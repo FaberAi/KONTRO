@@ -1,16 +1,18 @@
 const supabase = window.supabase.createClient(
   "https://imghqxftitokjkajtjjc.supabase.co",
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImltZ2hxeGZ0aXRva2prYWp0ampjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3NzE5MzMsImV4cCI6MjA5MTM0NzkzM30.-K5I31r8vVLwsSGliugnb0Q0v2sxlZbS2b9d6Yrs3qY"
+  "LA_TUA_ANON_KEY_COMPLETA"
 );
 
 async function aggiungiMovimento() {
-  const mov = {
+  const movimento = {
     descrizione: "Movimento test",
     importo: Math.floor(Math.random() * 200),
     data: new Date().toISOString()
   };
 
-  const { error } = await supabase.from('movimenti').insert([mov]);
+  const { error } = await supabase
+    .from("movimenti")
+    .insert([movimento]);
 
   if (error) {
     console.error(error);
@@ -23,9 +25,9 @@ async function aggiungiMovimento() {
 
 async function caricaMovimenti() {
   const { data, error } = await supabase
-    .from('movimenti')
-    .select('*')
-    .order('data', { ascending: false });
+    .from("movimenti")
+    .select("*")
+    .order("data", { ascending: false });
 
   if (error) {
     console.error(error);
@@ -35,12 +37,11 @@ async function caricaMovimenti() {
   document.getElementById("movimenti").innerHTML =
     data.map(m => `
       <div style="padding:10px;border-bottom:1px solid #333">
-        ${new Date(m.data).toLocaleDateString()} 
-        - ${m.descrizione} 
-        - €${m.importo}
+        ${new Date(m.data).toLocaleDateString()} - 
+        ${m.descrizione} - 
+        €${m.importo}
       </div>
     `).join('');
 }
 
-// carica all'avvio
 caricaMovimenti();
