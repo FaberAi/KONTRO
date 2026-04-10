@@ -1,18 +1,27 @@
-const supabase = window.supabase.createClient(
+const client = window.supabase.createClient(
   "https://imghqxftitokjkajtjjc.supabase.co",
-  "INCOLLA_LA_TUA_ANON_KEY"
+  "METTI_QUI_LA_TUA_ANON_KEY_VERA"
 );
 
-function aggiungiMovimento() {
-  supabase.from("movimenti").insert([{
-    descrizione: "test",
-    importo: 10,
-    data: new Date().toISOString()
-  }]).then(({ error }) => {
-    if (error) {
-      alert(error.message);
-    } else {
-      alert("ok salvato");
-    }
-  });
+document.getElementById("stato").textContent = "JS caricato";
+
+async function aggiungiMovimento() {
+  alert("click ricevuto");
+
+  const { error } = await client
+    .from("movimenti")
+    .insert([
+      {
+        descrizione: "test",
+        importo: 10,
+        data: new Date().toISOString()
+      }
+    ]);
+
+  if (error) {
+    alert("Errore Supabase: " + error.message);
+    return;
+  }
+
+  alert("ok salvato");
 }
