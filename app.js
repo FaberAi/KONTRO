@@ -1,6 +1,6 @@
 const supabase = window.supabase.createClient(
   "https://imghqxftitokjkajtjjc.supabase.co",
-  "LA_TUA_ANON_KEY_COMPLETA"
+  "TUA_ANON_KEY"
 );
 
 async function aggiungiMovimento() {
@@ -10,13 +10,11 @@ async function aggiungiMovimento() {
     data: new Date().toISOString()
   };
 
-  const { error } = await supabase
-    .from("movimenti")
-    .insert([movimento]);
+  const { error } = await supabase.from("movimenti").insert([movimento]);
 
   if (error) {
     console.error(error);
-    alert("Errore: " + error.message);
+    alert(error.message);
     return;
   }
 
@@ -35,13 +33,7 @@ async function caricaMovimenti() {
   }
 
   document.getElementById("movimenti").innerHTML =
-    data.map(m => `
-      <div style="padding:10px;border-bottom:1px solid #333">
-        ${new Date(m.data).toLocaleDateString()} - 
-        ${m.descrizione} - 
-        €${m.importo}
-      </div>
-    `).join('');
+    data.map(m => `<div>${m.descrizione} - €${m.importo}</div>`).join('');
 }
 
 caricaMovimenti();
