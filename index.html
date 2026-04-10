@@ -1,18 +1,19 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>KONTRO</title>
 </head>
-
-<body>
-
+<body style="background:#0b0b0b;color:white;font-family:Arial;padding:40px;">
   <h1>KONTRO</h1>
+  <button onclick="aggiungiMovimento()" style="padding:12px 18px;background:#00C897;border:0;border-radius:6px;cursor:pointer;">
+    + Movimento
+  </button>
 
-  <button onclick="aggiungiMovimento()">+ Movimento</button>
+  <p id="stato"></p>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="app.js"></script>
-
+  <script src="./app.js?v=3"></script>
 </body>
 </html>
