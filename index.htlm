@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<title>KONTRO</title>
+<link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<div class="layout">
+
+  <div class="sidebar">
+    <h2>KONTRO</h2>
+    <button onclick="carica()">Dashboard</button>
+  </div>
+
+  <div class="main">
+
+    <h1>Controllo</h1>
+
+    <button onclick="aggiungi()">+ Movimento</button>
+
+    <div id="movimenti"></div>
+
+    <h2>Consulente AI</h2>
+    <div id="consulente"></div>
+
+    <h2>Autopilota</h2>
+    <div id="autopilot"></div>
+
+  </div>
+
+</div>
+
+<script src="app.js"></script>
+
+</body>
+</html>
