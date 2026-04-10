@@ -5,8 +5,8 @@ const supabase = window.supabase.createClient(
 
 async function aggiungiMovimento() {
   const mov = {
-    descrizione: "Test movimento",
-    importo: Math.floor(Math.random() * 100),
+    descrizione: "Movimento test",
+    importo: Math.floor(Math.random() * 200),
     data: new Date().toISOString()
   };
 
@@ -34,12 +34,13 @@ async function caricaMovimenti() {
 
   document.getElementById("movimenti").innerHTML =
     data.map(m => `
-      <div style="padding:10px;border-bottom:1px solid #eee">
-        ${new Date(m.data).toLocaleDateString()} - 
-        ${m.descrizione} - 
-        €${m.importo}
+      <div style="padding:10px;border-bottom:1px solid #333">
+        ${new Date(m.data).toLocaleDateString()} 
+        - ${m.descrizione} 
+        - €${m.importo}
       </div>
     `).join('');
 }
 
+// carica all'avvio
 caricaMovimenti();
