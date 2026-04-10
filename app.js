@@ -1,39 +1,21 @@
 const supabase = window.supabase.createClient(
   "https://imghqxftitokjkajtjjc.supabase.co",
-  "TUA_ANON_KEY"
+  "INCOLLA_LA_TUA_ANON_KEY"
 );
 
 async function aggiungiMovimento() {
-  const movimento = {
-    descrizione: "Movimento test",
-    importo: Math.floor(Math.random() * 200),
-    data: new Date().toISOString()
-  };
-
-  const { error } = await supabase.from("movimenti").insert([movimento]);
+  const { error } = await supabase
+    .from("movimenti")
+    .insert([{
+      descrizione: "test",
+      importo: 10,
+      data: new Date().toISOString()
+    }]);
 
   if (error) {
-    console.error(error);
     alert(error.message);
     return;
   }
 
-  caricaMovimenti();
+  alert("ok salvato");
 }
-
-async function caricaMovimenti() {
-  const { data, error } = await supabase
-    .from("movimenti")
-    .select("*")
-    .order("data", { ascending: false });
-
-  if (error) {
-    console.error(error);
-    return;
-  }
-
-  document.getElementById("movimenti").innerHTML =
-    data.map(m => `<div>${m.descrizione} - €${m.importo}</div>`).join('');
-}
-
-caricaMovimenti();
