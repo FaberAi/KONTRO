@@ -22,7 +22,7 @@ h1 {
   margin-bottom: 10px;
 }
 
-input {
+input, select {
   padding: 10px;
   margin-right: 10px;
   border-radius: 5px;
@@ -58,6 +58,11 @@ button {
   <input id="desc" placeholder="Descrizione">
   <input id="imp" type="number" placeholder="Importo">
 
+  <select id="tipo">
+    <option value="entrata">Entrata</option>
+    <option value="uscita">Uscita</option>
+  </select>
+
   <button onclick="aggiungi()">+ Movimento</button>
 
   <div class="totale" id="totale">Totale: €0</div>
@@ -76,17 +81,20 @@ const client = window.supabase.createClient(
 async function aggiungi() {
   const descrizione = document.getElementById("desc").value;
   const importo = parseFloat(document.getElementById("imp").value);
+  const tipo = document.getElementById("tipo").value;
 
   if (!descrizione || isNaN(importo)) {
     alert("Compila i campi");
     return;
   }
 
+  const valore = tipo === "uscita" ? -importo : importo;
+
   const { error } = await client
     .from("movimenti")
     .insert([{
       descrizione,
-      importo,
+      importo: valore,
       data: new Date().toISOString()
     }]);
 
@@ -113,15 +121,16 @@ async function carica() {
   }
 
   let totale = 0;
-
   const lista = document.getElementById("lista");
   lista.innerHTML = "";
 
   data.forEach(m => {
     totale += Number(m.importo);
 
+    const colore = m.importo >= 0 ? "#00C897" : "#ff4d4d";
+
     lista.innerHTML += `
-      <div class="mov">
+      <div class="mov" style="color:${colore}">
         ${m.descrizione} - €${m.importo}
       </div>
     `;
