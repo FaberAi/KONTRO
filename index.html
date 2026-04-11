@@ -11,11 +11,24 @@ body {
   background: #0B0B0B;
   color: white;
 }
+
 .container {
   padding: 40px;
-  max-width: 800px;
+  max-width: 900px;
   margin: auto;
 }
+
+h1 {
+  margin-bottom: 10px;
+}
+
+input {
+  padding: 10px;
+  margin-right: 10px;
+  border-radius: 5px;
+  border: none;
+}
+
 button {
   padding: 10px 20px;
   background: #00C897;
@@ -23,6 +36,12 @@ button {
   border-radius: 5px;
   cursor: pointer;
 }
+
+.totale {
+  margin-top: 20px;
+  font-size: 20px;
+}
+
 .mov {
   padding: 10px;
   border-bottom: 1px solid #333;
@@ -34,9 +53,14 @@ button {
 
 <div class="container">
   <h1>KONTRO</h1>
-  <p>Gestione semplice dei tuoi movimenti</p>
+  <p>Gestione reale dei movimenti</p>
+
+  <input id="desc" placeholder="Descrizione">
+  <input id="imp" type="number" placeholder="Importo">
 
   <button onclick="aggiungi()">+ Movimento</button>
+
+  <div class="totale" id="totale">Totale: €0</div>
 
   <div id="lista"></div>
 </div>
@@ -50,11 +74,19 @@ const client = window.supabase.createClient(
 );
 
 async function aggiungi() {
+  const descrizione = document.getElementById("desc").value;
+  const importo = parseFloat(document.getElementById("imp").value);
+
+  if (!descrizione || isNaN(importo)) {
+    alert("Compila i campi");
+    return;
+  }
+
   const { error } = await client
     .from("movimenti")
     .insert([{
-      descrizione: "test",
-      importo: 10,
+      descrizione,
+      importo,
       data: new Date().toISOString()
     }]);
 
@@ -63,25 +95,39 @@ async function aggiungi() {
     return;
   }
 
+  document.getElementById("desc").value = "";
+  document.getElementById("imp").value = "";
+
   carica();
 }
 
 async function carica() {
-  const { data } = await client
+  const { data, error } = await client
     .from("movimenti")
     .select("*")
     .order("data", { ascending: false });
+
+  if (error) {
+    alert(error.message);
+    return;
+  }
+
+  let totale = 0;
 
   const lista = document.getElementById("lista");
   lista.innerHTML = "";
 
   data.forEach(m => {
+    totale += Number(m.importo);
+
     lista.innerHTML += `
       <div class="mov">
         ${m.descrizione} - €${m.importo}
       </div>
     `;
   });
+
+  document.getElementById("totale").innerText = "Totale: €" + totale;
 }
 
 carica();
