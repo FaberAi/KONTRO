@@ -1,19 +1,91 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>KONTRO</title>
+<meta charset="UTF-8">
+<title>KONTRO</title>
+
+<style>
+body {
+  margin: 0;
+  font-family: Arial;
+  background: #0B0B0B;
+  color: white;
+}
+.container {
+  padding: 40px;
+  max-width: 800px;
+  margin: auto;
+}
+button {
+  padding: 10px 20px;
+  background: #00C897;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.mov {
+  padding: 10px;
+  border-bottom: 1px solid #333;
+}
+</style>
 </head>
-<body style="background:#0b0b0b;color:white;font-family:Arial;padding:40px;">
+
+<body>
+
+<div class="container">
   <h1>KONTRO</h1>
-  <button onclick="aggiungiMovimento()" style="padding:12px 18px;background:#00C897;border:0;border-radius:6px;cursor:pointer;">
-    + Movimento
-  </button>
+  <p>Gestione semplice dei tuoi movimenti</p>
 
-  <p id="stato"></p>
+  <button onclick="aggiungi()">+ Movimento</button>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./app.js?v=3"></script>
+  <div id="lista"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<script>
+const client = window.supabase.createClient(
+  "https://imghqxftitokjkajtjjc.supabase.co",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImltZ2hxeGZ0aXRva2prYWp0ampjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3NzE5MzMsImV4cCI6MjA5MTM0NzkzM30.-K5I31r8vVLwsSGliugnb0Q0v2sxlZbS2b9d6Yrs3qY"
+);
+
+async function aggiungi() {
+  const { error } = await client
+    .from("movimenti")
+    .insert([{
+      descrizione: "test",
+      importo: 10,
+      data: new Date().toISOString()
+    }]);
+
+  if (error) {
+    alert("Errore: " + error.message);
+    return;
+  }
+
+  carica();
+}
+
+async function carica() {
+  const { data } = await client
+    .from("movimenti")
+    .select("*")
+    .order("data", { ascending: false });
+
+  const lista = document.getElementById("lista");
+  lista.innerHTML = "";
+
+  data.forEach(m => {
+    lista.innerHTML += `
+      <div class="mov">
+        ${m.descrizione} - €${m.importo}
+      </div>
+    `;
+  });
+}
+
+carica();
+</script>
+
 </body>
 </html>
