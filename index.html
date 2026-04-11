@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KONTRO — Prima Nota Digitale</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ========== LOGIN SCREEN ========== -->
+  <div id="screen-login" class="screen active">
+    <div class="login-bg">
+      <div class="login-grid"></div>
+      <div class="login-glow"></div>
+    </div>
+    <div class="login-card">
+      <div class="logo-wrap">
+        <span class="logo-icon">K</span>
+        <span class="logo-text">KONTRO</span>
+      </div>
+      <p class="login-tagline">Prima nota digitale per la tua attività</p>
+
+      <div class="tab-row">
+        <button class="tab-btn active" onclick="switchTab('login')">Accedi</button>
+        <button class="tab-btn" onclick="switchTab('register')">Registrati</button>
+      </div>
+
+      <!-- LOGIN -->
+      <div id="tab-login" class="tab-content active">
+        <div class="field">
+          <label>Email</label>
+          <input type="email" id="login-email" placeholder="nome@azienda.it" />
+        </div>
+        <div class="field">
+          <label>Password</label>
+          <input type="password" id="login-password" placeholder="••••••••" />
+        </div>
+        <button class="btn-primary" onclick="doLogin()">Entra →</button>
+      </div>
+
+      <!-- REGISTER -->
+      <div id="tab-register" class="tab-content">
+        <div class="field">
+          <label>Nome completo</label>
+          <input type="text" id="reg-name" placeholder="Mario Rossi" />
+        </div>
+        <div class="field">
+          <label>Email</label>
+          <input type="email" id="reg-email" placeholder="nome@azienda.it" />
+        </div>
+        <div class="field">
+          <label>Password</label>
+          <input type="password" id="reg-password" placeholder="min. 8 caratteri" />
+        </div>
+        <div class="field">
+          <label>Nome attività</label>
+          <input type="text" id="reg-business" placeholder="Es. Bar Roma" />
+        </div>
+        <button class="btn-primary" onclick="doRegister()">Crea account →</button>
+      </div>
+
+      <div id="auth-message" class="auth-message"></div>
+    </div>
+  </div>
+
+  <!-- ========== APP SCREEN ========== -->
+  <div id="screen-app" class="screen">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <span class="logo-icon sm">K</span>
+        <span class="logo-text">KONTRO</span>
+      </div>
+
+      <nav class="sidebar-nav">
+        <button class="nav-item active" onclick="showView('dashboard')" data-view="dashboard">
+          <span class="nav-icon">◈</span> Dashboard
+        </button>
+        <button class="nav-item" onclick="showView('nuovo')" data-view="nuovo">
+          <span class="nav-icon">＋</span> Nuovo movimento
+        </button>
+        <button class="nav-item" onclick="showView('movimenti')" data-view="movimenti">
+          <span class="nav-icon">≡</span> Movimenti
+        </button>
+        <button class="nav-item" onclick="showView('report')" data-view="report">
+          <span class="nav-icon">◎</span> Report
+        </button>
+        <button class="nav-item" onclick="showView('sedi')" data-view="sedi">
+          <span class="nav-icon">◉</span> Sedi
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="user-chip">
+          <span class="user-avatar" id="user-avatar">?</span>
+          <div class="user-info">
+            <span id="user-name-sidebar">—</span>
+            <span id="business-name-sidebar" class="user-role">—</span>
+          </div>
+        </div>
+        <button class="btn-logout" onclick="doLogout()" title="Esci">⏻</button>
+      </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="main-content">
+
+      <!-- TOPBAR -->
+      <header class="topbar">
+        <div class="topbar-left">
+          <h1 id="page-title">Dashboard</h1>
+          <span id="page-date" class="page-date"></span>
+        </div>
+        <div class="topbar-right">
+          <select id="location-select" class="location-select" onchange="onLocationChange()">
+            <option value="">Tutte le sedi</option>
+          </select>
+        </div>
+      </header>
+
+      <!-- ====== VIEW: DASHBOARD ====== -->
+      <div id="view-dashboard" class="view active">
+
+        <!-- KPI Cards -->
+        <div class="kpi-grid">
+          <div class="kpi-card entrate">
+            <div class="kpi-label">Entrate oggi</div>
+            <div class="kpi-value" id="kpi-entrate">€ 0,00</div>
+            <div class="kpi-sub" id="kpi-entrate-count">0 movimenti</div>
+          </div>
+          <div class="kpi-card uscite">
+            <div class="kpi-label">Uscite oggi</div>
+            <div class="kpi-value" id="kpi-uscite">€ 0,00</div>
+            <div class="kpi-sub" id="kpi-uscite-count">0 movimenti</div>
+          </div>
+          <div class="kpi-card saldo">
+            <div class="kpi-label">Saldo del giorno</div>
+            <div class="kpi-value" id="kpi-saldo">€ 0,00</div>
+            <div class="kpi-sub" id="kpi-saldo-trend">—</div>
+          </div>
+          <div class="kpi-card mese">
+            <div class="kpi-label">Saldo del mese</div>
+            <div class="kpi-value" id="kpi-mese">€ 0,00</div>
+            <div class="kpi-sub" id="kpi-mese-label">mese corrente</div>
+          </div>
+        </div>
+
+        <!-- Ultimi movimenti -->
+        <div class="section-card">
+          <div class="section-header">
+            <h2>Ultimi movimenti</h2>
+            <button class="btn-link" onclick="showView('movimenti')">Vedi tutti →</button>
+          </div>
+          <div id="recent-entries" class="entries-list">
+            <div class="empty-state">Nessun movimento oggi</div>
+          </div>
+        </div>
+
+        <!-- Quick add button -->
+        <button class="fab" onclick="showView('nuovo')" title="Nuovo movimento">＋</button>
+      </div>
+
+      <!-- ====== VIEW: NUOVO MOVIMENTO ====== -->
+      <div id="view-nuovo" class="view">
+        <div class="form-card">
+          <h2>Nuovo movimento</h2>
+
+          <!-- Tipo -->
+          <div class="type-toggle">
+            <button class="type-btn entrata active" id="btn-entrata" onclick="setType('entrata')">
+              ↑ Entrata
+            </button>
+            <button class="type-btn uscita" id="btn-uscita" onclick="setType('uscita')">
+              ↓ Uscita
+            </button>
+          </div>
+
+          <div class="form-grid">
+            <div class="field">
+              <label>Importo (€)</label>
+              <input type="number" id="mov-amount" placeholder="0,00" step="0.01" min="0" class="amount-input" />
+            </div>
+            <div class="field">
+              <label>Data</label>
+              <input type="date" id="mov-date" />
+            </div>
+            <div class="field">
+              <label>Categoria</label>
+              <select id="mov-category">
+                <option value="">Seleziona categoria</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Metodo di pagamento</label>
+              <select id="mov-payment">
+                <option value="contanti">💵 Contanti</option>
+                <option value="carta">💳 Carta</option>
+                <option value="bonifico">🏦 Bonifico</option>
+                <option value="assegno">📝 Assegno</option>
+                <option value="altro">📌 Altro</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Sede</label>
+              <select id="mov-location">
+                <option value="">Sede principale</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Descrizione</label>
+              <input type="text" id="mov-description" placeholder="Es. Fornitura caffè" />
+            </div>
+            <div class="field full">
+              <label>Note aggiuntive</label>
+              <textarea id="mov-notes" placeholder="Note opzionali..." rows="2"></textarea>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button class="btn-secondary" onclick="showView('dashboard')">Annulla</button>
+            <button class="btn-primary" onclick="saveMovimento()">Salva movimento →</button>
+          </div>
+
+          <div id="mov-message" class="auth-message"></div>
+        </div>
+      </div>
+
+      <!-- ====== VIEW: MOVIMENTI ====== -->
+      <div id="view-movimenti" class="view">
+        <div class="section-card">
+          <!-- Filtri -->
+          <div class="filters-row">
+            <input type="date" id="filter-from" class="filter-input" />
+            <input type="date" id="filter-to" class="filter-input" />
+            <select id="filter-type" class="filter-input">
+              <option value="">Tutti</option>
+              <option value="entrata">Entrate</option>
+              <option value="uscita">Uscite</option>
+            </select>
+            <select id="filter-payment" class="filter-input">
+              <option value="">Tutti i pagamenti</option>
+              <option value="contanti">Contanti</option>
+              <option value="carta">Carta</option>
+              <option value="bonifico">Bonifico</option>
+              <option value="assegno">Assegno</option>
+            </select>
+            <button class="btn-primary sm" onclick="loadMovimenti()">Filtra</button>
+            <button class="btn-secondary sm" onclick="exportCSV()">↓ CSV</button>
+          </div>
+
+          <!-- Totali filtrati -->
+          <div class="filter-totals">
+            <span class="ft-item entrate">Entrate: <strong id="ft-entrate">€ 0,00</strong></span>
+            <span class="ft-item uscite">Uscite: <strong id="ft-uscite">€ 0,00</strong></span>
+            <span class="ft-item saldo">Saldo: <strong id="ft-saldo">€ 0,00</strong></span>
+          </div>
+
+          <div id="all-entries" class="entries-list">
+            <div class="empty-state">Nessun movimento trovato</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ====== VIEW: REPORT ====== -->
+      <div id="view-report" class="view">
+        <div class="report-grid">
+          <div class="section-card">
+            <h2>Report mensile</h2>
+            <div class="report-month-select">
+              <select id="report-month" onchange="loadReport()"></select>
+              <select id="report-year" onchange="loadReport()"></select>
+            </div>
+            <div id="report-content" class="report-content">
+              <div class="empty-state">Seleziona mese e anno</div>
+            </div>
+          </div>
+
+          <div class="section-card">
+            <h2>Per categoria</h2>
+            <div id="report-categories" class="category-report">
+              <div class="empty-state">—</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ====== VIEW: SEDI ====== -->
+      <div id="view-sedi" class="view">
+        <div class="section-card">
+          <div class="section-header">
+            <h2>Gestione sedi</h2>
+            <button class="btn-primary sm" onclick="showAddLocation()">＋ Nuova sede</button>
+          </div>
+
+          <div id="add-location-form" class="add-form hidden">
+            <div class="form-grid">
+              <div class="field">
+                <label>Nome sede</label>
+                <input type="text" id="new-loc-name" placeholder="Es. Bar Centro" />
+              </div>
+              <div class="field">
+                <label>Indirizzo</label>
+                <input type="text" id="new-loc-address" placeholder="Via Roma 1, Milano" />
+              </div>
+            </div>
+            <div class="form-actions">
+              <button class="btn-secondary" onclick="hideAddLocation()">Annulla</button>
+              <button class="btn-primary" onclick="saveLocation()">Aggiungi sede</button>
+            </div>
+          </div>
+
+          <div id="locations-list" class="locations-grid">
+            <div class="empty-state">Nessuna sede aggiuntiva</div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Toast notification -->
+  <div id="toast" class="toast"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
