@@ -12,14 +12,44 @@ body {
   color: white;
 }
 
-.container {
-  padding: 40px;
-  max-width: 900px;
-  margin: auto;
+.layout {
+  display: flex;
 }
 
-h1 {
+/* SIDEBAR */
+.sidebar {
+  width: 220px;
+  background: #111;
+  height: 100vh;
+  padding: 20px;
+}
+
+.sidebar h2 {
+  margin-bottom: 20px;
+}
+
+.sidebar button {
+  width: 100%;
+  padding: 10px;
   margin-bottom: 10px;
+  background: #1a1a1a;
+  color: white;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+/* MAIN */
+.main {
+  flex: 1;
+  padding: 30px;
+}
+
+.card {
+  background: #111;
+  padding: 20px;
+  margin-bottom: 20px;
+  border-radius: 10px;
 }
 
 input, select {
@@ -29,17 +59,11 @@ input, select {
   border: none;
 }
 
-button {
-  padding: 10px 20px;
+button.action {
   background: #00C897;
   border: none;
-  border-radius: 5px;
+  padding: 10px 20px;
   cursor: pointer;
-}
-
-.totale {
-  margin-top: 20px;
-  font-size: 20px;
 }
 
 .mov {
@@ -51,23 +75,83 @@ button {
 
 <body>
 
-<div class="container">
-  <h1>KONTRO</h1>
-  <p>Gestione reale dei movimenti</p>
+<div class="layout">
 
-  <input id="desc" placeholder="Descrizione">
-  <input id="imp" type="number" placeholder="Importo">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <h2>KONTRO</h2>
 
-  <select id="tipo">
-    <option value="entrata">Entrata</option>
-    <option value="uscita">Uscita</option>
-  </select>
+    <button onclick="show('dashboard')">Dashboard</button>
+    <button onclick="show('primanota')">Prima Nota</button>
+    <button onclick="show('fornitori')">Fornitori</button>
+    <button onclick="show('banca')">Banca</button>
+    <button onclick="show('assegni')">Assegni</button>
+    <button onclick="show('report')">Report</button>
+  </div>
 
-  <button onclick="aggiungi()">+ Movimento</button>
+  <!-- MAIN -->
+  <div class="main">
 
-  <div class="totale" id="totale">Totale: €0</div>
+    <!-- DASHBOARD -->
+    <div id="dashboard" class="section">
+      <div class="card">
+        <h2>Dashboard</h2>
+        <p id="totale">Totale: €0</p>
+      </div>
+    </div>
 
-  <div id="lista"></div>
+    <!-- PRIMA NOTA -->
+    <div id="primanota" class="section" style="display:none;">
+      <div class="card">
+        <h2>Prima Nota</h2>
+
+        <input id="desc" placeholder="Descrizione">
+        <input id="imp" type="number" placeholder="Importo">
+
+        <select id="tipo">
+          <option value="entrata">Entrata</option>
+          <option value="uscita">Uscita</option>
+        </select>
+
+        <button class="action" onclick="aggiungi()">Aggiungi</button>
+
+        <div id="lista"></div>
+      </div>
+    </div>
+
+    <!-- FORNITORI -->
+    <div id="fornitori" class="section" style="display:none;">
+      <div class="card">
+        <h2>Fornitori</h2>
+        <p>Modulo in costruzione</p>
+      </div>
+    </div>
+
+    <!-- BANCA -->
+    <div id="banca" class="section" style="display:none;">
+      <div class="card">
+        <h2>Banca</h2>
+        <p>Modulo in costruzione</p>
+      </div>
+    </div>
+
+    <!-- ASSEGNI -->
+    <div id="assegni" class="section" style="display:none;">
+      <div class="card">
+        <h2>Assegni</h2>
+        <p>Modulo in costruzione</p>
+      </div>
+    </div>
+
+    <!-- REPORT -->
+    <div id="report" class="section" style="display:none;">
+      <div class="card">
+        <h2>Report</h2>
+        <p>Modulo in costruzione</p>
+      </div>
+    </div>
+
+  </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -75,72 +159,4 @@ button {
 <script>
 const client = window.supabase.createClient(
   "https://imghqxftitokjkajtjjc.supabase.co",
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImltZ2hxeGZ0aXRva2prYWp0ampjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3NzE5MzMsImV4cCI6MjA5MTM0NzkzM30.-K5I31r8vVLwsSGliugnb0Q0v2sxlZbS2b9d6Yrs3qY"
-);
-
-async function aggiungi() {
-  const descrizione = document.getElementById("desc").value;
-  const importo = parseFloat(document.getElementById("imp").value);
-  const tipo = document.getElementById("tipo").value;
-
-  if (!descrizione || isNaN(importo)) {
-    alert("Compila i campi");
-    return;
-  }
-
-  const valore = tipo === "uscita" ? -importo : importo;
-
-  const { error } = await client
-    .from("movimenti")
-    .insert([{
-      descrizione,
-      importo: valore,
-      data: new Date().toISOString()
-    }]);
-
-  if (error) {
-    alert("Errore: " + error.message);
-    return;
-  }
-
-  document.getElementById("desc").value = "";
-  document.getElementById("imp").value = "";
-
-  carica();
-}
-
-async function carica() {
-  const { data, error } = await client
-    .from("movimenti")
-    .select("*")
-    .order("data", { ascending: false });
-
-  if (error) {
-    alert(error.message);
-    return;
-  }
-
-  let totale = 0;
-  const lista = document.getElementById("lista");
-  lista.innerHTML = "";
-
-  data.forEach(m => {
-    totale += Number(m.importo);
-
-    const colore = m.importo >= 0 ? "#00C897" : "#ff4d4d";
-
-    lista.innerHTML += `
-      <div class="mov" style="color:${colore}">
-        ${m.descrizione} - €${m.importo}
-      </div>
-    `;
-  });
-
-  document.getElementById("totale").innerText = "Totale: €" + totale;
-}
-
-carica();
-</script>
-
-</body>
-</html>
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzd
