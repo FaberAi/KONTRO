@@ -16,7 +16,6 @@ body {
   display: flex;
 }
 
-/* SIDEBAR */
 .sidebar {
   width: 220px;
   background: #111;
@@ -39,7 +38,6 @@ body {
   text-align: left;
 }
 
-/* MAIN */
 .main {
   flex: 1;
   padding: 30px;
@@ -113,6 +111,10 @@ button.action {
           <option value="uscita">Uscita</option>
         </select>
 
+        <select id="fornitore_select">
+          <option value="">Seleziona fornitore</option>
+        </select>
+
         <button class="action" onclick="aggiungi()">Aggiungi</button>
 
         <div id="lista"></div>
@@ -123,7 +125,12 @@ button.action {
     <div id="fornitori" class="section" style="display:none;">
       <div class="card">
         <h2>Fornitori</h2>
-        <p>Modulo in costruzione</p>
+
+        <input id="nome_fornitore" placeholder="Nome fornitore">
+
+        <button class="action" onclick="aggiungiFornitore()">Aggiungi Fornitore</button>
+
+        <div id="lista_fornitori"></div>
       </div>
     </div>
 
@@ -159,4 +166,104 @@ button.action {
 <script>
 const client = window.supabase.createClient(
   "https://imghqxftitokjkajtjjc.supabase.co",
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzd
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImltZ2hxeGZ0aXRva2prYWp0ampjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3NzE5MzMsImV4cCI6MjA5MTM0NzkzM30.-K5I31r8vVLwsSGliugnb0Q0v2sxlZbS2b9d6Yrs3qY"
+);
+
+/* NAV */
+function show(sezione) {
+  document.querySelectorAll('.section').forEach(s => s.style.display = 'none');
+  document.getElementById(sezione).style.display = 'block';
+}
+
+/* AGGIUNTA FORNITORE */
+async function aggiungiFornitore() {
+  const nome = document.getElementById("nome_fornitore").value;
+
+  if (!nome) {
+    alert("Inserisci nome");
+    return;
+  }
+
+  await client.from("fornitori").insert([{ nome }]);
+
+  document.getElementById("nome_fornitore").value = "";
+
+  caricaFornitori();
+}
+
+/* CARICA FORNITORI */
+async function caricaFornitori() {
+  const { data } = await client.from("fornitori").select("*");
+
+  const lista = document.getElementById("lista_fornitori");
+  const select = document.getElementById("fornitore_select");
+
+  lista.innerHTML = "";
+  select.innerHTML = '<option value="">Seleziona fornitore</option>';
+
+  data.forEach(f => {
+    lista.innerHTML += `<div class="mov">${f.nome}</div>`;
+    select.innerHTML += `<option value="${f.nome}">${f.nome}</option>`;
+  });
+}
+
+/* AGGIUNTA MOVIMENTO */
+async function aggiungi() {
+  const descrizione = document.getElementById("desc").value;
+  const importo = parseFloat(document.getElementById("imp").value);
+  const tipo = document.getElementById("tipo").value;
+  const fornitore = document.getElementById("fornitore_select").value;
+
+  if (!descrizione || isNaN(importo)) {
+    alert("Compila i campi");
+    return;
+  }
+
+  const valore = tipo === "uscita" ? -importo : importo;
+
+  await client.from("movimenti").insert([{
+    descrizione,
+    importo: valore,
+    fornitore,
+    data: new Date().toISOString()
+  }]);
+
+  document.getElementById("desc").value = "";
+  document.getElementById("imp").value = "";
+
+  carica();
+}
+
+/* CARICA MOVIMENTI */
+async function carica() {
+  const { data } = await client
+    .from("movimenti")
+    .select("*")
+    .order("data", { ascending: false });
+
+  let totale = 0;
+  const lista = document.getElementById("lista");
+  lista.innerHTML = "";
+
+  data.forEach(m => {
+    totale += Number(m.importo);
+
+    const colore = m.importo >= 0 ? "#00C897" : "#ff4d4d";
+
+    lista.innerHTML += `
+      <div class="mov" style="color:${colore}">
+        ${m.descrizione} - €${m.importo} - ${m.fornitore || ""}
+      </div>
+    `;
+  });
+
+  document.getElementById("totale").innerText = "Totale: €" + totale;
+}
+
+/* INIT */
+carica();
+caricaFornitori();
+</script>
+
+</body>
+</html>
