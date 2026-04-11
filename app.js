@@ -103,7 +103,7 @@ async function doRegister() {
 
   if (data.user) {
     // Crea azienda
-    const { data: biz, error: bizErr } = await supabase
+    const { data: biz, error: bizErr } = await db
       .from('businesses')
       .insert({ name: businessName, email })
       .select().single();
@@ -138,7 +138,7 @@ function showAuthMsg(msg, type) {
 // BUSINESS & LOCATIONS
 // ============================================
 async function loadBusiness() {
-  const { data } = await supabase
+  const { data } = await db
     .from('user_roles')
     .select('business_id, role, businesses(*)')
     .eq('user_id', currentUser.id)
@@ -150,7 +150,7 @@ async function loadBusiness() {
 async function loadLocations() {
   if (!currentBusiness) return;
 
-  const { data } = await supabase
+  const { data } = await db
     .from('locations')
     .select('*')
     .eq('business_id', currentBusiness.id)
@@ -184,7 +184,7 @@ function onLocationChange() {
 async function loadCategories() {
   if (!currentBusiness) return;
 
-  const { data } = await supabase
+  const { data } = await db
     .from('categories')
     .select('*')
     .eq('business_id', currentBusiness.id)
