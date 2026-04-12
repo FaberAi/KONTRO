@@ -4171,7 +4171,7 @@ function populateDipendentiSelects() {
 }
 
 // ── ANAGRAFICA ────────────────────────────────────────────────────
-function showAddDipendente() { document.getElementById('add-dipendente-form').classList.remove('hidden'); }
+function showAddDipendente() { document.getElementById('add-dipendente-form').classList.remove('hidden'); populateSedeDipendente(); }
 function hideAddDipendente() { document.getElementById('add-dipendente-form').classList.add('hidden'); }
 
 async function saveDipendente() {
@@ -4183,6 +4183,7 @@ async function saveDipendente() {
     business_id: currentBusiness.id,
     nome, cognome,
     ruolo: document.getElementById('nd-ruolo').value.trim(),
+    location_id: document.getElementById('nd-sede').value || null,
     data_assunzione: document.getElementById('nd-assunzione').value || null,
     note: document.getElementById('nd-note').value.trim()
   });
@@ -4197,20 +4198,33 @@ async function saveDipendente() {
 
 async function loadDipendentiList() {
   if (!currentBusiness) return;
-  const { data } = await db.from('dipendenti').select('*')
+  const { data } = await db.from('dipendenti').select('*, locations(name)')
     .eq('business_id', currentBusiness.id).order('cognome');
   const el = document.getElementById('dipendenti-list');
   if (!data?.length) { el.innerHTML = '<div class="empty-state">Nessun dipendente registrato</div>'; return; }
-  el.innerHTML = data.map(d => `
-    <div class="dipendente-item">
-      <div class="dip-avatar">${d.nome[0]}${d.cognome[0]}</div>
-      <div class="dip-info">
-        <div class="dip-nome">${d.nome} ${d.cognome}</div>
-        <div class="dip-ruolo">${d.ruolo || '—'}${d.data_assunzione ? ' · dal ' + formatDate(d.data_assunzione) : ''}</div>
-      </div>
-      <button class="btn-secondary sm" onclick="switchHRTab('presenze');document.getElementById('pres-dipendente').value='${d.id}';loadPresenzeMese()">Presenze</button>
-      <button class="btn-secondary sm" onclick="switchHRTab('acconti');document.getElementById('acc-dipendente').value='${d.id}'">Acconti</button>
-      <button class="entry-del" onclick="deleteDipendente('${d.id}')">✕</button>
+
+  // Raggruppa per sede
+  const bySede = {};
+  data.forEach(d => {
+    const sedeNome = d.locations?.name || 'Sede principale';
+    if (!bySede[sedeNome]) bySede[sedeNome] = [];
+    bySede[sedeNome].push(d);
+  });
+
+  el.innerHTML = Object.entries(bySede).map(([sede, dips]) => `
+    <div class="sede-gruppo">
+      <div class="sede-gruppo-label">📍 ${sede}</div>
+      ${dips.map(d => `
+        <div class="dipendente-item">
+          <div class="dip-avatar">${d.nome[0]}${d.cognome[0]}</div>
+          <div class="dip-info">
+            <div class="dip-nome">${d.nome} ${d.cognome}</div>
+            <div class="dip-ruolo">${d.ruolo || '—'}${d.data_assunzione ? ' · dal ' + formatDate(d.data_assunzione) : ''}</div>
+          </div>
+          <button class="btn-secondary sm" onclick="switchHRTab('presenze');document.getElementById('pres-dipendente').value='${d.id}';loadPresenzeMese()">Presenze</button>
+          <button class="btn-secondary sm" onclick="switchHRTab('acconti');document.getElementById('acc-dipendente').value='${d.id}'">Acconti</button>
+          <button class="entry-del" onclick="deleteDipendente('${d.id}')">✕</button>
+        </div>`).join('')}
     </div>`).join('');
 }
 
@@ -4606,4 +4620,12 @@ async function exportHRCSV() {
   a.href = url; a.download = `KONTRO_HR_${anno}_${String(mese).padStart(2,'0')}.csv`;
   a.click();
   showToast('CSV scaricato ✓', 'success');
+}
+
+// Popola select sede nel form dipendente
+function populateSedeDipendente() {
+  const sel = document.getElementById('nd-sede');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Sede principale</option>' +
+    currentLocations.map(l => `<option value="${l.id}">${l.name}</option>`).join('');
 }
