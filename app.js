@@ -4185,12 +4185,13 @@ async function saveDipendente() {
     ruolo: document.getElementById('nd-ruolo').value.trim(),
     location_id: document.getElementById('nd-sede').value || null,
     data_assunzione: document.getElementById('nd-assunzione').value || null,
-    note: document.getElementById('nd-note').value.trim()
+    note: document.getElementById('nd-note').value.trim(),
+    telefono: document.getElementById('nd-telefono').value.trim()
   });
   if (error) { showToast('Errore: ' + error.message, 'error'); return; }
   showToast('Dipendente salvato ✓', 'success');
   hideAddDipendente();
-  ['nd-nome','nd-cognome','nd-ruolo','nd-note'].forEach(id => document.getElementById(id).value = '');
+  ['nd-nome','nd-cognome','nd-ruolo','nd-note','nd-telefono'].forEach(id => document.getElementById(id).value = '');
   await loadDipendentiCache();
   populateDipendentiSelects();
   loadDipendentiList();
@@ -4219,7 +4220,7 @@ async function loadDipendentiList() {
           <div class="dip-avatar">${d.nome[0]}${d.cognome[0]}</div>
           <div class="dip-info">
             <div class="dip-nome">${d.nome} ${d.cognome}</div>
-            <div class="dip-ruolo">${d.ruolo || '—'}${d.data_assunzione ? ' · dal ' + formatDate(d.data_assunzione) : ''}</div>
+            <div class="dip-ruolo">${d.ruolo || '—'}${d.data_assunzione ? ' · dal ' + formatDate(d.data_assunzione) : ''}${d.telefono ? ' · 📞 ' + d.telefono : ''}</div>
           </div>
           <button class="btn-secondary sm" onclick="switchHRTab('presenze');document.getElementById('pres-dipendente').value='${d.id}';loadPresenzeMese()">Presenze</button>
           <button class="btn-secondary sm" onclick="switchHRTab('acconti');document.getElementById('acc-dipendente').value='${d.id}'">Acconti</button>
