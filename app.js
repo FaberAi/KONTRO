@@ -149,6 +149,8 @@ function showAuthMsg(msg, type) {
 // ============================================
 // BUSINESS & LOCATIONS
 // ============================================
+let currentRole = null;
+
 async function loadBusiness() {
   const { data } = await db
     .from('user_roles')
@@ -156,7 +158,10 @@ async function loadBusiness() {
     .eq('user_id', currentUser.id)
     .single();
 
-  if (data) currentBusiness = data.businesses;
+  if (data) {
+    currentBusiness = data.businesses;
+    currentRole = data.role; // 'owner', 'admin', 'cashier'
+  }
 }
 
 async function loadLocations() {
@@ -224,6 +229,15 @@ function showScreen(name) {
 }
 
 function showView(name) {
+  // Controllo accessi
+  const ownerOnly = ['impostazioni', 'team'];
+  const adminOnly = ['storico', 'report', 'banca', 'fornitori'];
+  if (ownerOnly.includes(name) && currentRole !== 'owner') {
+    showToast('Accesso non autorizzato', 'error'); return;
+  }
+  if (adminOnly.includes(name) && currentRole === 'cashier') {
+    showToast('Accesso non autorizzato', 'error'); return;
+  }
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById(`view-${name}`).classList.add('active');
   document.querySelectorAll('.nav-item').forEach(n => {
@@ -249,6 +263,33 @@ function updateUserUI() {
   document.getElementById('user-avatar').textContent = initial;
   document.getElementById('user-name-sidebar').textContent = name;
   document.getElementById('business-name-sidebar').textContent = currentBusiness?.name || '—';
+
+  // Controllo accessi per ruolo
+  const isOwner = currentRole === 'owner';
+  const isAdmin = currentRole === 'admin' || isOwner;
+  const isCashier = currentRole === 'cashier';
+
+  // Voci visibili solo a owner/admin
+  const adminOnlyViews = ['storico', 'report', 'banca', 'fornitori', 'impostazioni', 'team'];
+  // Voci visibili solo a owner
+  const ownerOnlyViews = ['impostazioni', 'team'];
+
+  document.querySelectorAll('.nav-item').forEach(btn => {
+    const view = btn.dataset.view;
+    if (!view) return;
+    if (ownerOnlyViews.includes(view) && !isOwner) {
+      btn.style.display = 'none';
+    } else if (adminOnlyViews.includes(view) && isCashier) {
+      btn.style.display = 'none';
+    } else {
+      btn.style.display = 'flex';
+    }
+  });
+
+  // Mostra badge ruolo nella sidebar
+  const roleLabels = { owner: 'Owner', admin: 'Admin', cashier: 'Cassiere' };
+  document.getElementById('business-name-sidebar').textContent =
+    (currentBusiness?.name || '—') + ' · ' + (roleLabels[currentRole] || '');
 }
 
 function setType(type) {
