@@ -1437,95 +1437,6 @@ async function loadNotaGiorno() {
   calcPN();
 }
 
-async function salvaNotaGiorno() {
-  if (!currentBusiness) return;
-  const data = document.getElementById('pn-data').value;
-  if (!data) { showPNMsg('Inserisci la data', 'error'); return; }
-
-  const locId = document.getElementById('pn-location').value || null;
-  const fc = getPN('pn-fc');
-
-  const campiMap = {
-    incasso_m: getPN('incasso-m'), incasso_p: getPN('incasso-p'), incasso_s: getPN('incasso-s'),
-    money_m: getPN('money-m'), money_p: getPN('money-p'), money_s: getPN('money-s'),
-    sisal_m: getPN('sisal-m'), sisal_p: getPN('sisal-p'), sisal_s: getPN('sisal-s'),
-    fatture_m: getPN('fatture-m'), fatture_p: getPN('fatture-p'), fatture_s: getPN('fatture-s'),
-    giornali_m: getPN('giornali-m'), giornali_p: getPN('giornali-p'), giornali_s: getPN('giornali-s'),
-    pos_m: getPN('pos-m'), pos_p: getPN('pos-p'), pos_s: getPN('pos-s'),
-    carte_m: getPN('carte-m'), carte_p: getPN('carte-p'), carte_s: getPN('carte-s'),
-    bonifici_m: getPN('bonifici-m'), bonifici_p: getPN('bonifici-p'), bonifici_s: getPN('bonifici-s'),
-    fondo_chiusura_m: getPN('fc-usc-m'), fondo_chiusura_p: getPN('fc-usc-p'), fondo_chiusura_s: getPN('fc-usc-s'),
-  };
-
-  const voci = ['incasso','money','sisal','fatture','giornali'];
-  const uscVoci = ['pos','carte','bonifici'];
-  const entTot = fc + voci.reduce((s,k) => s + getPN(k+'-m') + getPN(k+'-p') + getPN(k+'-s'), 0);
-  const uscTot = uscVoci.reduce((s,k) => s + getPN(k+'-m') + getPN(k+'-p') + getPN(k+'-s'), 0)
-    + pnFornitoriRows.reduce((s,r) => s + (parseFloat(r.im.value)||0) + (parseFloat(r.ip.value)||0) + (parseFloat(r.is.value)||0), 0)
-    + pnPrelieviRows.reduce((s,r) => s + (parseFloat(r.im.value)||0) + (parseFloat(r.ip.value)||0) + (parseFloat(r.is.value)||0), 0)
-    + getPN('fc-usc-m') + getPN('fc-usc-p') + getPN('fc-usc-s');
-
-  const payload = {
-    business_id: currentBusiness.id,
-    location_id: locId,
-    data,
-    fondo_cassa: fc,
-    ...campiMap,
-    totale_entrate: entTot,
-    totale_uscite: uscTot,
-    differenza: entTot - uscTot,
-    incasso_giornaliero: entTot - uscTot,
-    compilatore_m: document.getElementById('cm').value,
-    compilatore_p: document.getElementById('cp').value,
-    compilatore_s: document.getElementById('cs').value,
-    note: document.getElementById('pn-note').value,
-    created_by: currentUser.id,
-    updated_at: new Date().toISOString()
-  };
-
-  const { data: saved, error } = await db.from('daily_notes')
-    .upsert(payload, { onConflict: 'business_id,location_id,data' })
-    .select().single();
-
-  if (error) { showPNMsg('Errore: ' + error.message, 'error'); return; }
-
-  // Salva righe
-  await db.from('daily_note_rows').delete().eq('daily_note_id', saved.id);
-  const rows = [];
-  pnFornitoriRows.forEach((r, i) => {
-    const vm = parseFloat(r.im.value)||0, vp = parseFloat(r.ip.value)||0, vs = parseFloat(r.is.value)||0;
-    if (vm || vp || vs || r.desc.value.trim()) {
-      rows.push({ daily_note_id: saved.id, business_id: currentBusiness.id,
-        categoria: 'fornitore', descrizione: r.desc.value.trim(),
-        importo_m: vm, importo_p: vp, importo_s: vs, ordine: i });
-    }
-  });
-  pnPrelieviRows.forEach((r, i) => {
-    const vm = parseFloat(r.im.value)||0, vp = parseFloat(r.ip.value)||0, vs = parseFloat(r.is.value)||0;
-    if (vm || vp || vs || r.desc.value.trim()) {
-      rows.push({ daily_note_id: saved.id, business_id: currentBusiness.id,
-        categoria: 'prelievo', descrizione: r.desc.value.trim(),
-        importo_m: vm, importo_p: vp, importo_s: vs, ordine: i });
-    }
-  });
-  if (rows.length) await db.from('daily_note_rows').insert(rows);
-
-  // Fondo chiusura → pre-compila giorno dopo
-  const fcChiusura = getPN('fc-usc-s') || getPN('fc-usc-p') || getPN('fc-usc-m');
-  if (fcChiusura > 0) {
-    const dom = new Date(data); dom.setDate(dom.getDate() + 1);
-    const domStr = dom.toISOString().split('T')[0];
-    await db.from('daily_notes').upsert({
-      business_id: currentBusiness.id,
-      location_id: locId,
-      data: domStr,
-      fondo_cassa: fcChiusura
-    }, { onConflict: 'business_id,location_id,data', ignoreDuplicates: true });
-  }
-
-  showPNMsg('Prima nota salvata ✓' + (fcChiusura > 0 ? ' — fondo cassa domani pre-compilato' : ''), 'success');
-  await loadDashboard();
-}
 
 function resetPN(rebuild = true) {
   const campi = ['pn-fc','incasso-m','incasso-p','incasso-s','money-m','money-p','money-s',
@@ -1788,62 +1699,6 @@ async function loadNotaGiorno2() {
 // Override loadNotaGiorno
 function loadNotaGiorno() { loadNotaGiorno2(); }
 
-async function salvaNotaGiorno() {
-  if (!currentBusiness) return;
-  const data = document.getElementById('pn-data').value;
-  if (!data) { showPNMsg('Inserisci la data','error'); return; }
-  const locId = document.getElementById('pn-location').value || null;
-  const fc = getV('pn-fc');
-
-  const payload = {
-    business_id: currentBusiness.id, location_id: locId, data, fondo_cassa: fc,
-    incasso_m: getV('incasso-m'), incasso_p: getV('incasso-p'), incasso_s: getV('incasso-s'),
-    money_m: getV('money-m'), money_p: getV('money-p'), money_s: getV('money-s'),
-    sisal_m: getV('sisal-m'), sisal_p: getV('sisal-p'), sisal_s: getV('sisal-s'),
-    fatture_m: getV('fatture-m'), fatture_p: getV('fatture-p'), fatture_s: getV('fatture-s'),
-    giornali_m: getV('giornali-m'), giornali_p: getV('giornali-p'), giornali_s: getV('giornali-s'),
-    pos_m: getV('pos-m'), pos_p: getV('pos-p'), pos_s: getV('pos-s'),
-    carte_m: getV('carte-m'), carte_p: getV('carte-p'), carte_s: getV('carte-s'),
-    bonifici_m: getV('bonifici-m'), bonifici_p: getV('bonifici-p'), bonifici_s: getV('bonifici-s'),
-    fondo_chiusura_m: getV('fc-usc-m'), fondo_chiusura_p: getV('fc-usc-p'), fondo_chiusura_s: getV('fc-usc-s'),
-    compilatore_m: document.getElementById('cm').value,
-    compilatore_p: document.getElementById('cp').value,
-    compilatore_s: document.getElementById('cs').value,
-    note: document.getElementById('pn-note').value,
-    created_by: currentUser.id, updated_at: new Date().toISOString()
-  };
-
-  const { data: saved, error } = await db.from('daily_notes')
-    .upsert(payload, { onConflict: 'business_id,location_id,data' })
-    .select().single();
-  if (error) { showPNMsg('Errore: '+error.message,'error'); return; }
-
-  await db.from('daily_note_rows').delete().eq('daily_note_id', saved.id);
-  const rows = [];
-  for (let i=0; i<pnFornitoriCount; i++) {
-    const desc = document.getElementById('fdesc-'+i)?.value?.trim()||'';
-    const m=getV('fm-'+i), p=getV('fp-'+i), s=getV('fs-'+i);
-    if (m||p||s||desc) rows.push({daily_note_id:saved.id,business_id:currentBusiness.id,categoria:'fornitore',descrizione:desc,importo_m:m,importo_p:p,importo_s:s,ordine:i});
-  }
-  for (let i=0; i<pnPrelieviCount; i++) {
-    const desc = document.getElementById('pdesc-'+i)?.value?.trim()||'';
-    const m=getV('pm-'+i), p=getV('pp-'+i), s=getV('ps-'+i);
-    if (m||p||s||desc) rows.push({daily_note_id:saved.id,business_id:currentBusiness.id,categoria:'prelievo',descrizione:desc,importo_m:m,importo_p:p,importo_s:s,ordine:i});
-  }
-  if (rows.length) await db.from('daily_note_rows').insert(rows);
-
-  const fcChiusura = getV('fc-usc-s')||getV('fc-usc-p')||getV('fc-usc-m');
-  if (fcChiusura>0) {
-    const dom = new Date(data); dom.setDate(dom.getDate()+1);
-    await db.from('daily_notes').upsert({
-      business_id:currentBusiness.id, location_id:locId,
-      data:dom.toISOString().split('T')[0], fondo_cassa:fcChiusura
-    },{onConflict:'business_id,location_id,data',ignoreDuplicates:true});
-  }
-
-  showPNMsg('Prima nota salvata ✓'+(fcChiusura>0?' — fondo domani pre-compilato':''),'success');
-  await loadDashboard();
-}
 
 // ============================================
 // STORICO PRIMA NOTA
@@ -3096,8 +2951,7 @@ function pnFornitoriOptsHtml() {
 }
 
 
-// Fix salvaNotaGiorno per salvare fornitore_id dal select
-const _origSalvaNotaGiorno = salvaNotaGiorno;
+// salvaNotaGiorno — versione con fornitore_id dal select
 async function salvaNotaGiorno() {
   // Prima di salvare, aggiorna daily_note_rows con fornitore_id
   if (!currentBusiness) return;
