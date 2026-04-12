@@ -1844,3 +1844,45 @@ html, body {
 }
 .cat-tipo.entrata { color: var(--green-400); }
 .cat-tipo.uscita { color: var(--red-400); }
+
+/* ============================================
+   PERMESSI
+   ============================================ */
+.permessi-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.perm-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--navy-700);
+  border-radius: var(--radius);
+  border: 1px solid rgba(255,255,255,0.05);
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.perm-item:hover { background: var(--navy-600); }
+
+.perm-item input[type="checkbox"] {
+  width: 16px; height: 16px;
+  cursor: pointer;
+  accent-color: var(--blue-500);
+  flex-shrink: 0;
+}
+
+.perm-item input[type="checkbox"]:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.perm-item span:nth-child(2) { flex: 1; }
+
+.perm-note {
+  font-size: 10px;
+  color: var(--gray-500);
+  font-family: var(--font-mono);
+}

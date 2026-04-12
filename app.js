@@ -67,6 +67,7 @@ async function initApp() {
     bancheCache = banche || [];
   }
   await loadDashboard();
+  if (currentRole === 'cashier') await loadCurrentUserPermissions();
   updateUserUI();
 }
 
@@ -269,21 +270,37 @@ function updateUserUI() {
   const isAdmin = currentRole === 'admin' || isOwner;
   const isCashier = currentRole === 'cashier';
 
-  // Voci visibili solo a owner/admin
-  const adminOnlyViews = ['storico', 'report', 'banca', 'fornitori', 'impostazioni', 'team'];
-  // Voci visibili solo a owner
-  const ownerOnlyViews = ['impostazioni', 'team'];
+  // Per i cassieri usa i permessi personalizzati
+  const perms = window.userPerms || {};
 
   document.querySelectorAll('.nav-item').forEach(btn => {
     const view = btn.dataset.view;
     if (!view) return;
-    if (ownerOnlyViews.includes(view) && !isOwner) {
-      btn.style.display = 'none';
-    } else if (adminOnlyViews.includes(view) && isCashier) {
-      btn.style.display = 'none';
-    } else {
-      btn.style.display = 'flex';
+
+    let visible = true;
+
+    if (isOwner) {
+      visible = true; // owner vede tutto
+    } else if (isAdmin) {
+      visible = !['team','impostazioni'].includes(view);
+    } else if (isCashier) {
+      // Cassiere vede solo quello che gli è stato abilitato
+      const permMap = {
+        dashboard: true,
+        primanota: true,
+        sedi: true,
+        movimenti: perms.movimenti,
+        storico: perms.storico,
+        report: perms.report,
+        banca: perms.banca,
+        fornitori: perms.fornitori,
+        team: false,
+        impostazioni: false
+      };
+      visible = permMap[view] ?? false;
     }
+
+    btn.style.display = visible ? 'flex' : 'none';
   });
 
   // Mostra badge ruolo nella sidebar
@@ -656,6 +673,7 @@ async function loadTeam() {
     membersEl.innerHTML = roles.map(r => {
       const p = r.profiles;
       const initial = (p?.full_name || p?.email || '?')[0].toUpperCase();
+      const isCashier = r.role === 'cashier';
       return `
         <div class="member-item">
           <div class="member-avatar">${initial}</div>
@@ -664,6 +682,10 @@ async function loadTeam() {
             <div class="member-email">${p?.email || '—'}</div>
           </div>
           <span class="role-badge ${r.role}">${roleLabel(r.role)}</span>
+          ${isCashier && currentRole === 'owner' ? `
+            <button class="btn-secondary sm" onclick="apriModalPermessi('${p?.id}','${p?.full_name || p?.email}','${r.role}')">
+              🔑 Permessi
+            </button>` : ''}
         </div>`;
     }).join('');
   }
@@ -3169,4 +3191,93 @@ async function saveAzienda() {
   msgEl.className = 'auth-message success';
   setTimeout(() => msgEl.textContent = '', 3000);
   showToast('Azienda aggiornata ✓', 'success');
+}
+
+// ============================================
+// GESTIONE PERMESSI CASSIERE
+// ============================================
+let currentPermessiUserId = null;
+
+async function apriModalPermessi(userId, userName, role) {
+  if (role !== 'cashier') {
+    showToast('I permessi si configurano solo per i cassieri', '');
+    return;
+  }
+
+  currentPermessiUserId = userId;
+
+  document.getElementById('modal-permessi-user').innerHTML = `
+    <div class="mi-label">Configurazione permessi per</div>
+    <div class="mi-value" style="font-size:16px">${userName}</div>
+    <div class="mi-meta">Ruolo: Cassiere</div>`;
+
+  // Carica permessi esistenti
+  const { data: perms } = await db.from('user_permissions')
+    .select('*')
+    .eq('business_id', currentBusiness.id)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  // Imposta checkbox
+  document.getElementById('perm-movimenti').checked = perms?.can_view_movimenti ?? false;
+  document.getElementById('perm-storico').checked = perms?.can_view_storico ?? false;
+  document.getElementById('perm-report').checked = perms?.can_view_report ?? false;
+  document.getElementById('perm-banca').checked = perms?.can_view_banca ?? false;
+  document.getElementById('perm-fornitori').checked = perms?.can_view_fornitori ?? false;
+
+  document.getElementById('modal-permessi').classList.remove('hidden');
+}
+
+function closeModalPermessi() {
+  document.getElementById('modal-permessi').classList.add('hidden');
+  currentPermessiUserId = null;
+}
+
+async function salvaPermessi() {
+  if (!currentPermessiUserId || !currentBusiness) return;
+
+  const payload = {
+    business_id: currentBusiness.id,
+    user_id: currentPermessiUserId,
+    can_view_dashboard: true,
+    can_view_primanota: true,
+    can_view_movimenti: document.getElementById('perm-movimenti').checked,
+    can_view_storico: document.getElementById('perm-storico').checked,
+    can_view_report: document.getElementById('perm-report').checked,
+    can_view_banca: document.getElementById('perm-banca').checked,
+    can_view_fornitori: document.getElementById('perm-fornitori').checked
+  };
+
+  const { error } = await db.from('user_permissions')
+    .upsert(payload, { onConflict: 'business_id,user_id' });
+
+  if (error) { showToast('Errore: ' + error.message, 'error'); return; }
+
+  closeModalPermessi();
+  showToast('Permessi salvati ✓', 'success');
+}
+
+// Carica permessi per l'utente corrente e aggiorna il menu
+async function loadCurrentUserPermissions() {
+  if (!currentBusiness || currentRole !== 'cashier') return;
+
+  const { data: perms } = await db.from('user_permissions')
+    .select('*')
+    .eq('business_id', currentBusiness.id)
+    .eq('user_id', currentUser.id)
+    .maybeSingle();
+
+  // Default cassiere: solo dashboard e primanota
+  window.userPerms = {
+    dashboard: true,
+    primanota: true,
+    movimenti: perms?.can_view_movimenti ?? false,
+    storico: perms?.can_view_storico ?? false,
+    report: perms?.can_view_report ?? false,
+    banca: perms?.can_view_banca ?? false,
+    fornitori: perms?.can_view_fornitori ?? false,
+    sedi: true,
+    team: false,
+    impostazioni: false
+  };
 }
