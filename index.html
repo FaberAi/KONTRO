@@ -482,11 +482,25 @@
                   <td class="td-tot" id="tot-money">€ 0,00</td>
                 </tr>
                 <tr class="pn-row-even">
-                  <td class="td-desc">Giochi e Scommesse</td>
-                  <td><input type="number" id="sisal-m" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
-                  <td><input type="number" id="sisal-p" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
-                  <td><input type="number" id="sisal-s" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
-                  <td class="td-tot" id="tot-sisal">€ 0,00</td>
+                  <td class="td-desc">Gratta e Vinci</td>
+                  <td><input type="number" id="grattavinci-m" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
+                  <td><input type="number" id="grattavinci-p" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
+                  <td><input type="number" id="grattavinci-s" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
+                  <td class="td-tot" id="tot-grattavinci">€ 0,00</td>
+                </tr>
+                <tr>
+                  <td class="td-desc">
+                    <div style="display:flex;flex-direction:column;gap:4px">
+                      <span>Conto Bet</span>
+                      <select id="pn-bet-banca" class="pn-desc-input" style="font-size:11px;margin-top:2px">
+                        <option value="">— Seleziona conto bet —</option>
+                      </select>
+                    </div>
+                  </td>
+                  <td><input type="number" id="conto-bet-m" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
+                  <td><input type="number" id="conto-bet-p" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
+                  <td><input type="number" id="conto-bet-s" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
+                  <td class="td-tot" id="tot-conto-bet">€ 0,00</td>
                 </tr>
                 <tr>
                   <td class="td-desc">Fatture Clienti</td>
@@ -759,6 +773,7 @@
                     <option value="corrente">Conto corrente</option>
                     <option value="deposito">Conto deposito</option>
                     <option value="postale">Conto postale</option>
+                    <option value="bet">Conto scommesse (Bet)</option>
                   </select>
                 </div>
                 <div class="field"><label>Saldo iniziale (€)</label><input type="number" id="nb-saldo" step="0.01" placeholder="0,00" /></div>
