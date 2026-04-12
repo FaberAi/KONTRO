@@ -2905,67 +2905,119 @@ async function loadEstratto() {
   ]);
 
   const totFatturato = (fatture||[]).reduce((s,f) => s + Number(f.importo_totale), 0);
-  const totAddebitato = (assegni||[]).filter(a => a.stato === 'addebitato').reduce((s,a) => s + Number(a.importo), 0);
-  const totEmesso = (assegni||[]).filter(a => a.stato !== 'addebitato').reduce((s,a) => s + Number(a.importo), 0);
-  const saldoAperto = totFatturato - totAddebitato - totEmesso;
+
+  // Assegni emessi = dati al fornitore ma banca non ancora addebitata
+  const assEmessi = (assegni||[]).filter(a => (a.stato||'emesso') !== 'addebitato');
+  const totEmesso = assEmessi.reduce((s,a) => s + Number(a.importo), 0);
+
+  // Assegni addebitati = usciti effettivamente dalla banca
+  const assAddebitati = (assegni||[]).filter(a => (a.stato||'emesso') === 'addebitato');
+  const totAddebitato = assAddebitati.reduce((s,a) => s + Number(a.importo), 0);
+
+  // Saldo scoperto = fatturato - assegni emessi (parte non coperta da nessun assegno)
+  const saldoScoperto = totFatturato - totEmesso - totAddebitato;
+
+  // Saldo da pagare = fatturato - addebitato (debito reale residuo, include anche assegni emessi non ancora incassati)
+  const saldoDaPagare = totFatturato - totAddebitato;
 
   document.getElementById('ec-fatturato').textContent = formatEur(totFatturato);
-  document.getElementById('ec-pagato').textContent = formatEur(totAddebitato);
-  document.getElementById('ec-saldo').textContent = formatEur(saldoAperto);
   document.getElementById('ec-assegni').textContent = formatEur(totEmesso);
+  document.getElementById('ec-scoperto').textContent = formatEur(Math.max(0, saldoScoperto));
+  document.getElementById('ec-saldo').textContent = formatEur(Math.max(0, saldoDaPagare));
 
-  // Merge movimenti ordinati per data
+  // Colora KPI saldo da pagare
+  const saldoEl = document.getElementById('ec-saldo');
+  if (saldoEl) saldoEl.style.color = saldoDaPagare <= 0 ? 'var(--green-400)' : 'var(--red-400)';
+
+  // ── LISTA MOVIMENTI con saldo progressivo ──
   const movimenti = [
     ...(fatture||[]).map(f => ({
       data: f.data_fattura,
+      sortData: f.data_fattura,
       tipo: 'fattura',
       icon: '🧾',
       desc: `Fattura ${f.numero || ''}`,
-      meta: `Scadenza: ${f.data_scadenza ? formatDate(f.data_scadenza) : '—'} · ${({aperta:'Aperta',pagata:'Pagata',pagata_parziale:'Parz. pagata'})[f.stato]||f.stato}`,
+      meta: `Emessa: ${formatDate(f.data_fattura)}${f.data_scadenza ? ' · Scad: ' + formatDate(f.data_scadenza) : ''} · ${{aperta:'Aperta',pagata:'Pagata',pagata_parziale:'Parz. pagata'}[f.stato]||f.stato}`,
       importo: Number(f.importo_totale),
-      segno: 'dare'
+      effetto: 'debito'   // aumenta il debito
     })),
     ...(assegni||[]).map(a => {
       const stato = a.stato || (a.incassato ? 'addebitato' : 'emesso');
       const isAddebitato = stato === 'addebitato';
       return {
+        // L'assegno si "vede" alla data di emissione ma impatta la banca alla scadenza
         data: a.data_emissione,
-        dataScadenza: a.data_scadenza,
+        dataAddebito: a.data_scadenza,
+        sortData: a.data_emissione,
         tipo: 'assegno',
-        icon: '📝',
-        desc: `Assegno ${a.numero ? 'N° ' + a.numero : ''} ${a.data_emissione !== a.data_scadenza ? '(postdatato)' : ''}`,
-        meta: `Emesso: ${formatDate(a.data_emissione)} · Addebito banca: ${formatDate(a.data_scadenza)} · ${isAddebitato ? '✓ Addebitato' : '⏳ In attesa addebito'}`,
+        icon: isAddebitato ? '✅' : '📝',
+        desc: `Assegno ${a.numero ? 'N° ' + a.numero : ''}${a.data_emissione !== a.data_scadenza ? ' — Postdatato' : ''}`,
+        meta: isAddebitato
+          ? `Emesso: ${formatDate(a.data_emissione)} · Addebitato in banca: ${formatDate(a.data_incasso || a.data_scadenza)} ✓`
+          : `Emesso: ${formatDate(a.data_emissione)} · Addebito banca previsto: ${formatDate(a.data_scadenza)} ⏳`,
         importo: Number(a.importo),
-        segno: isAddebitato ? 'avere' : 'avere_pending',
+        effetto: isAddebitato ? 'pagato' : 'emesso',
         addebitato: isAddebitato
       };
     })
-  ].sort((a, b) => new Date(a.data) - new Date(b.data));
+  ].sort((a, b) => new Date(a.sortData) - new Date(b.sortData));
 
-  // Calcola saldo progressivo
-  let saldoProg = 0;
   const el = document.getElementById('estratto-list');
   if (!movimenti.length) { el.innerHTML = '<div class="empty-state">Nessun movimento nel periodo</div>'; return; }
 
-  el.innerHTML = movimenti.map(m => {
-    if (m.segno === 'dare') saldoProg += m.importo;
-    else if (m.segno === 'avere') saldoProg -= m.importo;
-    else if (m.segno === 'avere_pending') saldoProg -= m.importo; // già scalato dall'esposizione
+  // Saldo progressivo: debito sale con fatture, scende con pagamenti confermati
+  let saldoProgDaPagare = 0;  // saldo effettivo (solo addebitati)
+  let saldoProgScoperto = 0;  // saldo scoperto (fatture - emessi - addebitati)
 
-    const valColor = m.segno === 'dare' ? 'dare' : m.addebitato ? 'avere' : 'avere_pending';
+  el.innerHTML = `
+    <div class="ec-header-row">
+      <span style="flex:0 0 28px"></span>
+      <span style="flex:1">Movimento</span>
+      <span style="min-width:100px;text-align:right;font-size:10px;color:var(--gray-500);text-transform:uppercase;letter-spacing:.06em">Importo</span>
+      <span style="min-width:120px;text-align:right;font-size:10px;color:var(--red-400);text-transform:uppercase;letter-spacing:.06em">Saldo da pagare</span>
+      <span style="min-width:120px;text-align:right;font-size:10px;color:var(--gold);text-transform:uppercase;letter-spacing:.06em">Saldo scoperto</span>
+    </div>
+    ${movimenti.map(m => {
+      if (m.effetto === 'debito') {
+        saldoProgDaPagare += m.importo;
+        saldoProgScoperto += m.importo;
+      } else if (m.effetto === 'emesso') {
+        saldoProgScoperto -= m.importo;
+        // saldoProgDaPagare NON cambia — assegno emesso non è ancora uscito dalla banca
+      } else if (m.effetto === 'pagato') {
+        saldoProgDaPagare -= m.importo;
+        // saldoProgScoperto già scalato quando era emesso
+      }
 
-    return `<div class="ec-item">
-      <div class="ec-tipo">${m.icon}</div>
-      <div class="ec-info">
-        <div class="ec-desc">${m.desc}</div>
-        <div class="ec-meta">${m.meta}</div>
+      const importoColor = m.effetto === 'debito' ? 'dare' : 'avere';
+      const opacity = m.effetto === 'emesso' ? 'opacity:0.75' : '';
+
+      return `<div class="ec-item" style="${opacity}">
+        <div class="ec-tipo">${m.icon}</div>
+        <div class="ec-info">
+          <div class="ec-desc">${m.desc}</div>
+          <div class="ec-meta">${m.meta}</div>
+        </div>
+        <div class="ec-val ${importoColor}" style="min-width:100px;text-align:right">
+          ${m.effetto === 'debito' ? '+' : '-'}${formatEur(m.importo)}
+        </div>
+        <div class="ec-val" style="min-width:120px;text-align:right;color:${saldoProgDaPagare > 0 ? 'var(--red-400)' : 'var(--green-400)'}">
+          ${formatEur(saldoProgDaPagare)}
+        </div>
+        <div class="ec-val" style="min-width:120px;text-align:right;color:${saldoProgScoperto > 0 ? 'var(--gold-light)' : 'var(--green-400)'}">
+          ${formatEur(saldoProgScoperto)}
+        </div>
+      </div>`;
+    }).join('')}
+    <div class="ec-item" style="background:var(--navy-950);border:1px solid rgba(255,255,255,0.08);font-weight:700">
+      <div class="ec-tipo">📊</div>
+      <div class="ec-info"><div class="ec-desc">TOTALE PERIODO</div></div>
+      <div class="ec-val" style="min-width:100px;text-align:right;color:var(--gray-400)">${formatEur(totFatturato)}</div>
+      <div class="ec-val" style="min-width:120px;text-align:right;color:${saldoProgDaPagare > 0 ? 'var(--red-400)' : 'var(--green-400)'};font-size:15px">
+        ${formatEur(saldoProgDaPagare)}
       </div>
-      <div class="ec-val ${valColor === 'dare' ? 'dare' : 'avere'}" style="${!m.addebitato && m.tipo==='assegno' ? 'opacity:0.6' : ''}">
-        ${m.segno === 'dare' ? '+' : '-'}${formatEur(m.importo)}
-      </div>
-      <div class="ec-val" style="min-width:100px;text-align:right;color:${saldoProg > 0 ? 'var(--red-400)' : 'var(--green-400)'}">
-        ${formatEur(saldoProg)}
+      <div class="ec-val" style="min-width:120px;text-align:right;color:${saldoProgScoperto > 0 ? 'var(--gold-light)' : 'var(--green-400)'};font-size:15px">
+        ${formatEur(saldoProgScoperto)}
       </div>
     </div>`;
-  }).join('');
 }

@@ -962,20 +962,24 @@
           <!-- KPI estratto -->
           <div class="kpi-grid" style="margin-bottom:16px">
             <div class="kpi-card uscite">
-              <div class="kpi-label">Fatturato</div>
+              <div class="kpi-label">Fatturato totale</div>
               <div class="kpi-value" id="ec-fatturato">€ 0,00</div>
-            </div>
-            <div class="kpi-card uscite">
-              <div class="kpi-label">Pagato</div>
-              <div class="kpi-value" id="ec-pagato" style="color:var(--green-400)">€ 0,00</div>
+              <div class="kpi-sub">Somma fatture periodo</div>
             </div>
             <div class="kpi-card mese">
-              <div class="kpi-label">Saldo aperto</div>
-              <div class="kpi-value" id="ec-saldo">€ 0,00</div>
-            </div>
-            <div class="kpi-card saldo">
               <div class="kpi-label">Assegni emessi</div>
               <div class="kpi-value" id="ec-assegni">€ 0,00</div>
+              <div class="kpi-sub">In attesa addebito banca</div>
+            </div>
+            <div class="kpi-card uscite">
+              <div class="kpi-label">Saldo scoperto</div>
+              <div class="kpi-value" id="ec-scoperto">€ 0,00</div>
+              <div class="kpi-sub">Non coperto da assegni</div>
+            </div>
+            <div class="kpi-card saldo">
+              <div class="kpi-label">Saldo da pagare</div>
+              <div class="kpi-value" id="ec-saldo">€ 0,00</div>
+              <div class="kpi-sub">Fatturato - addebitato</div>
             </div>
           </div>
 
@@ -988,6 +992,39 @@
       </div>
 
     </main>
+  </div>
+
+  <!-- Modale pagamento assegno -->
+  <div id="modal-paga-assegno" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Registra pagamento assegno</h3>
+        <button class="modal-close" onclick="closeModalAssegno()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="modal-assegno-info" class="modal-info-box"></div>
+        <div class="form-grid" style="margin-top:16px">
+          <div class="field">
+            <label>Data pagamento</label>
+            <input type="date" id="pag-data" />
+          </div>
+          <div class="field">
+            <label>Banca di addebito</label>
+            <select id="pag-banca">
+              <option value="">Seleziona banca</option>
+            </select>
+          </div>
+          <div class="field full">
+            <label>Note</label>
+            <input type="text" id="pag-note" placeholder="Es. Pagato in filiale..." />
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="closeModalAssegno()">Annulla</button>
+        <button class="btn-primary" onclick="confermaPagamentoAssegno()">Conferma pagamento →</button>
+      </div>
+    </div>
   </div>
 
   <!-- Toast notification -->

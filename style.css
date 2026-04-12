@@ -1786,3 +1786,19 @@ html, body {
 .fe-val.red { color: var(--red-400); }
 .fe-val.green { color: var(--green-400); }
 .fe-val.gold { color: var(--gold-light); }
+
+/* Estratto conto header */
+.ec-header-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 16px;
+  margin-bottom: 4px;
+}
+
+.ec-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
