@@ -55,6 +55,17 @@ async function initApp() {
   await loadBusiness();
   await loadLocations();
   await loadCategories();
+  // Carica cache fornitori e banche all'avvio
+  if (currentBusiness) {
+    const [{ data: forn }, { data: banche }] = await Promise.all([
+      db.from('fornitori').select('id,ragione_sociale')
+        .eq('business_id', currentBusiness.id).eq('attivo', true).order('ragione_sociale'),
+      db.from('banche').select('*')
+        .eq('business_id', currentBusiness.id).eq('attivo', true).order('nome')
+    ]);
+    fornitoriCache = forn || [];
+    bancheCache = banche || [];
+  }
   await loadDashboard();
   updateUserUI();
 }
@@ -1389,9 +1400,9 @@ async function loadNotaGiorno() {
     .eq('data', data);
 
   if (locId) query = query.eq('location_id', locId);
-  else query = query.is('location_id', null);
-
-  const { data: nota } = await query.single();
+  // Non filtriamo per null esplicitamente — prendiamo il record e controlliamo
+  const { data: noteList } = await query.order('created_at', { ascending: false }).limit(10);
+  const nota = (noteList || []).find(n => locId ? n.location_id === locId : !n.location_id) || null;
 
   resetPN(false);
   if (!nota) return;
@@ -1719,8 +1730,8 @@ async function loadNotaGiorno2() {
   let query = db.from('daily_notes').select('*, daily_note_rows(*)')
     .eq('business_id', currentBusiness.id).eq('data', data);
   if (locId) query = query.eq('location_id', locId);
-  else query = query.is('location_id', null);
-  const { data: nota } = await query.single();
+  const { data: noteList2 } = await query.order('created_at', { ascending: false }).limit(10);
+  const nota = (noteList2 || []).find(n => locId ? n.location_id === locId : !n.location_id) || null;
 
   resetPN();
   if (!nota) return;
