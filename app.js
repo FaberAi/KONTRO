@@ -295,6 +295,7 @@ async function loadDashboard() {
 
   const recent = [...all].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 8);
   renderEntries(recent, 'recent-entries');
+  loadCharts();
 }
 
 // ============================================
@@ -762,4 +763,165 @@ async function applyInvite(userId) {
 
   window._pendingInvite = null;
   window._pendingInviteToken = null;
+}
+
+// ============================================
+// GRAFICI
+// ============================================
+let chartWeekly = null;
+let chartCategories = null;
+
+async function loadCharts() {
+  if (!currentBusiness) return;
+
+  // Ultimi 7 giorni
+  const days = [];
+  const labels = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    days.push(d.toISOString().split('T')[0]);
+    labels.push(d.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric' }));
+  }
+
+  const from = days[0];
+  const to = days[days.length - 1];
+
+  let query = db.from('cash_entries').select('*')
+    .eq('business_id', currentBusiness.id)
+    .gte('entry_date', from)
+    .lte('entry_date', to);
+
+  if (selectedLocation) query = query.eq('location_id', selectedLocation);
+
+  const { data } = await query;
+  const entries = data || [];
+
+  // Dati per grafico settimanale
+  const entratePerDay = days.map(d =>
+    entries.filter(e => e.entry_date === d && e.type === 'entrata')
+           .reduce((s, e) => s + Number(e.amount), 0)
+  );
+  const uscitePerDay = days.map(d =>
+    entries.filter(e => e.entry_date === d && e.type === 'uscita')
+           .reduce((s, e) => s + Number(e.amount), 0)
+  );
+
+  // Grafico settimanale
+  const ctxW = document.getElementById('chart-weekly');
+  if (ctxW) {
+    if (chartWeekly) chartWeekly.destroy();
+    chartWeekly = new Chart(ctxW, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: 'Entrate',
+            data: entratePerDay,
+            backgroundColor: 'rgba(16, 185, 129, 0.7)',
+            borderColor: 'rgba(16, 185, 129, 1)',
+            borderWidth: 1,
+            borderRadius: 6,
+          },
+          {
+            label: 'Uscite',
+            data: uscitePerDay,
+            backgroundColor: 'rgba(239, 68, 68, 0.7)',
+            borderColor: 'rgba(239, 68, 68, 1)',
+            borderWidth: 1,
+            borderRadius: 6,
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: {
+            labels: { color: '#9ca3af', font: { family: 'DM Mono', size: 11 } }
+          },
+          tooltip: {
+            callbacks: {
+              label: ctx => ' € ' + ctx.parsed.y.toLocaleString('it-IT', { minimumFractionDigits: 2 })
+            }
+          }
+        },
+        scales: {
+          x: {
+            ticks: { color: '#6b7280', font: { family: 'DM Mono', size: 11 } },
+            grid: { color: 'rgba(255,255,255,0.04)' }
+          },
+          y: {
+            ticks: {
+              color: '#6b7280',
+              font: { family: 'DM Mono', size: 11 },
+              callback: v => '€ ' + v.toLocaleString('it-IT')
+            },
+            grid: { color: 'rgba(255,255,255,0.04)' }
+          }
+        }
+      }
+    });
+  }
+
+  // Dati per grafico categorie (mese corrente)
+  const firstDay = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
+  const { data: monthData } = await db.from('cash_entries').select('*')
+    .eq('business_id', currentBusiness.id)
+    .gte('entry_date', firstDay);
+
+  const catGroups = {};
+  (monthData || []).forEach(e => {
+    const cat = (window.allCategories || []).find(c => c.id === e.category_id);
+    const key = cat ? cat.name : 'Altro';
+    const color = cat ? cat.color : '#6b7280';
+    if (!catGroups[key]) catGroups[key] = { total: 0, color };
+    catGroups[key].total += Number(e.amount);
+  });
+
+  const catLabels = Object.keys(catGroups);
+  const catValues = catLabels.map(k => catGroups[k].total);
+  const catColors = catLabels.map(k => catGroups[k].color);
+
+  const ctxC = document.getElementById('chart-categories');
+  if (ctxC) {
+    if (chartCategories) chartCategories.destroy();
+    if (catLabels.length === 0) {
+      ctxC.parentElement.querySelector('canvas').style.display = 'none';
+      return;
+    }
+    chartCategories = new Chart(ctxC, {
+      type: 'doughnut',
+      data: {
+        labels: catLabels,
+        datasets: [{
+          data: catValues,
+          backgroundColor: catColors.map(c => c + 'cc'),
+          borderColor: catColors,
+          borderWidth: 1,
+          hoverOffset: 8
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: {
+            position: 'right',
+            labels: {
+              color: '#9ca3af',
+              font: { family: 'DM Mono', size: 11 },
+              padding: 12,
+              boxWidth: 12
+            }
+          },
+          tooltip: {
+            callbacks: {
+              label: ctx => ' € ' + ctx.parsed.toLocaleString('it-IT', { minimumFractionDigits: 2 })
+            }
+          }
+        },
+        cutout: '65%'
+      }
+    });
+  }
 }

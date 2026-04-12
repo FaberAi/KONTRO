@@ -152,6 +152,22 @@
           </div>
         </div>
 
+        <!-- Grafici -->
+        <div class="charts-grid">
+          <div class="section-card">
+            <div class="section-header">
+              <h2>Ultimi 7 giorni</h2>
+            </div>
+            <canvas id="chart-weekly" height="200"></canvas>
+          </div>
+          <div class="section-card">
+            <div class="section-header">
+              <h2>Per categoria</h2>
+            </div>
+            <canvas id="chart-categories" height="200"></canvas>
+          </div>
+        </div>
+
         <!-- Ultimi movimenti -->
         <div class="section-card">
           <div class="section-header">
@@ -372,6 +388,7 @@
   <!-- Toast notification -->
   <div id="toast" class="toast"></div>
 
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
   <script src="app.js"></script>
