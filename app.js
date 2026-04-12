@@ -218,13 +218,14 @@ function showView(name) {
   document.querySelectorAll('.nav-item').forEach(n => {
     n.classList.toggle('active', n.dataset.view === name);
   });
-  const titles = { dashboard: 'Dashboard', nuovo: 'Nuovo movimento', movimenti: 'Movimenti', report: 'Report', sedi: 'Sedi', team: 'Team' };
+  const titles = { dashboard: 'Dashboard', primanota: 'Prima Nota', nuovo: 'Nuovo movimento', movimenti: 'Movimenti', report: 'Report', sedi: 'Sedi', team: 'Team' };
   document.getElementById('page-title').textContent = titles[name] || name;
 
   if (name === 'movimenti') loadMovimenti();
   if (name === 'report') loadReport();
   if (name === 'sedi') renderLocationsList();
   if (name === 'team') loadTeam();
+  if (name === 'primanota') initPrimaNota();
 }
 
 function updateUserUI() {
@@ -924,4 +925,900 @@ async function loadCharts() {
       }
     });
   }
+}
+
+// ============================================
+// EXPORT PDF
+// ============================================
+async function exportPDF() {
+  if (!currentBusiness) return;
+
+  const month = parseInt(document.getElementById('report-month').value);
+  const year = parseInt(document.getElementById('report-year').value);
+  const monthNames = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
+                      'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+  const from = `${year}-${String(month).padStart(2,'0')}-01`;
+  const lastDay = new Date(year, month, 0).getDate();
+  const to = `${year}-${String(month).padStart(2,'0')}-${lastDay}`;
+
+  showToast('Generazione PDF...', '');
+
+  const { data } = await db.from('cash_entries').select('*')
+    .eq('business_id', currentBusiness.id)
+    .gte('entry_date', from).lte('entry_date', to)
+    .order('entry_date', { ascending: true });
+
+  const entries = data || [];
+  const totIn = entries.filter(e => e.type === 'entrata').reduce((s, e) => s + Number(e.amount), 0);
+  const totOut = entries.filter(e => e.type === 'uscita').reduce((s, e) => s + Number(e.amount), 0);
+  const saldo = totIn - totOut;
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+  const W = 210;
+  const margin = 16;
+  let y = 0;
+
+  // ---- HEADER ----
+  doc.setFillColor(10, 15, 30);
+  doc.rect(0, 0, W, 40, 'F');
+
+  // Logo K
+  doc.setFillColor(37, 99, 235);
+  doc.roundedRect(margin, 10, 18, 18, 3, 3, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.text('K', margin + 9, 22, { align: 'center' });
+
+  // Titolo
+  doc.setFontSize(20);
+  doc.setFont('helvetica', 'bold');
+  doc.text('KONTRO', margin + 22, 22);
+
+  // Data generazione
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(156, 163, 175);
+  doc.text('Generato il ' + new Date().toLocaleDateString('it-IT'), W - margin, 22, { align: 'right' });
+
+  y = 48;
+
+  // ---- TITOLO REPORT ----
+  doc.setTextColor(30, 40, 70);
+  doc.setFontSize(16);
+  doc.setFont('helvetica', 'bold');
+  doc.text(`Report ${monthNames[month - 1]} ${year}`, margin, y);
+
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(107, 114, 128);
+  doc.text(currentBusiness.name, margin, y + 6);
+
+  y += 18;
+
+  // ---- KPI BOX ----
+  const kpiW = (W - margin * 2 - 8) / 3;
+
+  // Entrate
+  doc.setFillColor(16, 185, 129, 0.1);
+  doc.setFillColor(236, 253, 245);
+  doc.roundedRect(margin, y, kpiW, 22, 3, 3, 'F');
+  doc.setTextColor(16, 185, 129);
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.text('ENTRATE', margin + 4, y + 7);
+  doc.setFontSize(13);
+  doc.text(formatEur(totIn), margin + 4, y + 16);
+
+  // Uscite
+  const x2 = margin + kpiW + 4;
+  doc.setFillColor(254, 242, 242);
+  doc.roundedRect(x2, y, kpiW, 22, 3, 3, 'F');
+  doc.setTextColor(239, 68, 68);
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.text('USCITE', x2 + 4, y + 7);
+  doc.setFontSize(13);
+  doc.text(formatEur(totOut), x2 + 4, y + 16);
+
+  // Saldo
+  const x3 = margin + (kpiW + 4) * 2;
+  doc.setFillColor(saldo >= 0 ? 239 : 254, saldo >= 0 ? 246 : 242, saldo >= 0 ? 255 : 242);
+  doc.roundedRect(x3, y, kpiW, 22, 3, 3, 'F');
+  doc.setTextColor(saldo >= 0 ? 37 : 239, saldo >= 0 ? 99 : 68, saldo >= 0 ? 235 : 68);
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.text('SALDO NETTO', x3 + 4, y + 7);
+  doc.setFontSize(13);
+  doc.text(formatEur(saldo), x3 + 4, y + 16);
+
+  y += 30;
+
+  // ---- TABELLA MOVIMENTI ----
+  doc.setTextColor(10, 15, 30);
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Dettaglio movimenti', margin, y);
+  y += 6;
+
+  // Header tabella
+  doc.setFillColor(10, 15, 30);
+  doc.rect(margin, y, W - margin * 2, 7, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.text('DATA', margin + 2, y + 5);
+  doc.text('DESCRIZIONE', margin + 22, y + 5);
+  doc.text('CATEGORIA', margin + 90, y + 5);
+  doc.text('METODO', margin + 130, y + 5);
+  doc.text('IMPORTO', W - margin - 2, y + 5, { align: 'right' });
+  y += 9;
+
+  // Righe
+  doc.setFont('helvetica', 'normal');
+  entries.forEach((e, i) => {
+    if (y > 270) {
+      doc.addPage();
+      y = 20;
+    }
+
+    if (i % 2 === 0) {
+      doc.setFillColor(248, 250, 252);
+      doc.rect(margin, y - 3, W - margin * 2, 7, 'F');
+    }
+
+    const cat = (window.allCategories || []).find(c => c.id === e.category_id);
+    const isEntrata = e.type === 'entrata';
+
+    doc.setTextColor(107, 114, 128);
+    doc.setFontSize(8);
+    doc.text(formatDate(e.entry_date), margin + 2, y + 2);
+
+    doc.setTextColor(10, 15, 30);
+    const desc = (e.description || (isEntrata ? 'Entrata' : 'Uscita')).substring(0, 35);
+    doc.text(desc, margin + 22, y + 2);
+
+    doc.setTextColor(107, 114, 128);
+    doc.text((cat ? cat.name : '—').substring(0, 18), margin + 90, y + 2);
+    doc.text((e.payment_method || '—'), margin + 130, y + 2);
+
+    isEntrata ? doc.setTextColor(16, 185, 129) : doc.setTextColor(239, 68, 68);
+    doc.setFont('helvetica', 'bold');
+    doc.text((isEntrata ? '+' : '-') + formatEur(e.amount), W - margin - 2, y + 2, { align: 'right' });
+    doc.setFont('helvetica', 'normal');
+
+    y += 7;
+  });
+
+  if (entries.length === 0) {
+    doc.setTextColor(156, 163, 175);
+    doc.setFontSize(9);
+    doc.text('Nessun movimento nel periodo selezionato', margin + 2, y + 4);
+    y += 10;
+  }
+
+  // ---- TOTALE FINALE ----
+  y += 4;
+  doc.setDrawColor(10, 15, 30);
+  doc.setLineWidth(0.3);
+  doc.line(margin, y, W - margin, y);
+  y += 6;
+
+  doc.setFillColor(10, 15, 30);
+  doc.rect(margin, y, W - margin * 2, 8, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  doc.text('TOTALE', margin + 2, y + 5.5);
+  doc.setTextColor(saldo >= 0 ? 52 : 248, saldo >= 0 ? 211 : 113, saldo >= 0 ? 153 : 113);
+  doc.text(formatEur(saldo), W - margin - 2, y + 5.5, { align: 'right' });
+
+  // ---- FOOTER ----
+  const pageCount = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    doc.setFontSize(7);
+    doc.setTextColor(156, 163, 175);
+    doc.text('KONTRO — Prima nota digitale · kontro.vercel.app', margin, 290);
+    doc.text(`Pagina ${i} di ${pageCount}`, W - margin, 290, { align: 'right' });
+  }
+
+  // Salva
+  const filename = `KONTRO_Report_${monthNames[month-1]}_${year}_${currentBusiness.name.replace(/\s/g,'_')}.pdf`;
+  doc.save(filename);
+  showToast('PDF scaricato ✓', 'success');
+}
+
+// ============================================
+// PRIMA NOTA
+// ============================================
+let pnFornitoriRows = [];
+let pnPrelieviRows = [];
+
+function initPrimaNota() {
+  // Imposta data di oggi
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('pn-data').value = today;
+
+  // Popola select sede
+  const sel = document.getElementById('pn-location');
+  sel.innerHTML = '<option value="">Sede principale</option>' +
+    currentLocations.map(l => `<option value="${l.id}">${l.name}</option>`).join('');
+
+  // Costruisci righe dinamiche
+  buildFornitoriRows(5);
+  buildPrelieviRows(3);
+  calcPN();
+  loadNotaGiorno();
+}
+
+// ── RIGHE DINAMICHE ───────────────────────────────────────────────
+function buildFornitoriRows(n) {
+  pnFornitoriRows = [];
+  const tbody = document.getElementById('tbody-fornitori');
+  tbody.innerHTML = '';
+  for (let i = 0; i < n; i++) addFornitoreRow(false);
+}
+
+function buildPrelieviRows(n) {
+  pnPrelieviRows = [];
+  const tbody = document.getElementById('tbody-prelievi');
+  tbody.innerHTML = '';
+  for (let i = 0; i < n; i++) addPrelievRow(false);
+}
+
+function addFornitoreRow(recalc = true) {
+  const tbody = document.getElementById('tbody-fornitori');
+  const idx = pnFornitoriRows.length;
+  const tr = document.createElement('tr');
+
+  const desc = document.createElement('input');
+  desc.type = 'text'; desc.placeholder = 'Fornitore...'; desc.className = 'pn-desc-input';
+
+  const im = mkPNInput(); const ip = mkPNInput(); const is = mkPNInput();
+  pnFornitoriRows.push({ desc, im, ip, is });
+
+  const tdDesc = document.createElement('td'); tdDesc.className = 'td-desc';
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex;align-items:center;gap:4px';
+  wrap.appendChild(desc);
+  if (idx >= 5) {
+    const rm = document.createElement('button');
+    rm.textContent = '×'; rm.className = 'pn-remove-btn';
+    rm.onclick = () => {
+      const i = pnFornitoriRows.findIndex(r => r.im === im);
+      if (i >= 0) pnFornitoriRows.splice(i, 1);
+      tr.remove(); calcPN();
+    };
+    wrap.appendChild(rm);
+  }
+  tdDesc.appendChild(wrap);
+
+  const totEl = document.createElement('td');
+  totEl.className = 'td-tot'; totEl.textContent = '€ 0,00';
+
+  tr.appendChild(tdDesc);
+  tr.appendChild(mkPNTd(im)); tr.appendChild(mkPNTd(ip)); tr.appendChild(mkPNTd(is));
+  tr.appendChild(totEl);
+  tbody.appendChild(tr);
+
+  [im, ip, is].forEach(el => el.oninput = () => {
+    const tot = (parseFloat(im.value)||0) + (parseFloat(ip.value)||0) + (parseFloat(is.value)||0);
+    totEl.textContent = fmtPN(tot);
+    calcPN();
+  });
+
+  if (recalc) calcPN();
+}
+
+function addPrelievRow(recalc = true) {
+  const tbody = document.getElementById('tbody-prelievi');
+  const idx = pnPrelieviRows.length;
+  const tr = document.createElement('tr');
+
+  const desc = document.createElement('input');
+  desc.type = 'text'; desc.placeholder = 'Causale...'; desc.className = 'pn-desc-input';
+
+  const im = mkPNInput(); const ip = mkPNInput(); const is = mkPNInput();
+  pnPrelieviRows.push({ desc, im, ip, is });
+
+  const tdDesc = document.createElement('td'); tdDesc.className = 'td-desc';
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex;align-items:center;gap:4px';
+  wrap.appendChild(desc);
+  if (idx >= 3) {
+    const rm = document.createElement('button');
+    rm.textContent = '×'; rm.className = 'pn-remove-btn';
+    rm.onclick = () => {
+      const i = pnPrelieviRows.findIndex(r => r.im === im);
+      if (i >= 0) pnPrelieviRows.splice(i, 1);
+      tr.remove(); calcPN();
+    };
+    wrap.appendChild(rm);
+  }
+  tdDesc.appendChild(wrap);
+
+  const totEl = document.createElement('td');
+  totEl.className = 'td-tot'; totEl.textContent = '€ 0,00';
+
+  tr.appendChild(tdDesc);
+  tr.appendChild(mkPNTd(im)); tr.appendChild(mkPNTd(ip)); tr.appendChild(mkPNTd(is));
+  tr.appendChild(totEl);
+  tbody.appendChild(tr);
+
+  [im, ip, is].forEach(el => el.oninput = () => {
+    const tot = (parseFloat(im.value)||0) + (parseFloat(ip.value)||0) + (parseFloat(is.value)||0);
+    totEl.textContent = fmtPN(tot);
+    calcPN();
+  });
+
+  if (recalc) calcPN();
+}
+
+function mkPNInput() {
+  const i = document.createElement('input');
+  i.type = 'number'; i.step = '0.01'; i.placeholder = '—'; i.className = 'pn-input';
+  return i;
+}
+
+function mkPNTd(child) {
+  const td = document.createElement('td');
+  if (child) td.appendChild(child);
+  return td;
+}
+
+function fmtPN(n) {
+  return '€ ' + Math.abs(n||0).toFixed(2).replace('.', ',');
+}
+
+function getPN(id) { return parseFloat(document.getElementById(id)?.value) || 0; }
+
+function sumTurni(id) {
+  return getPN(id+'-m') + getPN(id+'-p') + getPN(id+'-s');
+}
+
+function setPN(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = fmtPN(val);
+}
+
+// ── CALCOLO ───────────────────────────────────────────────────────
+function calcPN() {
+  const fc = getPN('pn-fc');
+  const voci = ['incasso','money','sisal','fatture','giornali'];
+  const uscVoci = ['pos','carte','bonifici'];
+
+  // Totali per voce
+  voci.forEach(k => {
+    const tot = sumTurni(k);
+    setPN('tot-'+k, tot);
+  });
+  uscVoci.forEach(k => {
+    const tot = sumTurni(k);
+    setPN('tot-'+k, tot);
+  });
+
+  // Totali fornitori per turno
+  let fM=0, fP=0, fS=0;
+  pnFornitoriRows.forEach(r => {
+    fM += parseFloat(r.im.value)||0;
+    fP += parseFloat(r.ip.value)||0;
+    fS += parseFloat(r.is.value)||0;
+  });
+
+  // Totali prelievi per turno
+  let pM=0, pP=0, pS=0;
+  pnPrelieviRows.forEach(r => {
+    pM += parseFloat(r.im.value)||0;
+    pP += parseFloat(r.ip.value)||0;
+    pS += parseFloat(r.is.value)||0;
+  });
+
+  // Fondo chiusura
+  const fcUscM = getPN('fc-usc-m'), fcUscP = getPN('fc-usc-p'), fcUscS = getPN('fc-usc-s');
+  setPN('tot-fc-usc', fcUscM + fcUscP + fcUscS);
+
+  // Totali entrate per turno (fc solo in totale, non per turno)
+  const entM = voci.reduce((s,k) => s + getPN(k+'-m'), 0);
+  const entP = voci.reduce((s,k) => s + getPN(k+'-p'), 0);
+  const entS = voci.reduce((s,k) => s + getPN(k+'-s'), 0);
+  const entTot = fc + entM + entP + entS;
+
+  setPN('tot-ent-m', entM); setPN('tot-ent-p', entP);
+  setPN('tot-ent-s', entS); setPN('tot-ent', entTot);
+
+  // Totali uscite per turno
+  const uscM = uscVoci.reduce((s,k) => s + getPN(k+'-m'), 0) + fM + pM + fcUscM;
+  const uscP = uscVoci.reduce((s,k) => s + getPN(k+'-p'), 0) + fP + pP + fcUscP;
+  const uscS = uscVoci.reduce((s,k) => s + getPN(k+'-s'), 0) + fS + pS + fcUscS;
+  const uscTot = uscM + uscP + uscS;
+
+  setPN('tot-usc-m', uscM); setPN('tot-usc-p', uscP);
+  setPN('tot-usc-s', uscS); setPN('tot-usc', uscTot);
+
+  // Differenze per turno
+  const diffM = entM - uscM;
+  const diffP = entP - uscP;
+  const diffS = entS - uscS;
+  const diffTot = entTot - uscTot;
+
+  ['m','p','s'].forEach((t, i) => {
+    const d = [diffM, diffP, diffS][i];
+    const el = document.getElementById('diff-'+t);
+    if (el) {
+      el.textContent = (d >= 0 ? '+ ' : '- ') + fmtPN(d);
+      el.className = 'td-tot' + (d > 0 ? ' alarm' : '');
+    }
+  });
+  const dtEl = document.getElementById('diff-tot');
+  if (dtEl) {
+    dtEl.textContent = (diffTot >= 0 ? '+ ' : '- ') + fmtPN(diffTot);
+    dtEl.className = 'td-tot' + (diffTot > 0 ? ' alarm' : '');
+  }
+
+  // Incasso per turno = incasso dichiarato + |differenza turno|
+  const incM = getPN('incasso-m') + Math.abs(diffM);
+  const incP = getPN('incasso-p') + Math.abs(diffP);
+  const incS = getPN('incasso-s') + Math.abs(diffS);
+  const incTot = incM + incP + incS;
+
+  setPN('r-inc-m', incM);
+  setPN('r-inc-p', incP);
+  setPN('r-inc-s', incS);
+  setPN('r-inc-tot', incTot);
+
+  // Allarme
+  const allarme = document.getElementById('pn-allarme');
+  if (allarme) allarme.classList.toggle('hidden', diffTot <= 0);
+}
+
+// ── CARICA/SALVA ──────────────────────────────────────────────────
+async function loadNotaGiorno() {
+  if (!currentBusiness) return;
+  const data = document.getElementById('pn-data').value;
+  const locId = document.getElementById('pn-location').value || null;
+  if (!data) return;
+
+  let query = db.from('daily_notes').select('*, daily_note_rows(*)')
+    .eq('business_id', currentBusiness.id)
+    .eq('data', data);
+
+  if (locId) query = query.eq('location_id', locId);
+  else query = query.is('location_id', null);
+
+  const { data: nota } = await query.single();
+
+  resetPN(false);
+  if (!nota) return;
+
+  // Popola campi fissi
+  document.getElementById('pn-fc').value = nota.fondo_cassa || '';
+  const campi = ['incasso','money','sisal','fatture','giornali','pos','carte','bonifici','fc-usc'];
+  campi.forEach(k => {
+    const key = k.replace('-','_');
+    ['m','p','s'].forEach(t => {
+      const el = document.getElementById(k+'-'+t);
+      if (el) el.value = nota[key+'_'+t] || '';
+    });
+  });
+
+  document.getElementById('cm').value = nota.compilatore_m || '';
+  document.getElementById('cp').value = nota.compilatore_p || '';
+  document.getElementById('cs').value = nota.compilatore_s || '';
+  document.getElementById('pn-note').value = nota.note || '';
+
+  // Popola righe dinamiche
+  if (nota.daily_note_rows?.length) {
+    const fornitori = nota.daily_note_rows.filter(r => r.categoria === 'fornitore');
+    const prelievi = nota.daily_note_rows.filter(r => r.categoria === 'prelievo');
+
+    buildFornitoriRows(Math.max(5, fornitori.length));
+    fornitori.forEach((r, i) => {
+      if (pnFornitoriRows[i]) {
+        pnFornitoriRows[i].desc.value = r.descrizione || '';
+        pnFornitoriRows[i].im.value = r.importo_m || '';
+        pnFornitoriRows[i].ip.value = r.importo_p || '';
+        pnFornitoriRows[i].is.value = r.importo_s || '';
+      }
+    });
+
+    buildPrelieviRows(Math.max(3, prelievi.length));
+    prelievi.forEach((r, i) => {
+      if (pnPrelieviRows[i]) {
+        pnPrelieviRows[i].desc.value = r.descrizione || '';
+        pnPrelieviRows[i].im.value = r.importo_m || '';
+        pnPrelieviRows[i].ip.value = r.importo_p || '';
+        pnPrelieviRows[i].is.value = r.importo_s || '';
+      }
+    });
+  }
+
+  calcPN();
+}
+
+async function salvaNotaGiorno() {
+  if (!currentBusiness) return;
+  const data = document.getElementById('pn-data').value;
+  if (!data) { showPNMsg('Inserisci la data', 'error'); return; }
+
+  const locId = document.getElementById('pn-location').value || null;
+  const fc = getPN('pn-fc');
+
+  const campiMap = {
+    incasso_m: getPN('incasso-m'), incasso_p: getPN('incasso-p'), incasso_s: getPN('incasso-s'),
+    money_m: getPN('money-m'), money_p: getPN('money-p'), money_s: getPN('money-s'),
+    sisal_m: getPN('sisal-m'), sisal_p: getPN('sisal-p'), sisal_s: getPN('sisal-s'),
+    fatture_m: getPN('fatture-m'), fatture_p: getPN('fatture-p'), fatture_s: getPN('fatture-s'),
+    giornali_m: getPN('giornali-m'), giornali_p: getPN('giornali-p'), giornali_s: getPN('giornali-s'),
+    pos_m: getPN('pos-m'), pos_p: getPN('pos-p'), pos_s: getPN('pos-s'),
+    carte_m: getPN('carte-m'), carte_p: getPN('carte-p'), carte_s: getPN('carte-s'),
+    bonifici_m: getPN('bonifici-m'), bonifici_p: getPN('bonifici-p'), bonifici_s: getPN('bonifici-s'),
+    fondo_chiusura_m: getPN('fc-usc-m'), fondo_chiusura_p: getPN('fc-usc-p'), fondo_chiusura_s: getPN('fc-usc-s'),
+  };
+
+  const voci = ['incasso','money','sisal','fatture','giornali'];
+  const uscVoci = ['pos','carte','bonifici'];
+  const entTot = fc + voci.reduce((s,k) => s + getPN(k+'-m') + getPN(k+'-p') + getPN(k+'-s'), 0);
+  const uscTot = uscVoci.reduce((s,k) => s + getPN(k+'-m') + getPN(k+'-p') + getPN(k+'-s'), 0)
+    + pnFornitoriRows.reduce((s,r) => s + (parseFloat(r.im.value)||0) + (parseFloat(r.ip.value)||0) + (parseFloat(r.is.value)||0), 0)
+    + pnPrelieviRows.reduce((s,r) => s + (parseFloat(r.im.value)||0) + (parseFloat(r.ip.value)||0) + (parseFloat(r.is.value)||0), 0)
+    + getPN('fc-usc-m') + getPN('fc-usc-p') + getPN('fc-usc-s');
+
+  const payload = {
+    business_id: currentBusiness.id,
+    location_id: locId,
+    data,
+    fondo_cassa: fc,
+    ...campiMap,
+    totale_entrate: entTot,
+    totale_uscite: uscTot,
+    differenza: entTot - uscTot,
+    incasso_giornaliero: entTot - uscTot,
+    compilatore_m: document.getElementById('cm').value,
+    compilatore_p: document.getElementById('cp').value,
+    compilatore_s: document.getElementById('cs').value,
+    note: document.getElementById('pn-note').value,
+    created_by: currentUser.id,
+    updated_at: new Date().toISOString()
+  };
+
+  const { data: saved, error } = await db.from('daily_notes')
+    .upsert(payload, { onConflict: 'business_id,location_id,data' })
+    .select().single();
+
+  if (error) { showPNMsg('Errore: ' + error.message, 'error'); return; }
+
+  // Salva righe
+  await db.from('daily_note_rows').delete().eq('daily_note_id', saved.id);
+  const rows = [];
+  pnFornitoriRows.forEach((r, i) => {
+    const vm = parseFloat(r.im.value)||0, vp = parseFloat(r.ip.value)||0, vs = parseFloat(r.is.value)||0;
+    if (vm || vp || vs || r.desc.value.trim()) {
+      rows.push({ daily_note_id: saved.id, business_id: currentBusiness.id,
+        categoria: 'fornitore', descrizione: r.desc.value.trim(),
+        importo_m: vm, importo_p: vp, importo_s: vs, ordine: i });
+    }
+  });
+  pnPrelieviRows.forEach((r, i) => {
+    const vm = parseFloat(r.im.value)||0, vp = parseFloat(r.ip.value)||0, vs = parseFloat(r.is.value)||0;
+    if (vm || vp || vs || r.desc.value.trim()) {
+      rows.push({ daily_note_id: saved.id, business_id: currentBusiness.id,
+        categoria: 'prelievo', descrizione: r.desc.value.trim(),
+        importo_m: vm, importo_p: vp, importo_s: vs, ordine: i });
+    }
+  });
+  if (rows.length) await db.from('daily_note_rows').insert(rows);
+
+  // Fondo chiusura → pre-compila giorno dopo
+  const fcChiusura = getPN('fc-usc-s') || getPN('fc-usc-p') || getPN('fc-usc-m');
+  if (fcChiusura > 0) {
+    const dom = new Date(data); dom.setDate(dom.getDate() + 1);
+    const domStr = dom.toISOString().split('T')[0];
+    await db.from('daily_notes').upsert({
+      business_id: currentBusiness.id,
+      location_id: locId,
+      data: domStr,
+      fondo_cassa: fcChiusura
+    }, { onConflict: 'business_id,location_id,data', ignoreDuplicates: true });
+  }
+
+  showPNMsg('Prima nota salvata ✓' + (fcChiusura > 0 ? ' — fondo cassa domani pre-compilato' : ''), 'success');
+  await loadDashboard();
+}
+
+function resetPN(rebuild = true) {
+  const campi = ['pn-fc','incasso-m','incasso-p','incasso-s','money-m','money-p','money-s',
+    'sisal-m','sisal-p','sisal-s','fatture-m','fatture-p','fatture-s','giornali-m','giornali-p','giornali-s',
+    'pos-m','pos-p','pos-s','carte-m','carte-p','carte-s','bonifici-m','bonifici-p','bonifici-s',
+    'fc-usc-m','fc-usc-p','fc-usc-s','cm','cp','cs','pn-note'];
+  campi.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  if (rebuild) { buildFornitoriRows(5); buildPrelieviRows(3); }
+  calcPN();
+}
+
+function showPNMsg(msg, type) {
+  const el = document.getElementById('pn-msg');
+  el.textContent = msg;
+  el.className = 'auth-message ' + type;
+  setTimeout(() => el.textContent = '', 4000);
+}
+
+// ============================================
+// PRIMA NOTA v2 — Struttura statica
+// ============================================
+let pnFornitoriCount = 5;
+let pnPrelieviCount = 3;
+
+function initPrimaNota() {
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('pn-data').value = today;
+  const sel = document.getElementById('pn-location');
+  if (sel) {
+    sel.innerHTML = '<option value="">Sede principale</option>' +
+      currentLocations.map(l => `<option value="${l.id}">${l.name}</option>`).join('');
+  }
+  calcPN2();
+  loadNotaGiorno2();
+}
+
+function getV(id) { return parseFloat(document.getElementById(id)?.value) || 0; }
+
+function calcPN2() {
+  const fc = getV('pn-fc');
+  const voci = ['incasso','money','sisal','fatture','giornali'];
+  const uscVoci = ['pos','carte','bonifici'];
+
+  // Totali voci entrata
+  voci.forEach(k => {
+    const tot = getV(k+'-m') + getV(k+'-p') + getV(k+'-s');
+    const el = document.getElementById('tot-'+k);
+    if (el) el.textContent = fmtPN(tot);
+  });
+
+  // Totali voci uscita fisse
+  uscVoci.forEach(k => {
+    const tot = getV(k+'-m') + getV(k+'-p') + getV(k+'-s');
+    const el = document.getElementById('tot-'+k);
+    if (el) el.textContent = fmtPN(tot);
+  });
+
+  // Totali fornitori per turno + aggiorna tot per riga
+  let fM=0, fP=0, fS=0;
+  for (let i = 0; i < pnFornitoriCount; i++) {
+    const m = getV('fm-'+i), p = getV('fp-'+i), s = getV('fs-'+i);
+    fM += m; fP += p; fS += s;
+    const totEl = document.getElementById('ftot-'+i);
+    if (totEl) totEl.textContent = fmtPN(m+p+s);
+  }
+
+  // Totali prelievi per turno + aggiorna tot per riga
+  let pM=0, pP=0, pS=0;
+  for (let i = 0; i < pnPrelieviCount; i++) {
+    const m = getV('pm-'+i), p = getV('pp-'+i), s = getV('ps-'+i);
+    pM += m; pP += p; pS += s;
+    const totEl = document.getElementById('ptot-'+i);
+    if (totEl) totEl.textContent = fmtPN(m+p+s);
+  }
+
+  // Fondo chiusura
+  const fcUscM = getV('fc-usc-m'), fcUscP = getV('fc-usc-p'), fcUscS = getV('fc-usc-s');
+  const fcUscEl = document.getElementById('tot-fc-usc');
+  if (fcUscEl) fcUscEl.textContent = fmtPN(fcUscM+fcUscP+fcUscS);
+
+  // Totali entrate per turno
+  const entM = voci.reduce((s,k) => s + getV(k+'-m'), 0);
+  const entP = voci.reduce((s,k) => s + getV(k+'-p'), 0);
+  const entS = voci.reduce((s,k) => s + getV(k+'-s'), 0);
+  const entTot = fc + entM + entP + entS;
+
+  const setT = (id, v) => { const el = document.getElementById(id); if(el) el.textContent = fmtPN(v); };
+  setT('tot-ent-m', entM); setT('tot-ent-p', entP);
+  setT('tot-ent-s', entS); setT('tot-ent', entTot);
+
+  // Totali uscite per turno
+  const uscM = uscVoci.reduce((s,k)=>s+getV(k+'-m'),0) + fM + pM + fcUscM;
+  const uscP = uscVoci.reduce((s,k)=>s+getV(k+'-p'),0) + fP + pP + fcUscP;
+  const uscS = uscVoci.reduce((s,k)=>s+getV(k+'-s'),0) + fS + pS + fcUscS;
+  const uscTot = uscM + uscP + uscS;
+
+  setT('tot-usc-m', uscM); setT('tot-usc-p', uscP);
+  setT('tot-usc-s', uscS); setT('tot-usc', uscTot);
+
+  // Differenze
+  const dM = entM-uscM, dP = entP-uscP, dS = entS-uscS, dTot = entTot-uscTot;
+  [['diff-m',dM],['diff-p',dP],['diff-s',dS],['diff-tot',dTot]].forEach(([id,d]) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.textContent = (d>=0?'+ ':'- ') + fmtPN(d);
+      el.className = 'td-tot' + (d>0?' alarm':'');
+    }
+  });
+
+  // Incasso per turno
+  const incM = getV('incasso-m') + Math.abs(dM);
+  const incP = getV('incasso-p') + Math.abs(dP);
+  const incS = getV('incasso-s') + Math.abs(dS);
+  setT('r-inc-m', incM); setT('r-inc-p', incP);
+  setT('r-inc-s', incS); setT('r-inc-tot', incM+incP+incS);
+
+  const allarme = document.getElementById('pn-allarme');
+  if (allarme) allarme.classList.toggle('hidden', dTot <= 0);
+}
+
+// Override calcPN con la v2
+function calcPN() { calcPN2(); }
+
+function addFornitoreRow() {
+  const idx = pnFornitoriCount;
+  const tbody = document.getElementById('pn-tbody');
+  const chiusura = document.querySelector('.pn-section-row.chiusura');
+  const tr = document.createElement('tr');
+  tr.className = 'pn-dyn-row' + (idx%2===0?' pn-row-even':'');
+  tr.id = 'fornitori-r'+idx;
+  tr.innerHTML = `
+    <td class="td-desc" style="display:flex;align-items:center;gap:4px">
+      <input type="text" placeholder="Fornitore..." class="pn-desc-input" id="fdesc-${idx}"/>
+      <button class="pn-remove-btn" onclick="removeRow(this,'f',${idx})">×</button>
+    </td>
+    <td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fm-${idx}" oninput="calcPN()"/></td>
+    <td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fp-${idx}" oninput="calcPN()"/></td>
+    <td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fs-${idx}" oninput="calcPN()"/></td>
+    <td class="td-tot" id="ftot-${idx}">€ 0,00</td>`;
+  tbody.insertBefore(tr, chiusura);
+  pnFornitoriCount++;
+}
+
+function addPrelievRow() {
+  const idx = pnPrelieviCount;
+  const tbody = document.getElementById('pn-tbody');
+  const chiusura = document.querySelector('.pn-section-row.chiusura');
+  const tr = document.createElement('tr');
+  tr.className = 'pn-dyn-row' + (idx%2===0?' pn-row-even':'');
+  tr.id = 'prelievi-r'+idx;
+  tr.innerHTML = `
+    <td class="td-desc" style="display:flex;align-items:center;gap:4px">
+      <input type="text" placeholder="Causale..." class="pn-desc-input" id="pdesc-${idx}"/>
+      <button class="pn-remove-btn" onclick="removeRow(this,'p',${idx})">×</button>
+    </td>
+    <td><input type="number" step="0.01" placeholder="—" class="pn-input" id="pm-${idx}" oninput="calcPN()"/></td>
+    <td><input type="number" step="0.01" placeholder="—" class="pn-input" id="pp-${idx}" oninput="calcPN()"/></td>
+    <td><input type="number" step="0.01" placeholder="—" class="pn-input" id="ps-${idx}" oninput="calcPN()"/></td>
+    <td class="td-tot" id="ptot-${idx}">€ 0,00</td>`;
+  tbody.insertBefore(tr, chiusura);
+  pnPrelieviCount++;
+}
+
+function removeRow(btn, tipo, idx) {
+  btn.closest('tr').remove();
+  calcPN();
+}
+
+function resetPN() {
+  const campi = ['pn-fc','incasso-m','incasso-p','incasso-s','money-m','money-p','money-s',
+    'sisal-m','sisal-p','sisal-s','fatture-m','fatture-p','fatture-s','giornali-m','giornali-p','giornali-s',
+    'pos-m','pos-p','pos-s','carte-m','carte-p','carte-s','bonifici-m','bonifici-p','bonifici-s',
+    'fc-usc-m','fc-usc-p','fc-usc-s','cm','cp','cs','pn-note'];
+  campi.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  // Pulisci righe statiche fornitori
+  for (let i=0; i<5; i++) { ['fdesc','fm','fp','fs'].forEach(p => { const el=document.getElementById(p+'-'+i); if(el) el.value=''; }); }
+  for (let i=0; i<3; i++) { ['pdesc','pm','pp','ps'].forEach(p => { const el=document.getElementById(p+'-'+i); if(el) el.value=''; }); }
+  calcPN();
+}
+
+async function loadNotaGiorno2() {
+  if (!currentBusiness) return;
+  const data = document.getElementById('pn-data')?.value;
+  const locId = document.getElementById('pn-location')?.value || null;
+  if (!data) return;
+
+  let query = db.from('daily_notes').select('*, daily_note_rows(*)')
+    .eq('business_id', currentBusiness.id).eq('data', data);
+  if (locId) query = query.eq('location_id', locId);
+  else query = query.is('location_id', null);
+  const { data: nota } = await query.single();
+
+  resetPN();
+  if (!nota) return;
+
+  document.getElementById('pn-fc').value = nota.fondo_cassa || '';
+  const campiMap = [
+    ['incasso','incasso'],['money','money'],['sisal','sisal'],
+    ['fatture','fatture'],['giornali','giornali'],
+    ['pos','pos'],['carte','carte'],['bonifici','bonifici'],['fc-usc','fondo_chiusura']
+  ];
+  campiMap.forEach(([html, db]) => {
+    ['m','p','s'].forEach(t => {
+      const el = document.getElementById(html+'-'+t);
+      if (el) el.value = nota[db+'_'+t] || '';
+    });
+  });
+  document.getElementById('cm').value = nota.compilatore_m || '';
+  document.getElementById('cp').value = nota.compilatore_p || '';
+  document.getElementById('cs').value = nota.compilatore_s || '';
+  document.getElementById('pn-note').value = nota.note || '';
+
+  const fornitori = (nota.daily_note_rows||[]).filter(r=>r.categoria==='fornitore');
+  const prelievi  = (nota.daily_note_rows||[]).filter(r=>r.categoria==='prelievo');
+
+  fornitori.forEach((r,i) => {
+    if (i>=5) addFornitoreRow();
+    const el = (id) => document.getElementById(id+'-'+i);
+    if (el('fdesc')) el('fdesc').value = r.descrizione||'';
+    if (el('fm'))    el('fm').value    = r.importo_m||'';
+    if (el('fp'))    el('fp').value    = r.importo_p||'';
+    if (el('fs'))    el('fs').value    = r.importo_s||'';
+  });
+
+  prelievi.forEach((r,i) => {
+    if (i>=3) addPrelievRow();
+    const el = (id) => document.getElementById(id+'-'+i);
+    if (el('pdesc')) el('pdesc').value = r.descrizione||'';
+    if (el('pm'))    el('pm').value    = r.importo_m||'';
+    if (el('pp'))    el('pp').value    = r.importo_p||'';
+    if (el('ps'))    el('ps').value    = r.importo_s||'';
+  });
+
+  calcPN();
+}
+
+// Override loadNotaGiorno
+function loadNotaGiorno() { loadNotaGiorno2(); }
+
+async function salvaNotaGiorno() {
+  if (!currentBusiness) return;
+  const data = document.getElementById('pn-data').value;
+  if (!data) { showPNMsg('Inserisci la data','error'); return; }
+  const locId = document.getElementById('pn-location').value || null;
+  const fc = getV('pn-fc');
+
+  const payload = {
+    business_id: currentBusiness.id, location_id: locId, data, fondo_cassa: fc,
+    incasso_m: getV('incasso-m'), incasso_p: getV('incasso-p'), incasso_s: getV('incasso-s'),
+    money_m: getV('money-m'), money_p: getV('money-p'), money_s: getV('money-s'),
+    sisal_m: getV('sisal-m'), sisal_p: getV('sisal-p'), sisal_s: getV('sisal-s'),
+    fatture_m: getV('fatture-m'), fatture_p: getV('fatture-p'), fatture_s: getV('fatture-s'),
+    giornali_m: getV('giornali-m'), giornali_p: getV('giornali-p'), giornali_s: getV('giornali-s'),
+    pos_m: getV('pos-m'), pos_p: getV('pos-p'), pos_s: getV('pos-s'),
+    carte_m: getV('carte-m'), carte_p: getV('carte-p'), carte_s: getV('carte-s'),
+    bonifici_m: getV('bonifici-m'), bonifici_p: getV('bonifici-p'), bonifici_s: getV('bonifici-s'),
+    fondo_chiusura_m: getV('fc-usc-m'), fondo_chiusura_p: getV('fc-usc-p'), fondo_chiusura_s: getV('fc-usc-s'),
+    compilatore_m: document.getElementById('cm').value,
+    compilatore_p: document.getElementById('cp').value,
+    compilatore_s: document.getElementById('cs').value,
+    note: document.getElementById('pn-note').value,
+    created_by: currentUser.id, updated_at: new Date().toISOString()
+  };
+
+  const { data: saved, error } = await db.from('daily_notes')
+    .upsert(payload, { onConflict: 'business_id,location_id,data' })
+    .select().single();
+  if (error) { showPNMsg('Errore: '+error.message,'error'); return; }
+
+  await db.from('daily_note_rows').delete().eq('daily_note_id', saved.id);
+  const rows = [];
+  for (let i=0; i<pnFornitoriCount; i++) {
+    const desc = document.getElementById('fdesc-'+i)?.value?.trim()||'';
+    const m=getV('fm-'+i), p=getV('fp-'+i), s=getV('fs-'+i);
+    if (m||p||s||desc) rows.push({daily_note_id:saved.id,business_id:currentBusiness.id,categoria:'fornitore',descrizione:desc,importo_m:m,importo_p:p,importo_s:s,ordine:i});
+  }
+  for (let i=0; i<pnPrelieviCount; i++) {
+    const desc = document.getElementById('pdesc-'+i)?.value?.trim()||'';
+    const m=getV('pm-'+i), p=getV('pp-'+i), s=getV('ps-'+i);
+    if (m||p||s||desc) rows.push({daily_note_id:saved.id,business_id:currentBusiness.id,categoria:'prelievo',descrizione:desc,importo_m:m,importo_p:p,importo_s:s,ordine:i});
+  }
+  if (rows.length) await db.from('daily_note_rows').insert(rows);
+
+  const fcChiusura = getV('fc-usc-s')||getV('fc-usc-p')||getV('fc-usc-m');
+  if (fcChiusura>0) {
+    const dom = new Date(data); dom.setDate(dom.getDate()+1);
+    await db.from('daily_notes').upsert({
+      business_id:currentBusiness.id, location_id:locId,
+      data:dom.toISOString().split('T')[0], fondo_cassa:fcChiusura
+    },{onConflict:'business_id,location_id,data',ignoreDuplicates:true});
+  }
+
+  showPNMsg('Prima nota salvata ✓'+(fcChiusura>0?' — fondo domani pre-compilato':''),'success');
+  await loadDashboard();
 }
