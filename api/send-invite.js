@@ -70,7 +70,7 @@ export default async function handler(req, res) {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        from: 'KONTRO <noreply@kontro.app>',
+        from: 'KONTRO <onboarding@resend.dev>',
         to: [email],
         subject: `Sei stato invitato su KONTRO come ${roleLabel}`,
         html: htmlBody
