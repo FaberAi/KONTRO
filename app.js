@@ -2137,11 +2137,9 @@ async function saveAssegno() {
   if (!scadenza) { showToast('Inserisci la data di scadenza', 'error'); return; }
 
   // Auto-compila beneficiario dal fornitore selezionato
-  let beneficiario = document.getElementById('na-beneficiario').value.trim();
-  if (!beneficiario && fornitoreId) {
-    const f = fornitoriCache.find(x => x.id === fornitoreId);
-    if (f) beneficiario = f.ragione_sociale;
-  }
+  let beneficiario = '';
+  if (fornitoreId) { const f2 = fornitoriCache.find(x => x.id === fornitoreId); if (f2) beneficiario = f2.ragione_sociale; }
+
 
   const { error } = await db.from('assegni').insert({
     business_id: currentBusiness.id,
@@ -2157,7 +2155,7 @@ async function saveAssegno() {
   });
   if (error) { showToast('Errore: ' + error.message, 'error'); return; }
   showToast('Assegno registrato ✓', 'success');
-  ['na-numero','na-beneficiario','na-importo','na-note'].forEach(id => document.getElementById(id).value = '');
+  ['na-numero','na-importo','na-note'].forEach(id => document.getElementById(id).value = '');
   const naF = document.getElementById('na-fornitore'); if (naF) naF.value = '';
   loadAssegni(); loadOverview();
 }
@@ -3382,11 +3380,8 @@ async function saveAssegno() {
   if (!importo || importo <= 0) { showToast('Inserisci un importo valido', 'error'); return; }
   if (!scadenza) { showToast('Inserisci la data di scadenza', 'error'); return; }
 
-  let beneficiario = document.getElementById('na-beneficiario').value.trim();
-  if (!beneficiario && fornitoreId) {
-    const f = fornitoriCache.find(x => x.id === fornitoreId);
-    if (f) beneficiario = f.ragione_sociale;
-  }
+  let beneficiario = '';
+  if (fornitoreId) { const f = fornitoriCache.find(x => x.id === fornitoreId); if (f) beneficiario = f.ragione_sociale; }
 
   const { data: assegno, error } = await db.from('assegni').insert({
     business_id: currentBusiness.id,
@@ -3441,7 +3436,7 @@ async function saveAssegno() {
   }
 
   // Reset form
-  ['na-numero','na-beneficiario','na-importo','na-note'].forEach(id => {
+  ['na-numero','na-importo','na-note'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
   });
   const naF = document.getElementById('na-fornitore'); if (naF) naF.value = '';
