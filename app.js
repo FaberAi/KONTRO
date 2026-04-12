@@ -1351,7 +1351,7 @@ function setPN(id, val) {
 // ── CALCOLO ───────────────────────────────────────────────────────
 function calcPN() {
   const fc = getPN('pn-fc');
-  const voci = ['incasso','money','grattavinci','fatture','giornali'];
+  const voci = ['incasso','money','grattavinci','sisal','fatture','giornali'];
   const uscVoci = ['pos','carte','bonifici'];
 
   // Totali per voce
@@ -1505,7 +1505,7 @@ async function loadNotaGiorno() {
 
 function resetPN(rebuild = true) {
   const campi = ['pn-fc','incasso-m','incasso-p','incasso-s','money-m','money-p','money-s',
-    'grattavinci-m','grattavinci-p','grattavinci-s','fatture-m','fatture-p','fatture-s','giornali-m','giornali-p','giornali-s','conto-bet-m','conto-bet-p','conto-bet-s',
+    'grattavinci-m','grattavinci-p','grattavinci-s','sisal-m','sisal-p','sisal-s','fatture-m','fatture-p','fatture-s','giornali-m','giornali-p','giornali-s','conto-bet-m','conto-bet-p','conto-bet-s',
     'pos-m','pos-p','pos-s','carte-m','carte-p','carte-s','bonifici-m','bonifici-p','bonifici-s',
     'fc-usc-m','fc-usc-p','fc-usc-s','cm','cp','cs','pn-note'];
   campi.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
@@ -1565,7 +1565,7 @@ function getV(id) { return parseFloat(document.getElementById(id)?.value) || 0; 
 
 function calcPN2() {
   const fc = getV('pn-fc');
-  const voci = ['incasso','money','grattavinci','fatture','giornali'];
+  const voci = ['incasso','money','grattavinci','sisal','fatture','giornali'];
   const uscVoci = ['pos','carte','bonifici'];
 
   // Totali voci entrata
@@ -1695,7 +1695,7 @@ function removeRow(btn, tipo, idx) {
 
 function resetPN() {
   const campi = ['pn-fc','incasso-m','incasso-p','incasso-s','money-m','money-p','money-s',
-    'grattavinci-m','grattavinci-p','grattavinci-s','fatture-m','fatture-p','fatture-s','giornali-m','giornali-p','giornali-s','conto-bet-m','conto-bet-p','conto-bet-s',
+    'grattavinci-m','grattavinci-p','grattavinci-s','sisal-m','sisal-p','sisal-s','fatture-m','fatture-p','fatture-s','giornali-m','giornali-p','giornali-s','conto-bet-m','conto-bet-p','conto-bet-s',
     'pos-m','pos-p','pos-s','carte-m','carte-p','carte-s','bonifici-m','bonifici-p','bonifici-s',
     'fc-usc-m','fc-usc-p','fc-usc-s','cm','cp','cs','pn-note'];
   campi.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
@@ -1722,7 +1722,7 @@ async function loadNotaGiorno2() {
 
   document.getElementById('pn-fc').value = nota.fondo_cassa || '';
   const campiMap = [
-    ['incasso','incasso'],['money','money'],['grattavinci','grattavinci'],['conto-bet','conto_bet'],
+    ['incasso','incasso'],['money','money'],['grattavinci','grattavinci'],['sisal','sisal'],['conto-bet','conto_bet'],
     ['fatture','fatture'],['giornali','giornali'],
     ['pos','pos'],['carte','carte'],['bonifici','bonifici'],['fc-usc','fondo_chiusura']
   ];
@@ -2958,6 +2958,7 @@ async function salvaNotaGiorno() {
     incasso_m: getV('incasso-m'), incasso_p: getV('incasso-p'), incasso_s: getV('incasso-s'),
     money_m: getV('money-m'), money_p: getV('money-p'), money_s: getV('money-s'),
     grattavinci_m: getV('grattavinci-m'), grattavinci_p: getV('grattavinci-p'), grattavinci_s: getV('grattavinci-s'),
+    sisal_m: getV('sisal-m'), sisal_p: getV('sisal-p'), sisal_s: getV('sisal-s'),
     conto_bet_m: getV('conto-bet-m'), conto_bet_p: getV('conto-bet-p'), conto_bet_s: getV('conto-bet-s'),
     bet_banca_id: document.getElementById('pn-bet-banca')?.value || null,
     fatture_m: getV('fatture-m'), fatture_p: getV('fatture-p'), fatture_s: getV('fatture-s'),
