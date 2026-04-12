@@ -229,7 +229,7 @@ function showView(name) {
   document.querySelectorAll('.nav-item').forEach(n => {
     n.classList.toggle('active', n.dataset.view === name);
   });
-  const titles = { dashboard: 'Dashboard', primanota: 'Prima Nota', nuovo: 'Nuovo movimento', movimenti: 'Movimenti', report: 'Report', sedi: 'Sedi', team: 'Team' };
+  const titles = { dashboard: 'Dashboard', primanota: 'Prima Nota', nuovo: 'Movimenti extra cassa', movimenti: 'Movimenti', report: 'Report', sedi: 'Sedi', team: 'Team' };
   document.getElementById('page-title').textContent = titles[name] || name;
 
   if (name === 'movimenti') loadMovimenti();
