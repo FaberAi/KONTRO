@@ -89,6 +89,9 @@
         <button class="nav-item" onclick="showView('banca')" data-view="banca">
           <span class="nav-icon">🏦</span> Banca & Finanza
         </button>
+        <button class="nav-item" onclick="showView('fornitori')" data-view="fornitori">
+          <span class="nav-icon">📦</span> Fornitori
+        </button>
         <button class="nav-item" onclick="showView('nuovo')" data-view="nuovo">
           <span class="nav-icon">＋</span> Nuovo movimento
         </button>
@@ -771,6 +774,7 @@
             <div class="form-grid">
               <div class="field"><label>Numero assegno</label><input type="text" id="na-numero" placeholder="Es. 001234" /></div>
               <div class="field"><label>Beneficiario</label><input type="text" id="na-beneficiario" placeholder="Nome fornitore..." /></div>
+              <div class="field"><label>Fornitore (opzionale)</label><select id="na-fornitore"><option value="">Nessun fornitore collegato</option></select></div>
               <div class="field"><label>Importo (€)</label><input type="number" id="na-importo" step="0.01" placeholder="0,00" /></div>
               <div class="field"><label>Banca</label><select id="na-banca"><option value="">Seleziona banca</option></select></div>
               <div class="field"><label>Data emissione</label><input type="date" id="na-emissione" /></div>
@@ -822,6 +826,162 @@
           <div class="section-card">
             <div class="section-header"><h2>RID/SDD attivi</h2></div>
             <div id="rid-list" class="entries-list"><div class="empty-state">Nessun RID configurato</div></div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ====== VIEW: FORNITORI ====== -->
+      <div id="view-fornitori" class="view">
+
+        <!-- Sub-tabs -->
+        <div class="banca-tabs">
+          <button class="banca-tab active" onclick="switchFornitoriTab('anagrafica')" id="ftab-anagrafica">📦 Anagrafica</button>
+          <button class="banca-tab" onclick="switchFornitoriTab('fatture')" id="ftab-fatture">🧾 Fatture</button>
+          <button class="banca-tab" onclick="switchFornitoriTab('estratto')" id="ftab-estratto">📋 Estratto conto</button>
+        </div>
+
+        <!-- ── ANAGRAFICA ── -->
+        <div id="fpanel-anagrafica" class="banca-panel active">
+          <div class="section-card">
+            <div class="section-header">
+              <h2>Fornitori</h2>
+              <button class="btn-primary sm" onclick="showAddFornitore()">＋ Nuovo fornitore</button>
+            </div>
+
+            <div id="add-fornitore-form" class="add-form hidden">
+              <div class="form-grid">
+                <div class="field full"><label>Ragione sociale</label><input type="text" id="nf-nome" placeholder="Es. Mario Rossi S.r.l." /></div>
+                <div class="field"><label>Partita IVA</label><input type="text" id="nf-piva" placeholder="IT12345678901" /></div>
+                <div class="field"><label>Codice fiscale</label><input type="text" id="nf-cf" placeholder="RSSMRA70A01H501Z" /></div>
+                <div class="field"><label>Email</label><input type="email" id="nf-email" placeholder="info@fornitore.it" /></div>
+                <div class="field"><label>Telefono</label><input type="text" id="nf-tel" placeholder="+39 02 1234567" /></div>
+                <div class="field full"><label>Indirizzo</label><input type="text" id="nf-indirizzo" placeholder="Via Roma 1, Milano" /></div>
+                <div class="field full"><label>Note</label><input type="text" id="nf-note" placeholder="Note..." /></div>
+              </div>
+              <div class="form-actions">
+                <button class="btn-secondary" onclick="hideAddFornitore()">Annulla</button>
+                <button class="btn-primary" onclick="saveFornitore()">Salva fornitore</button>
+              </div>
+              <div id="nf-msg" class="auth-message"></div>
+            </div>
+
+            <div id="fornitori-list" class="fornitori-list">
+              <div class="empty-state">Nessun fornitore</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── FATTURE ── -->
+        <div id="fpanel-fatture" class="banca-panel">
+          <!-- KPI fatture -->
+          <div class="kpi-grid" style="margin-bottom:20px">
+            <div class="kpi-card uscite">
+              <div class="kpi-label">Fatture aperte</div>
+              <div class="kpi-value" id="ft-aperte">€ 0,00</div>
+              <div class="kpi-sub" id="ft-aperte-n">0 fatture</div>
+            </div>
+            <div class="kpi-card uscite">
+              <div class="kpi-label">In scadenza 30gg</div>
+              <div class="kpi-value" id="ft-scadenza">€ 0,00</div>
+              <div class="kpi-sub" id="ft-scadenza-n">0 fatture</div>
+            </div>
+            <div class="kpi-card mese">
+              <div class="kpi-label">Pagate questo mese</div>
+              <div class="kpi-value" id="ft-pagate">€ 0,00</div>
+              <div class="kpi-sub" id="ft-pagate-n">0 fatture</div>
+            </div>
+            <div class="kpi-card saldo">
+              <div class="kpi-label">Totale anno</div>
+              <div class="kpi-value" id="ft-anno">€ 0,00</div>
+              <div class="kpi-sub">tutte le fatture</div>
+            </div>
+          </div>
+
+          <!-- Form nuova fattura -->
+          <div class="section-card" style="margin-bottom:16px">
+            <h2 style="margin-bottom:16px">Registra fattura</h2>
+            <div class="form-grid">
+              <div class="field"><label>Fornitore</label><select id="nft-fornitore"><option value="">Seleziona fornitore</option></select></div>
+              <div class="field"><label>Numero fattura</label><input type="text" id="nft-numero" placeholder="Es. FT-2024-001" /></div>
+              <div class="field"><label>Data fattura</label><input type="date" id="nft-data" /></div>
+              <div class="field"><label>Data scadenza</label><input type="date" id="nft-scadenza" /></div>
+              <div class="field"><label>Imponibile (€)</label><input type="number" id="nft-netto" step="0.01" placeholder="0,00" oninput="calcFattura()" /></div>
+              <div class="field"><label>IVA (€)</label><input type="number" id="nft-iva" step="0.01" placeholder="0,00" oninput="calcFattura()" /></div>
+              <div class="field"><label>Totale (€)</label><input type="number" id="nft-totale" step="0.01" placeholder="0,00" class="pn-fc-input" style="width:100%" /></div>
+              <div class="field"><label>Metodo pagamento</label>
+                <select id="nft-metodo">
+                  <option value="">Da definire</option>
+                  <option value="contanti">Contanti</option>
+                  <option value="bonifico">Bonifico</option>
+                  <option value="assegno">Assegno</option>
+                  <option value="rid">RID/SDD</option>
+                </select>
+              </div>
+              <div class="field full"><label>Note</label><input type="text" id="nft-note" placeholder="Note..." /></div>
+            </div>
+            <div class="form-actions">
+              <button class="btn-primary" onclick="saveFattura()">Registra fattura →</button>
+            </div>
+            <div id="nft-msg" class="auth-message"></div>
+          </div>
+
+          <!-- Lista fatture -->
+          <div class="section-card">
+            <div class="section-header">
+              <h2>Registro fatture</h2>
+              <div style="display:flex;gap:8px">
+                <select id="ft-filter-stato" class="filter-input" onchange="loadFatture()">
+                  <option value="">Tutte</option>
+                  <option value="aperta">Aperte</option>
+                  <option value="pagata">Pagate</option>
+                  <option value="pagata_parziale">Parz. pagate</option>
+                </select>
+                <select id="ft-filter-fornitore" class="filter-input" onchange="loadFatture()">
+                  <option value="">Tutti i fornitori</option>
+                </select>
+              </div>
+            </div>
+            <div id="fatture-list" class="entries-list"><div class="empty-state">Nessuna fattura</div></div>
+          </div>
+        </div>
+
+        <!-- ── ESTRATTO CONTO ── -->
+        <div id="fpanel-estratto" class="banca-panel">
+          <div class="section-card" style="margin-bottom:16px">
+            <div class="form-grid">
+              <div class="field">
+                <label>Fornitore</label>
+                <select id="ec-fornitore" onchange="loadEstratto()"><option value="">Seleziona fornitore</option></select>
+              </div>
+              <div class="field"><label>Da</label><input type="date" id="ec-from" onchange="loadEstratto()" /></div>
+              <div class="field"><label>A</label><input type="date" id="ec-to" onchange="loadEstratto()" /></div>
+            </div>
+          </div>
+
+          <!-- KPI estratto -->
+          <div class="kpi-grid" style="margin-bottom:16px">
+            <div class="kpi-card uscite">
+              <div class="kpi-label">Fatturato</div>
+              <div class="kpi-value" id="ec-fatturato">€ 0,00</div>
+            </div>
+            <div class="kpi-card uscite">
+              <div class="kpi-label">Pagato</div>
+              <div class="kpi-value" id="ec-pagato" style="color:var(--green-400)">€ 0,00</div>
+            </div>
+            <div class="kpi-card mese">
+              <div class="kpi-label">Saldo aperto</div>
+              <div class="kpi-value" id="ec-saldo">€ 0,00</div>
+            </div>
+            <div class="kpi-card saldo">
+              <div class="kpi-label">Assegni emessi</div>
+              <div class="kpi-value" id="ec-assegni">€ 0,00</div>
+            </div>
+          </div>
+
+          <div class="section-card">
+            <div class="section-header"><h2>Movimenti fornitore</h2></div>
+            <div id="estratto-list" class="entries-list"><div class="empty-state">Seleziona un fornitore</div></div>
           </div>
         </div>
 

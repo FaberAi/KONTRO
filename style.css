@@ -1544,3 +1544,91 @@ html, body {
 .prev-row .prev-val.green { color: var(--green-400); }
 .prev-row .prev-val.gold { color: var(--gold-light); }
 .prev-row.saldo { background: rgba(37,99,235,0.1); border: 1px solid rgba(37,99,235,0.2); }
+
+/* ============================================
+   FORNITORI
+   ============================================ */
+.fornitori-list { display: flex; flex-direction: column; gap: 8px; }
+
+.fornitore-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  background: var(--navy-700);
+  border-radius: var(--radius);
+  border: 1px solid rgba(255,255,255,0.04);
+  transition: all 0.2s;
+}
+
+.fornitore-item:hover { border-color: rgba(255,255,255,0.1); }
+
+.fornitore-avatar {
+  width: 40px; height: 40px;
+  border-radius: 10px;
+  background: rgba(37,99,235,0.2);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 800;
+  font-size: 16px;
+  color: var(--blue-300);
+  flex-shrink: 0;
+}
+
+.fornitore-info { flex: 1; }
+.fornitore-nome { font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.fornitore-meta { font-family: var(--font-mono); font-size: 11px; color: var(--gray-400); }
+
+/* FATTURE */
+.fattura-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  background: var(--navy-700);
+  border-radius: var(--radius);
+  border: 1px solid rgba(255,255,255,0.04);
+  border-left: 3px solid transparent;
+  margin-bottom: 8px;
+  transition: all 0.2s;
+}
+
+.fattura-item.aperta { border-left-color: var(--blue-400); }
+.fattura-item.pagata_parziale { border-left-color: var(--gold); }
+.fattura-item.pagata { border-left-color: var(--green-500); opacity: 0.7; }
+.fattura-item.scaduta { border-left-color: var(--red-500); }
+
+.ft-info { flex: 1; }
+.ft-numero { font-family: var(--font-mono); font-size: 11px; color: var(--gray-400); }
+.ft-fornitore { font-weight: 700; font-size: 13px; }
+.ft-meta { font-family: var(--font-mono); font-size: 11px; color: var(--gray-400); margin-top: 2px; }
+.ft-importo { font-family: var(--font-mono); font-size: 16px; font-weight: 600; color: var(--red-400); min-width: 110px; text-align: right; }
+.ft-importo.pagata { color: var(--green-400); }
+
+.ft-badge {
+  font-size: 10px; font-weight: 700;
+  padding: 3px 8px; border-radius: 100px;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.ft-badge.aperta { background: rgba(59,130,246,0.15); color: var(--blue-300); }
+.ft-badge.pagata_parziale { background: rgba(245,158,11,0.15); color: var(--gold-light); }
+.ft-badge.pagata { background: rgba(16,185,129,0.15); color: var(--green-400); }
+.ft-badge.scaduta { background: rgba(239,68,68,0.15); color: var(--red-400); }
+
+/* ESTRATTO */
+.ec-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--navy-700);
+  border-radius: var(--radius);
+  border: 1px solid rgba(255,255,255,0.04);
+  margin-bottom: 6px;
+}
+.ec-tipo { font-size: 18px; width: 28px; text-align: center; }
+.ec-info { flex: 1; }
+.ec-desc { font-size: 13px; font-weight: 500; }
+.ec-meta { font-family: var(--font-mono); font-size: 11px; color: var(--gray-400); }
+.ec-val { font-family: var(--font-mono); font-size: 14px; font-weight: 600; }
+.ec-val.dare { color: var(--red-400); }
+.ec-val.avere { color: var(--green-400); }

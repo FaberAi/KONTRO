@@ -228,6 +228,7 @@ function showView(name) {
   if (name === 'primanota') initPrimaNota();
   if (name === 'storico') initStorico();
   if (name === 'banca') initBanca();
+  if (name === 'fornitori') initFornitori();
 }
 
 function updateUserUI() {
@@ -2317,4 +2318,281 @@ async function deleteRid(id) {
   await db.from('rid_bancari').delete().eq('id', id);
   loadRid(); loadOverview();
   showToast('RID eliminato', 'success');
+}
+
+// ============================================
+// FORNITORI
+// ============================================
+let fornitoriCache = [];
+
+function switchFornitoriTab(tab) {
+  document.querySelectorAll('.banca-tab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.banca-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('ftab-' + tab).classList.add('active');
+  document.getElementById('fpanel-' + tab).classList.add('active');
+  if (tab === 'fatture') loadFatture();
+  if (tab === 'estratto') initEstratto();
+}
+
+async function initFornitori() {
+  await loadFornitoriCache();
+  populateFornitoriSelects();
+  loadFornitoriList();
+  // Date default estratto
+  const today = new Date().toISOString().split('T')[0];
+  const firstDay = new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0];
+  const ecFrom = document.getElementById('ec-from');
+  const ecTo = document.getElementById('ec-to');
+  if (ecFrom && !ecFrom.value) ecFrom.value = firstDay;
+  if (ecTo && !ecTo.value) ecTo.value = today;
+  // Date default fattura
+  const nftData = document.getElementById('nft-data');
+  if (nftData && !nftData.value) nftData.value = today;
+}
+
+async function loadFornitoriCache() {
+  if (!currentBusiness) return;
+  const { data } = await db.from('fornitori').select('id,ragione_sociale')
+    .eq('business_id', currentBusiness.id).eq('attivo', true).order('ragione_sociale');
+  fornitoriCache = data || [];
+}
+
+function populateFornitoriSelects() {
+  const opts = '<option value="">Seleziona fornitore</option>' +
+    fornitoriCache.map(f => `<option value="${f.id}">${f.ragione_sociale}</option>`).join('');
+  ['nft-fornitore','ec-fornitore','na-fornitore','ft-filter-fornitore'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const first = id === 'ft-filter-fornitore'
+      ? '<option value="">Tutti i fornitori</option>'
+      : id === 'na-fornitore'
+        ? '<option value="">Nessun fornitore collegato</option>'
+        : '<option value="">Seleziona fornitore</option>';
+    el.innerHTML = first + fornitoriCache.map(f => `<option value="${f.id}">${f.ragione_sociale}</option>`).join('');
+  });
+}
+
+// ── ANAGRAFICA ────────────────────────────────────────────────────
+function showAddFornitore() { document.getElementById('add-fornitore-form').classList.remove('hidden'); }
+function hideAddFornitore() { document.getElementById('add-fornitore-form').classList.add('hidden'); }
+
+async function saveFornitore() {
+  if (!currentBusiness) return;
+  const nome = document.getElementById('nf-nome').value.trim();
+  if (!nome) { showToast('Inserisci la ragione sociale', 'error'); return; }
+  const { error } = await db.from('fornitori').insert({
+    business_id: currentBusiness.id,
+    ragione_sociale: nome,
+    piva: document.getElementById('nf-piva').value.trim(),
+    cf: document.getElementById('nf-cf').value.trim(),
+    email: document.getElementById('nf-email').value.trim(),
+    telefono: document.getElementById('nf-tel').value.trim(),
+    indirizzo: document.getElementById('nf-indirizzo').value.trim(),
+    note: document.getElementById('nf-note').value.trim()
+  });
+  if (error) { showToast('Errore: ' + error.message, 'error'); return; }
+  showToast('Fornitore salvato ✓', 'success');
+  hideAddFornitore();
+  ['nf-nome','nf-piva','nf-cf','nf-email','nf-tel','nf-indirizzo','nf-note'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  await loadFornitoriCache();
+  populateFornitoriSelects();
+  loadFornitoriList();
+}
+
+async function loadFornitoriList() {
+  if (!currentBusiness) return;
+  const { data } = await db.from('fornitori').select('*')
+    .eq('business_id', currentBusiness.id).order('ragione_sociale');
+  const el = document.getElementById('fornitori-list');
+  if (!data?.length) { el.innerHTML = '<div class="empty-state">Nessun fornitore registrato</div>'; return; }
+  el.innerHTML = data.map(f => `
+    <div class="fornitore-item">
+      <div class="fornitore-avatar">${f.ragione_sociale[0].toUpperCase()}</div>
+      <div class="fornitore-info">
+        <div class="fornitore-nome">${f.ragione_sociale}</div>
+        <div class="fornitore-meta">
+          ${f.piva ? 'P.IVA: ' + f.piva : ''}
+          ${f.email ? ' · ' + f.email : ''}
+          ${f.telefono ? ' · ' + f.telefono : ''}
+        </div>
+        ${f.indirizzo ? `<div class="fornitore-meta">${f.indirizzo}</div>` : ''}
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        <button class="btn-secondary sm" onclick="switchFornitoriTab('estratto');document.getElementById('ec-fornitore').value='${f.id}';loadEstratto()">Estratto conto</button>
+        <button class="entry-del" onclick="deleteFornitore('${f.id}')">✕</button>
+      </div>
+    </div>`).join('');
+}
+
+async function deleteFornitore(id) {
+  if (!confirm('Eliminare questo fornitore?')) return;
+  await db.from('fornitori').update({ attivo: false }).eq('id', id);
+  await loadFornitoriCache();
+  populateFornitoriSelects();
+  loadFornitoriList();
+  showToast('Fornitore eliminato', 'success');
+}
+
+// ── FATTURE ───────────────────────────────────────────────────────
+function calcFattura() {
+  const netto = parseFloat(document.getElementById('nft-netto').value) || 0;
+  const iva = parseFloat(document.getElementById('nft-iva').value) || 0;
+  const totEl = document.getElementById('nft-totale');
+  if (totEl && (netto || iva)) totEl.value = (netto + iva).toFixed(2);
+}
+
+async function saveFattura() {
+  if (!currentBusiness) return;
+  const totale = parseFloat(document.getElementById('nft-totale').value);
+  const fornitore = document.getElementById('nft-fornitore').value;
+  if (!totale || totale <= 0) { showToast('Inserisci il totale fattura', 'error'); return; }
+  const { error } = await db.from('fatture_fornitori').insert({
+    business_id: currentBusiness.id,
+    fornitore_id: fornitore || null,
+    numero: document.getElementById('nft-numero').value.trim(),
+    data_fattura: document.getElementById('nft-data').value,
+    data_scadenza: document.getElementById('nft-scadenza').value || null,
+    importo_netto: parseFloat(document.getElementById('nft-netto').value) || 0,
+    importo_iva: parseFloat(document.getElementById('nft-iva').value) || 0,
+    importo_totale: totale,
+    metodo_pagamento: document.getElementById('nft-metodo').value || null,
+    note: document.getElementById('nft-note').value,
+    created_by: currentUser.id
+  });
+  if (error) { showToast('Errore: ' + error.message, 'error'); return; }
+  showToast('Fattura registrata ✓', 'success');
+  ['nft-numero','nft-netto','nft-iva','nft-totale','nft-note'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  loadFatture();
+}
+
+async function loadFatture() {
+  if (!currentBusiness) return;
+  const stato = document.getElementById('ft-filter-stato')?.value;
+  const fornitore = document.getElementById('ft-filter-fornitore')?.value;
+  const today = new Date().toISOString().split('T')[0];
+  const firstMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
+  const firstYear = new Date().getFullYear() + '-01-01';
+
+  let query = db.from('fatture_fornitori').select('*, fornitori(ragione_sociale)')
+    .eq('business_id', currentBusiness.id).order('data_fattura', { ascending: false });
+  if (stato) query = query.eq('stato', stato);
+  if (fornitore) query = query.eq('fornitore_id', fornitore);
+
+  const { data } = await query;
+  const all = data || [];
+  const in30 = new Date(); in30.setDate(in30.getDate() + 30);
+  const in30str = in30.toISOString().split('T')[0];
+
+  const aperte = all.filter(f => f.stato === 'aperta' || f.stato === 'pagata_parziale');
+  const scad30 = aperte.filter(f => f.data_scadenza && f.data_scadenza <= in30str);
+  const pagateMese = all.filter(f => f.stato === 'pagata' && f.data_fattura >= firstMonth);
+  const annoAll = all.filter(f => f.data_fattura >= firstYear);
+
+  document.getElementById('ft-aperte').textContent = formatEur(aperte.reduce((s,f)=>s+Number(f.importo_totale),0));
+  document.getElementById('ft-aperte-n').textContent = aperte.length + ' fatture';
+  document.getElementById('ft-scadenza').textContent = formatEur(scad30.reduce((s,f)=>s+Number(f.importo_totale),0));
+  document.getElementById('ft-scadenza-n').textContent = scad30.length + ' fatture';
+  document.getElementById('ft-pagate').textContent = formatEur(pagateMese.reduce((s,f)=>s+Number(f.importo_totale),0));
+  document.getElementById('ft-pagate-n').textContent = pagateMese.length + ' fatture';
+  document.getElementById('ft-anno').textContent = formatEur(annoAll.reduce((s,f)=>s+Number(f.importo_totale),0));
+
+  const el = document.getElementById('fatture-list');
+  if (!all.length) { el.innerHTML = '<div class="empty-state">Nessuna fattura registrata</div>'; return; }
+
+  el.innerHTML = all.map(f => {
+    const scaduta = f.stato !== 'pagata' && f.data_scadenza && f.data_scadenza < today;
+    const statoEff = scaduta ? 'scaduta' : f.stato;
+    const statoLabel = { aperta:'Aperta', pagata_parziale:'Parz. pagata', pagata:'Pagata', scaduta:'Scaduta' }[statoEff] || f.stato;
+    return `<div class="fattura-item ${statoEff}">
+      <div class="ft-info">
+        <div class="ft-numero">${f.numero ? 'N° ' + f.numero : 'Senza numero'}</div>
+        <div class="ft-fornitore">${f.fornitori?.ragione_sociale || 'Fornitore generico'}</div>
+        <div class="ft-meta">
+          Emessa: ${formatDate(f.data_fattura)}
+          ${f.data_scadenza ? ' · Scadenza: ' + formatDate(f.data_scadenza) : ''}
+          ${f.metodo_pagamento ? ' · ' + f.metodo_pagamento : ''}
+        </div>
+      </div>
+      <span class="ft-badge ${statoEff}">${statoLabel}</span>
+      <div class="ft-importo ${f.stato === 'pagata' ? 'pagata' : ''}">${formatEur(f.importo_totale)}</div>
+      <div style="display:flex;gap:4px;flex-shrink:0">
+        ${f.stato !== 'pagata' ? `<button class="btn-secondary sm" onclick="pagaFattura('${f.id}')">Paga</button>` : ''}
+        <button class="entry-del" onclick="deleteFattura('${f.id}')">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function pagaFattura(id) {
+  await db.from('fatture_fornitori').update({ stato: 'pagata' }).eq('id', id);
+  loadFatture();
+  showToast('Fattura marcata come pagata ✓', 'success');
+}
+
+async function deleteFattura(id) {
+  if (!confirm('Eliminare questa fattura?')) return;
+  await db.from('fatture_fornitori').delete().eq('id', id);
+  loadFatture();
+  showToast('Fattura eliminata', 'success');
+}
+
+// ── ESTRATTO CONTO ────────────────────────────────────────────────
+function initEstratto() {
+  const today = new Date().toISOString().split('T')[0];
+  const firstYear = new Date().getFullYear() + '-01-01';
+  const ecFrom = document.getElementById('ec-from');
+  const ecTo = document.getElementById('ec-to');
+  if (ecFrom && !ecFrom.value) ecFrom.value = firstYear;
+  if (ecTo && !ecTo.value) ecTo.value = today;
+}
+
+async function loadEstratto() {
+  const fornitoreId = document.getElementById('ec-fornitore').value;
+  if (!fornitoreId || !currentBusiness) {
+    document.getElementById('estratto-list').innerHTML = '<div class="empty-state">Seleziona un fornitore</div>';
+    return;
+  }
+  const from = document.getElementById('ec-from').value;
+  const to = document.getElementById('ec-to').value;
+
+  const [{ data: fatture }, { data: assegni }] = await Promise.all([
+    db.from('fatture_fornitori').select('*').eq('business_id', currentBusiness.id)
+      .eq('fornitore_id', fornitoreId)
+      .gte('data_fattura', from).lte('data_fattura', to),
+    db.from('assegni').select('*').eq('business_id', currentBusiness.id)
+      .eq('fornitore_id', fornitoreId)
+      .gte('data_emissione', from).lte('data_emissione', to)
+  ]);
+
+  const totFatturato = (fatture||[]).reduce((s,f)=>s+Number(f.importo_totale),0);
+  const totPagato = (fatture||[]).filter(f=>f.stato==='pagata').reduce((s,f)=>s+Number(f.importo_totale),0);
+  const totAssegni = (assegni||[]).reduce((s,a)=>s+Number(a.importo),0);
+
+  document.getElementById('ec-fatturato').textContent = formatEur(totFatturato);
+  document.getElementById('ec-pagato').textContent = formatEur(totPagato);
+  document.getElementById('ec-saldo').textContent = formatEur(totFatturato - totPagato);
+  document.getElementById('ec-assegni').textContent = formatEur(totAssegni);
+
+  // Merge e ordina per data
+  const movimenti = [
+    ...(fatture||[]).map(f => ({ data: f.data_fattura, tipo: 'fattura', desc: `Fattura ${f.numero||''}`, importo: Number(f.importo_totale), stato: f.stato, segno: 'dare' })),
+    ...(assegni||[]).map(a => ({ data: a.data_emissione, tipo: 'assegno', desc: `Assegno ${a.numero||''} scad. ${formatDate(a.data_scadenza)}`, importo: Number(a.importo), stato: a.incassato ? 'incassato' : 'aperto', segno: 'avere' }))
+  ].sort((a, b) => new Date(b.data) - new Date(a.data));
+
+  const el = document.getElementById('estratto-list');
+  if (!movimenti.length) { el.innerHTML = '<div class="empty-state">Nessun movimento nel periodo</div>'; return; }
+
+  el.innerHTML = movimenti.map(m => `
+    <div class="ec-item">
+      <div class="ec-tipo">${m.tipo === 'fattura' ? '🧾' : '📝'}</div>
+      <div class="ec-info">
+        <div class="ec-desc">${m.desc}</div>
+        <div class="ec-meta">${formatDate(m.data)} · ${m.stato}</div>
+      </div>
+      <div class="ec-val ${m.segno}">${m.segno === 'dare' ? '-' : '+'}${formatEur(m.importo)}</div>
+    </div>`).join('');
 }
