@@ -83,6 +83,9 @@
         <button class="nav-item" onclick="showView('primanota')" data-view="primanota">
           <span class="nav-icon">✎</span> Prima Nota
         </button>
+        <button class="nav-item" onclick="showView('storico')" data-view="storico">
+          <span class="nav-icon">◷</span> Storico
+        </button>
         <button class="nav-item" onclick="showView('nuovo')" data-view="nuovo">
           <span class="nav-icon">＋</span> Nuovo movimento
         </button>
@@ -602,6 +605,53 @@
               <button class="btn-primary" onclick="salvaNotaGiorno()">Salva prima nota →</button>
             </div>
             <div id="pn-msg" class="auth-message"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ====== VIEW: STORICO ====== -->
+      <div id="view-storico" class="view">
+
+        <!-- Filtri -->
+        <div class="section-card" style="margin-bottom:16px">
+          <div class="filters-row">
+            <input type="date" id="storico-from" class="filter-input" />
+            <input type="date" id="storico-to" class="filter-input" />
+            <select id="storico-location" class="filter-input">
+              <option value="">Tutte le sedi</option>
+            </select>
+            <button class="btn-primary sm" onclick="loadStorico()">Filtra</button>
+          </div>
+
+          <!-- KPI storico -->
+          <div class="storico-kpi-row">
+            <div class="storico-kpi">
+              <div class="kpi-label">Giorni registrati</div>
+              <div class="kpi-value" id="st-giorni" style="color:var(--blue-300)">0</div>
+            </div>
+            <div class="storico-kpi">
+              <div class="kpi-label">Totale entrate</div>
+              <div class="kpi-value" id="st-entrate" style="color:var(--green-400)">€ 0,00</div>
+            </div>
+            <div class="storico-kpi">
+              <div class="kpi-label">Totale uscite</div>
+              <div class="kpi-value" id="st-uscite" style="color:var(--red-400)">€ 0,00</div>
+            </div>
+            <div class="storico-kpi">
+              <div class="kpi-label">Incasso totale periodo</div>
+              <div class="kpi-value" id="st-incasso" style="color:var(--gold-light)">€ 0,00</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Lista giorni -->
+        <div class="section-card">
+          <div class="section-header">
+            <h2>Giorni registrati</h2>
+            <span style="font-size:12px;color:var(--gray-400);font-family:var(--font-mono)">Clicca su un giorno per modificarlo</span>
+          </div>
+          <div id="storico-list" class="storico-list">
+            <div class="empty-state">Nessun giorno registrato</div>
           </div>
         </div>
       </div>

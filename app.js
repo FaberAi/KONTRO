@@ -226,6 +226,7 @@ function showView(name) {
   if (name === 'sedi') renderLocationsList();
   if (name === 'team') loadTeam();
   if (name === 'primanota') initPrimaNota();
+  if (name === 'storico') initStorico();
 }
 
 function updateUserUI() {
@@ -1821,4 +1822,115 @@ async function salvaNotaGiorno() {
 
   showPNMsg('Prima nota salvata ✓'+(fcChiusura>0?' — fondo domani pre-compilato':''),'success');
   await loadDashboard();
+}
+
+// ============================================
+// STORICO PRIMA NOTA
+// ============================================
+async function initStorico() {
+  // Imposta date default (mese corrente)
+  const today = new Date().toISOString().split('T')[0];
+  const firstDay = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
+  const fromEl = document.getElementById('storico-from');
+  const toEl = document.getElementById('storico-to');
+  if (fromEl && !fromEl.value) fromEl.value = firstDay;
+  if (toEl && !toEl.value) toEl.value = today;
+
+  // Popola select sede
+  const sel = document.getElementById('storico-location');
+  if (sel) {
+    sel.innerHTML = '<option value="">Tutte le sedi</option>' +
+      currentLocations.map(l => `<option value="${l.id}">${l.name}</option>`).join('');
+  }
+
+  await loadStorico();
+}
+
+async function loadStorico() {
+  if (!currentBusiness) return;
+
+  const from = document.getElementById('storico-from').value;
+  const to = document.getElementById('storico-to').value;
+  const locId = document.getElementById('storico-location').value;
+
+  let query = db.from('daily_notes')
+    .select('*')
+    .eq('business_id', currentBusiness.id)
+    .order('data', { ascending: false });
+
+  if (from) query = query.gte('data', from);
+  if (to) query = query.lte('data', to);
+  if (locId) query = query.eq('location_id', locId);
+
+  const { data: notes } = await query;
+  const list = notes || [];
+
+  // KPI totali
+  const totEnt = list.reduce((s, n) => s + Number(n.totale_entrate || 0), 0);
+  const totUsc = list.reduce((s, n) => s + Number(n.totale_uscite || 0), 0);
+  const totInc = list.reduce((s, n) => s + Number(n.incasso_giornaliero || 0), 0);
+
+  document.getElementById('st-giorni').textContent = list.length;
+  document.getElementById('st-entrate').textContent = formatEur(totEnt);
+  document.getElementById('st-uscite').textContent = formatEur(totUsc);
+  document.getElementById('st-incasso').textContent = formatEur(totInc);
+
+  const container = document.getElementById('storico-list');
+  if (!list.length) {
+    container.innerHTML = '<div class="empty-state">Nessun giorno registrato nel periodo</div>';
+    return;
+  }
+
+  container.innerHTML = `
+    <div class="storico-header">
+      <span>Data</span>
+      <span>Compilatori</span>
+      <span style="text-align:right">Entrate</span>
+      <span style="text-align:right">Uscite</span>
+      <span style="text-align:right">Differenza</span>
+      <span style="text-align:right">Incasso</span>
+      <span></span>
+    </div>
+    ${list.map(n => {
+      const loc = currentLocations.find(l => l.id === n.location_id);
+      const compilatori = [n.compilatore_m, n.compilatore_p, n.compilatore_s].filter(Boolean).join(' · ') || '—';
+      const diff = Number(n.differenza || 0);
+      const inc = Number(n.incasso_giornaliero || 0);
+      const dataFormatted = new Date(n.data + 'T12:00:00').toLocaleDateString('it-IT', {
+        weekday: 'short', day: '2-digit', month: 'short', year: 'numeric'
+      });
+
+      return `
+        <div class="storico-item" onclick="apriGiorno('${n.data}', '${n.location_id || ''}')">
+          <div>
+            <div class="st-data">${dataFormatted}</div>
+            ${loc ? `<div class="st-sede">${loc.name}</div>` : ''}
+          </div>
+          <div class="st-sede">${compilatori}</div>
+          <div class="st-val green">${formatEur(n.totale_entrate || 0)}</div>
+          <div class="st-val red">${formatEur(n.totale_uscite || 0)}</div>
+          <div class="st-val ${diff <= 0 ? 'blue' : 'red'}">${diff <= 0 ? '' : '⚠ '}${formatEur(diff)}</div>
+          <div class="st-val gold">${formatEur(inc)}</div>
+          <div class="st-arrow">→</div>
+        </div>`;
+    }).join('')}`;
+}
+
+async function apriGiorno(data, locationId) {
+  // Vai alla Prima Nota con quella data
+  showView('primanota');
+
+  // Imposta data e sede
+  const dataEl = document.getElementById('pn-data');
+  const locEl = document.getElementById('pn-location');
+
+  if (dataEl) dataEl.value = data;
+  if (locEl && locationId) locEl.value = locationId;
+
+  // Carica i dati
+  await loadNotaGiorno2();
+
+  // Scroll in cima
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  showToast('Giorno del ' + new Date(data + 'T12:00:00').toLocaleDateString('it-IT') + ' caricato', 'success');
 }

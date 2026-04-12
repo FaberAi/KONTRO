@@ -1298,3 +1298,88 @@ html, body {
 .pn-subtot-row.uscite .td-tot { background: rgba(239,68,68,0.15); color: var(--red-400); }
 .pn-row-even { background: rgba(255,255,255,0.015); }
 .pn-dyn-row td { padding: 5px 8px; }
+
+/* ============================================
+   STORICO
+   ============================================ */
+.storico-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-top: 16px;
+}
+@media (max-width: 900px) { .storico-kpi-row { grid-template-columns: repeat(2,1fr); } }
+
+.storico-kpi {
+  background: var(--navy-700);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  border: 1px solid rgba(255,255,255,0.05);
+}
+
+.storico-list { display: flex; flex-direction: column; gap: 8px; }
+
+.storico-item {
+  display: grid;
+  grid-template-columns: 120px 1fr repeat(4, 100px) 40px;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  background: var(--navy-700);
+  border-radius: var(--radius);
+  border: 1px solid rgba(255,255,255,0.04);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.storico-item:hover {
+  border-color: var(--blue-400);
+  background: var(--navy-600);
+  transform: translateX(4px);
+}
+
+.storico-item .st-data {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 13px;
+  color: white;
+}
+
+.storico-item .st-sede {
+  font-size: 12px;
+  color: var(--gray-400);
+  font-family: var(--font-mono);
+}
+
+.storico-item .st-val {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 500;
+  text-align: right;
+}
+
+.storico-item .st-val.green { color: var(--green-400); }
+.storico-item .st-val.red { color: var(--red-400); }
+.storico-item .st-val.blue { color: var(--blue-300); }
+.storico-item .st-val.gold { color: var(--gold-light); }
+
+.storico-item .st-arrow {
+  color: var(--gray-500);
+  font-size: 16px;
+  text-align: right;
+}
+
+.storico-item:hover .st-arrow { color: var(--blue-300); }
+
+.storico-header {
+  display: grid;
+  grid-template-columns: 120px 1fr repeat(4, 100px) 40px;
+  gap: 12px;
+  padding: 8px 18px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--gray-500);
+  margin-bottom: 4px;
+}
