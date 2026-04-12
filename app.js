@@ -370,6 +370,7 @@ async function loadDashboard() {
   const recent = [...all].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 8);
   renderEntries(recent, 'recent-entries');
   loadCharts();
+  loadPrevisioni();
 }
 
 // ============================================
@@ -3863,4 +3864,206 @@ async function exportEstrattoBancaPDF() {
   const filename = 'KONTRO_Banca_' + (d.banca?.nome||'').replace(/\s/g,'_') + '_' + d.from + '_' + d.to + '.pdf';
   doc.save(filename);
   showToast('PDF scaricato ✓', 'success');
+}
+
+// ============================================
+// PREVISIONI DASHBOARD
+// ============================================
+
+async function loadPrevisioni() {
+  if (!currentBusiness) return;
+  await Promise.all([
+    buildPrevisioneIncasso(),
+    buildFabbisognoFinanziario()
+  ]);
+}
+
+// ── PREVISIONE INCASSO ─────────────────────────────────────────────
+async function buildPrevisioneIncasso() {
+  const el = document.getElementById('prev-incasso-content');
+  if (!el) return;
+
+  const today = new Date();
+  const todayStr = today.toISOString().split('T')[0];
+
+  // Prendo storico ultimi 8 settimane dalla prima nota
+  const otto = new Date(today); otto.setDate(otto.getDate() - 56);
+  const ottoStr = otto.toISOString().split('T')[0];
+
+  const { data: note } = await db.from('daily_notes')
+    .select('data, incasso_giornaliero, incasso_m, incasso_p, incasso_s')
+    .eq('business_id', currentBusiness.id)
+    .gte('data', ottoStr)
+    .order('data');
+
+  const storici = note || [];
+
+  // Calcolo media per giorno della settimana (0=dom, 1=lun, ...)
+  const mediaDow = Array(7).fill(0).map(() => ({ tot: 0, n: 0 }));
+  storici.forEach(n => {
+    const dow = new Date(n.data + 'T12:00:00').getDay();
+    const inc = Number(n.incasso_giornaliero || 0);
+    if (inc > 0) {
+      mediaDow[dow].tot += inc;
+      mediaDow[dow].n++;
+    }
+  });
+
+  const mediaGiorno = mediaDow.map(d => d.n > 0 ? d.tot / d.n : 0);
+  const dowLabels = ['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
+
+  // Prossimi 7 giorni
+  const giorni = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(today); d.setDate(d.getDate() + i);
+    const dStr = d.toISOString().split('T')[0];
+    const dow = d.getDay();
+    const previsto = mediaGiorno[dow];
+
+    // Cerca dato reale se già registrato
+    const reale = storici.find(n => n.data === dStr);
+    const incReale = reale ? Number(reale.incasso_giornaliero || 0) : null;
+
+    giorni.push({
+      data: dStr,
+      label: i === 0 ? 'Oggi' : i === 1 ? 'Domani' : dowLabels[dow] + ' ' + d.getDate() + '/' + (d.getMonth()+1),
+      previsto,
+      reale: incReale,
+      isOggi: i === 0,
+      dow
+    });
+  }
+
+  const maxVal = Math.max(...giorni.map(g => Math.max(g.previsto, g.reale || 0)), 1);
+
+  // Accuracy badge
+  const accuracy = storici.length;
+  const badge = document.getElementById('prev-accuracy');
+  if (badge) {
+    if (accuracy >= 14) { badge.textContent = 'Alta precisione (' + accuracy + ' giorni)'; badge.className = 'prev-badge ok'; }
+    else if (accuracy >= 7) { badge.textContent = 'Media precisione (' + accuracy + ' giorni)'; badge.className = 'prev-badge warning'; }
+    else { badge.textContent = 'Dati insufficienti'; badge.className = 'prev-badge'; }
+  }
+
+  el.innerHTML = '<div class="prev-incasso-list">'
+    + giorni.map(g => {
+      const val = g.reale !== null ? g.reale : g.previsto;
+      const pct = maxVal > 0 ? Math.round((val / maxVal) * 100) : 0;
+      const isReale = g.reale !== null;
+      const barClass = g.isOggi ? 'og-bar' : isReale ? 'storico' : '';
+      const valClass = g.isOggi ? 'oggi-val' : isReale ? 'storico' : '';
+
+      return '<div class="prev-giorno' + (g.isOggi ? ' oggi' : '') + '">'
+        + '<div class="pg-data">' + g.label + '</div>'
+        + '<div class="pg-bar-wrap"><div class="pg-bar ' + barClass + '" style="width:' + pct + '%"></div></div>'
+        + '<div class="pg-val ' + valClass + '">'
+        + (isReale ? '' : '~') + formatEur(val)
+        + (isReale ? ' ✓' : '')
+        + '</div>'
+        + '</div>';
+    }).join('')
+    + '</div>'
+    + '<div style="margin-top:10px;font-size:11px;font-family:var(--font-mono);color:var(--gray-500)">'
+    + '✓ = dato reale · ~ = previsione basata su media storica per giorno settimana'
+    + '</div>';
+}
+
+// ── FABBISOGNO FINANZIARIO ─────────────────────────────────────────
+async function buildFabbisognoFinanziario() {
+  const el = document.getElementById('prev-fabbisogno-content');
+  if (!el) return;
+
+  const today = new Date().toISOString().split('T')[0];
+  const in30 = new Date(); in30.setDate(in30.getDate() + 30);
+  const in30str = in30.toISOString().split('T')[0];
+
+  // Dati finanziari
+  const [{ data: vers }, { data: movUsc }, { data: assegni }, { data: rid }, { data: fatture }, { data: noteStorico }] = await Promise.all([
+    db.from('versamenti').select('importo_contante,importo_pos').eq('business_id', currentBusiness.id),
+    db.from('movimenti_banca').select('importo').eq('business_id', currentBusiness.id).eq('segno','dare'),
+    db.from('assegni').select('importo,data_scadenza,beneficiario,stato').eq('business_id', currentBusiness.id).eq('stato','emesso').lte('data_scadenza', in30str),
+    db.from('rid_bancari').select('*').eq('business_id', currentBusiness.id).eq('attivo', true).lte('prossimo_addebito', in30str),
+    db.from('fatture_fornitori').select('importo_totale,data_scadenza,fornitori(ragione_sociale)').eq('business_id', currentBusiness.id).in('stato',['aperta','pagata_parziale']).lte('data_scadenza', in30str),
+    db.from('daily_notes').select('data,incasso_giornaliero').eq('business_id', currentBusiness.id).gte('data', new Date(new Date().setDate(new Date().getDate()-28)).toISOString().split('T')[0]).order('data')
+  ]);
+
+  // Saldo banche attuale
+  let saldoBanche = bancheCache.reduce((s,b) => s + Number(b.saldo_iniziale||0), 0);
+  saldoBanche += (vers||[]).reduce((s,v) => s + Number(v.importo_contante||0) + Number(v.importo_pos||0), 0);
+  saldoBanche -= (movUsc||[]).reduce((s,m) => s + Number(m.importo||0), 0);
+
+  // Previsione incasso prossimi 30 giorni (basata su media settimanale)
+  const noteArr = noteStorico || [];
+  const mediaDow2 = Array(7).fill(0).map(() => ({ tot:0, n:0 }));
+  noteArr.forEach(n => {
+    const dow = new Date(n.data + 'T12:00:00').getDay();
+    const inc = Number(n.incasso_giornaliero||0);
+    if (inc > 0) { mediaDow2[dow].tot += inc; mediaDow2[dow].n++; }
+  });
+  const mediaG2 = mediaDow2.map(d => d.n > 0 ? d.tot/d.n : 0);
+
+  let prevIncasso30 = 0;
+  for (let i = 1; i <= 30; i++) {
+    const d = new Date(); d.setDate(d.getDate() + i);
+    prevIncasso30 += mediaG2[d.getDay()];
+  }
+
+  // Costruisci eventi futuri
+  const eventi = [];
+
+  (assegni||[]).forEach(a => {
+    if (a.data_scadenza >= today) {
+      eventi.push({ data: a.data_scadenza, desc: 'Assegno — ' + (a.beneficiario||'N/D'), importo: -Number(a.importo), tipo: 'assegno' });
+    }
+  });
+
+  (rid||[]).forEach(r => {
+    if (r.prossimo_addebito && r.prossimo_addebito >= today) {
+      eventi.push({ data: r.prossimo_addebito, desc: 'RID — ' + r.nome, importo: -Number(r.importo), tipo: 'rid' });
+    }
+  });
+
+  (fatture||[]).forEach(f => {
+    if (f.data_scadenza && f.data_scadenza >= today) {
+      eventi.push({ data: f.data_scadenza, desc: 'Fattura — ' + (f.fornitori?.ragione_sociale||'N/D'), importo: -Number(f.importo_totale), tipo: 'fattura' });
+    }
+  });
+
+  eventi.sort((a,b) => new Date(a.data) - new Date(b.data));
+
+  const totUscite30 = eventi.reduce((s,e) => s + Math.abs(e.importo), 0);
+  const dispFinale = saldoBanche + prevIncasso30 - totUscite30;
+
+  // Status badge
+  const badge = document.getElementById('fab-status');
+  if (badge) {
+    if (dispFinale < 0) { badge.textContent = '⚠ Deficit previsto'; badge.className = 'prev-badge danger'; }
+    else if (dispFinale < totUscite30 * 0.2) { badge.textContent = '⚡ Attenzione liquidità'; badge.className = 'prev-badge warning'; }
+    else { badge.textContent = '✓ Situazione equilibrata'; badge.className = 'prev-badge ok'; }
+  }
+
+  // Saldo progressivo
+  let saldo = saldoBanche;
+  const eventiRows = eventi.slice(0, 10).map(e => {
+    saldo += e.importo;
+    const cls = saldo < 0 ? 'negativo' : Math.abs(e.importo) > saldoBanche * 0.2 ? 'warning' : 'ok';
+    return '<div class="fab-evento ' + cls + '">'
+      + '<span class="fe-data">' + formatDate(e.data) + '</span>'
+      + '<span class="fe-desc">' + e.desc + '</span>'
+      + '<span class="fe-importo" style="color:var(--red-400)">' + formatEur(Math.abs(e.importo)) + '</span>'
+      + '<span class="fe-saldo" style="color:' + (saldo >= 0 ? 'var(--blue-300)' : 'var(--red-400)') + '">' + formatEur(saldo) + '</span>'
+      + '</div>';
+  }).join('');
+
+  el.innerHTML = '<div class="fab-summary">'
+    + '<div class="fab-kpi"><div class="fab-kpi-label">Saldo banche oggi</div><div class="fab-kpi-val ' + (saldoBanche>=0?'blue':'red') + '">' + formatEur(saldoBanche) + '</div></div>'
+    + '<div class="fab-kpi"><div class="fab-kpi-label">Incasso previsto 30gg</div><div class="fab-kpi-val green">' + formatEur(prevIncasso30) + '</div></div>'
+    + '<div class="fab-kpi"><div class="fab-kpi-label">Uscite previste 30gg</div><div class="fab-kpi-val red">' + formatEur(totUscite30) + '</div></div>'
+    + '<div class="fab-kpi"><div class="fab-kpi-label">Disponibilità finale</div><div class="fab-kpi-val ' + (dispFinale>=0?'green':'red') + '">' + formatEur(dispFinale) + '</div></div>'
+    + '</div>'
+    + (eventi.length > 0
+      ? '<div style="display:flex;justify-content:space-between;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--gray-500);padding:0 4px;margin-bottom:6px">'
+        + '<span>Evento</span><span>Importo</span><span>Saldo prev.</span></div>'
+        + '<div class="fab-eventi">' + eventiRows + '</div>'
+      : '<div class="empty-state">Nessuna uscita prevista nei prossimi 30 giorni 🎉</div>');
 }

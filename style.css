@@ -1943,3 +1943,133 @@ html, body {
 
 .fat-tot-label { color: var(--gray-400); }
 .fat-tot-val { color: var(--green-400); font-weight: 600; font-size: 15px; }
+
+/* ============================================
+   PREVISIONI DASHBOARD
+   ============================================ */
+.prev-dashboard-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 900px) { .prev-dashboard-grid { grid-template-columns: 1fr; } }
+
+.prev-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 100px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  background: rgba(37,99,235,0.15);
+  color: var(--blue-300);
+}
+
+.prev-badge.warning { background: rgba(245,158,11,0.15); color: var(--gold-light); }
+.prev-badge.danger { background: rgba(239,68,68,0.15); color: var(--red-400); }
+.prev-badge.ok { background: rgba(16,185,129,0.15); color: var(--green-400); }
+
+/* Barre previsione incasso */
+.prev-incasso-list { display: flex; flex-direction: column; gap: 6px; }
+
+.prev-giorno {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--navy-700);
+  border-radius: var(--radius);
+}
+
+.prev-giorno.oggi {
+  background: rgba(37,99,235,0.1);
+  border: 1px solid rgba(37,99,235,0.2);
+}
+
+.prev-giorno .pg-data {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--gray-400);
+  min-width: 90px;
+}
+
+.prev-giorno .pg-label {
+  font-size: 12px;
+  font-weight: 600;
+  min-width: 80px;
+}
+
+.prev-giorno .pg-bar-wrap {
+  flex: 1;
+  height: 6px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.prev-giorno .pg-bar {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--green-500);
+  transition: width 0.5s ease;
+}
+
+.prev-giorno .pg-bar.storico { background: var(--gray-500); opacity: 0.5; }
+.prev-giorno .pg-bar.oggi-bar { background: var(--blue-400); }
+
+.prev-giorno .pg-val {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  min-width: 80px;
+  text-align: right;
+  color: var(--green-400);
+}
+
+.prev-giorno .pg-val.storico { color: var(--gray-400); }
+.prev-giorno .pg-val.oggi-val { color: var(--blue-300); }
+
+/* Fabbisogno finanziario */
+.fab-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.fab-kpi {
+  background: var(--navy-700);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  border: 1px solid rgba(255,255,255,0.05);
+}
+
+.fab-kpi-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-400); margin-bottom: 4px; }
+.fab-kpi-val { font-family: var(--font-mono); font-size: 16px; font-weight: 600; }
+.fab-kpi-val.green { color: var(--green-400); }
+.fab-kpi-val.red { color: var(--red-400); }
+.fab-kpi-val.gold { color: var(--gold-light); }
+.fab-kpi-val.blue { color: var(--blue-300); }
+
+.fab-eventi { display: flex; flex-direction: column; gap: 5px; }
+
+.fab-evento {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  background: var(--navy-700);
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.fab-evento.negativo { border-left: 3px solid var(--red-400); }
+.fab-evento.warning { border-left: 3px solid var(--gold); }
+.fab-evento.ok { border-left: 3px solid var(--green-500); }
+
+.fab-evento .fe-data { font-family: var(--font-mono); font-size: 11px; color: var(--gray-400); min-width: 70px; }
+.fab-evento .fe-desc { flex: 1; color: var(--gray-300); }
+.fab-evento .fe-importo { font-family: var(--font-mono); font-size: 12px; font-weight: 600; }
+.fab-evento .fe-saldo { font-family: var(--font-mono); font-size: 11px; min-width: 80px; text-align: right; }
