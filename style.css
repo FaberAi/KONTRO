@@ -1802,3 +1802,45 @@ html, body {
   gap: 12px;
   flex-wrap: wrap;
 }
+
+/* ============================================
+   IMPOSTAZIONI / CATEGORIE
+   ============================================ */
+.categorie-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+}
+
+.categoria-card {
+  background: var(--navy-700);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  border: 1px solid rgba(255,255,255,0.05);
+  border-left: 4px solid transparent;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition: all 0.2s;
+}
+
+.categoria-card:hover { background: var(--navy-600); }
+
+.cat-icon {
+  font-size: 22px;
+  width: 36px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.cat-info { flex: 1; }
+.cat-nome { font-weight: 600; font-size: 13px; }
+.cat-tipo {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+.cat-tipo.entrata { color: var(--green-400); }
+.cat-tipo.uscita { color: var(--red-400); }

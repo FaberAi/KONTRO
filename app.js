@@ -240,6 +240,7 @@ function showView(name) {
   if (name === 'storico') initStorico();
   if (name === 'banca') initBanca();
   if (name === 'fornitori') initFornitori();
+  if (name === 'impostazioni') initImpostazioni();
 }
 
 function updateUserUI() {
@@ -2993,4 +2994,138 @@ async function deleteAssegnoCompleto(id) {
   loadAssegniV2();
   loadOverview();
   showToast('Assegno eliminato', 'success');
+}
+
+// ============================================
+// IMPOSTAZIONI
+// ============================================
+let currentCatFilter = 'tutte';
+
+function switchSettingsTab(tab) {
+  document.querySelectorAll('.banca-tab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.banca-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('stab-' + tab).classList.add('active');
+  document.getElementById('spanel-' + tab).classList.add('active');
+  if (tab === 'azienda') loadAzienda();
+}
+
+async function initImpostazioni() {
+  await loadCategorieLista();
+  loadAzienda();
+}
+
+// ── CATEGORIE ─────────────────────────────────────────────────────
+async function loadCategorieLista() {
+  if (!currentBusiness) return;
+  const { data } = await db.from('categories').select('*')
+    .eq('business_id', currentBusiness.id)
+    .eq('active', true)
+    .order('type').order('name');
+
+  window.allCategories = data || [];
+
+  const entrate = (data||[]).filter(c => c.type === 'entrata');
+  const uscite = (data||[]).filter(c => c.type === 'uscita');
+
+  document.getElementById('cat-n-entrate').textContent = entrate.length;
+  document.getElementById('cat-n-uscite').textContent = uscite.length;
+
+  renderCategorieLista(data||[]);
+
+  // Aggiorna anche i select nella form movimenti
+  filterCategoriesByType('entrata');
+}
+
+function filterCategorie(tipo) {
+  currentCatFilter = tipo;
+  ['tutte','entrata','uscita'].forEach(t => {
+    const btn = document.getElementById('cf-' + t);
+    if (btn) btn.classList.toggle('active', t === tipo);
+  });
+  const filtered = tipo === 'tutte'
+    ? (window.allCategories || [])
+    : (window.allCategories || []).filter(c => c.type === tipo);
+  renderCategorieLista(filtered);
+}
+
+function renderCategorieLista(cats) {
+  const el = document.getElementById('categorie-list');
+  if (!cats.length) { el.innerHTML = '<div class="empty-state">Nessuna categoria</div>'; return; }
+  el.innerHTML = cats.map(c => `
+    <div class="categoria-card" style="border-left-color:${c.color}">
+      <div class="cat-icon">${c.icon || '📌'}</div>
+      <div class="cat-info">
+        <div class="cat-nome">${c.name}</div>
+        <div class="cat-tipo ${c.type}">${c.type === 'entrata' ? 'Entrata' : 'Uscita'}</div>
+      </div>
+      <button class="entry-del" onclick="deleteCategoria('${c.id}')" title="Elimina">✕</button>
+    </div>`).join('');
+}
+
+async function saveCategoria() {
+  if (!currentBusiness) return;
+  const nome = document.getElementById('nc-nome').value.trim();
+  const tipo = document.getElementById('nc-tipo').value;
+  const icon = document.getElementById('nc-icon').value.trim() || '📌';
+  const color = document.getElementById('nc-color').value;
+  const msgEl = document.getElementById('nc-msg');
+
+  if (!nome) { msgEl.textContent = 'Inserisci il nome'; msgEl.className = 'auth-message error'; return; }
+
+  const { error } = await db.from('categories').insert({
+    business_id: currentBusiness.id,
+    name: nome,
+    type: tipo,
+    icon,
+    color,
+    active: true
+  });
+
+  if (error) { msgEl.textContent = 'Errore: ' + error.message; msgEl.className = 'auth-message error'; return; }
+
+  msgEl.textContent = 'Categoria aggiunta ✓';
+  msgEl.className = 'auth-message success';
+  document.getElementById('nc-nome').value = '';
+  document.getElementById('nc-icon').value = '';
+  setTimeout(() => msgEl.textContent = '', 3000);
+  await loadCategorieLista();
+}
+
+async function deleteCategoria(id) {
+  const { error } = await db.from('categories').update({ active: false }).eq('id', id);
+  if (error) { showToast('Errore eliminazione', 'error'); return; }
+  showToast('Categoria eliminata ✓', 'success');
+  await loadCategorieLista();
+}
+
+// ── AZIENDA ───────────────────────────────────────────────────────
+async function loadAzienda() {
+  if (!currentBusiness) return;
+  document.getElementById('az-nome').value = currentBusiness.name || '';
+  document.getElementById('az-email').value = currentBusiness.email || '';
+  document.getElementById('az-piva').value = currentBusiness.vat_number || '';
+  document.getElementById('az-tel').value = currentBusiness.phone || '';
+}
+
+async function saveAzienda() {
+  if (!currentBusiness) return;
+  const nome = document.getElementById('az-nome').value.trim();
+  if (!nome) { showToast('Inserisci il nome attività', 'error'); return; }
+
+  const { error } = await db.from('businesses').update({
+    name: nome,
+    email: document.getElementById('az-email').value.trim(),
+    vat_number: document.getElementById('az-piva').value.trim(),
+    phone: document.getElementById('az-tel').value.trim()
+  }).eq('id', currentBusiness.id);
+
+  if (error) { showToast('Errore: ' + error.message, 'error'); return; }
+
+  currentBusiness.name = nome;
+  document.getElementById('business-name-sidebar').textContent = nome;
+  const msgEl = document.getElementById('az-msg');
+  msgEl.textContent = 'Dati salvati ✓';
+  msgEl.className = 'auth-message success';
+  setTimeout(() => msgEl.textContent = '', 3000);
+  showToast('Azienda aggiornata ✓', 'success');
 }

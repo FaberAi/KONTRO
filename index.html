@@ -92,6 +92,9 @@
         <button class="nav-item" onclick="showView('fornitori')" data-view="fornitori">
           <span class="nav-icon">📦</span> Fornitori
         </button>
+        <button class="nav-item" onclick="showView('impostazioni')" data-view="impostazioni">
+          <span class="nav-icon">⚙</span> Impostazioni
+        </button>
         <button class="nav-item" onclick="showView('nuovo')" data-view="nuovo">
           <span class="nav-icon">＋</span> Movimenti extra cassa
         </button>
@@ -986,6 +989,106 @@
           <div class="section-card">
             <div class="section-header"><h2>Movimenti fornitore</h2></div>
             <div id="estratto-list" class="entries-list"><div class="empty-state">Seleziona un fornitore</div></div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ====== VIEW: IMPOSTAZIONI ====== -->
+      <div id="view-impostazioni" class="view">
+
+        <div class="banca-tabs">
+          <button class="banca-tab active" onclick="switchSettingsTab('categorie')" id="stab-categorie">🏷 Categorie</button>
+          <button class="banca-tab" onclick="switchSettingsTab('azienda')" id="stab-azienda">🏢 Azienda</button>
+        </div>
+
+        <!-- ── CATEGORIE ── -->
+        <div id="spanel-categorie" class="banca-panel active">
+
+          <!-- KPI -->
+          <div class="kpi-grid" style="margin-bottom:20px">
+            <div class="kpi-card entrate">
+              <div class="kpi-label">Categorie entrate</div>
+              <div class="kpi-value" id="cat-n-entrate" style="color:var(--green-400)">0</div>
+            </div>
+            <div class="kpi-card uscite">
+              <div class="kpi-label">Categorie uscite</div>
+              <div class="kpi-value" id="cat-n-uscite" style="color:var(--red-400)">0</div>
+            </div>
+          </div>
+
+          <!-- Form nuova categoria -->
+          <div class="section-card" style="margin-bottom:16px">
+            <h2 style="margin-bottom:16px">Nuova categoria</h2>
+            <div class="form-grid">
+              <div class="field">
+                <label>Nome</label>
+                <input type="text" id="nc-nome" placeholder="Es. Affitto locale" />
+              </div>
+              <div class="field">
+                <label>Tipo</label>
+                <select id="nc-tipo">
+                  <option value="entrata">Entrata</option>
+                  <option value="uscita">Uscita</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Icona (emoji)</label>
+                <input type="text" id="nc-icon" placeholder="Es. 🏠" maxlength="4" style="font-size:20px;text-align:center" />
+              </div>
+              <div class="field">
+                <label>Colore</label>
+                <input type="color" id="nc-color" value="#3b82f6" style="height:42px;padding:4px;cursor:pointer" />
+              </div>
+            </div>
+            <div class="form-actions">
+              <button class="btn-primary" onclick="saveCategoria()">Aggiungi categoria →</button>
+            </div>
+            <div id="nc-msg" class="auth-message"></div>
+          </div>
+
+          <!-- Lista categorie -->
+          <div class="section-card">
+            <div class="section-header">
+              <h2>Categorie attive</h2>
+              <div style="display:flex;gap:8px">
+                <button class="btn-secondary sm" onclick="filterCategorie('tutte')" id="cf-tutte">Tutte</button>
+                <button class="btn-secondary sm" onclick="filterCategorie('entrata')" id="cf-entrata">Entrate</button>
+                <button class="btn-secondary sm" onclick="filterCategorie('uscita')" id="cf-uscita">Uscite</button>
+              </div>
+            </div>
+            <div id="categorie-list" class="categorie-grid">
+              <div class="empty-state">Nessuna categoria</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── AZIENDA ── -->
+        <div id="spanel-azienda" class="banca-panel">
+          <div class="section-card">
+            <h2 style="margin-bottom:20px">Dati azienda</h2>
+            <div class="form-grid">
+              <div class="field full">
+                <label>Nome attività</label>
+                <input type="text" id="az-nome" placeholder="Es. Bar Roma S.r.l." />
+              </div>
+              <div class="field">
+                <label>Partita IVA</label>
+                <input type="text" id="az-piva" placeholder="IT12345678901" />
+              </div>
+              <div class="field">
+                <label>Email</label>
+                <input type="email" id="az-email" placeholder="info@miobar.it" />
+              </div>
+              <div class="field">
+                <label>Telefono</label>
+                <input type="text" id="az-tel" placeholder="+39 02 1234567" />
+              </div>
+            </div>
+            <div class="form-actions">
+              <button class="btn-primary" onclick="saveAzienda()">Salva modifiche →</button>
+            </div>
+            <div id="az-msg" class="auth-message"></div>
           </div>
         </div>
 
