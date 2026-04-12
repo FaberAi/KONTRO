@@ -675,6 +675,7 @@
           <button class="banca-tab" onclick="switchBancaTab('versamenti')" id="btab-versamenti">💵 Versamenti</button>
           <button class="banca-tab" onclick="switchBancaTab('assegni')" id="btab-assegni">📝 Assegni</button>
           <button class="banca-tab" onclick="switchBancaTab('rid')" id="btab-rid">🔄 RID/SDD</button>
+          <button class="banca-tab" onclick="switchBancaTab('estratto')" id="btab-estratto">📋 Estratto banca</button>
         </div>
 
         <!-- ── OVERVIEW ── -->
@@ -833,6 +834,50 @@
           <div class="section-card">
             <div class="section-header"><h2>RID/SDD attivi</h2></div>
             <div id="rid-list" class="entries-list"><div class="empty-state">Nessun RID configurato</div></div>
+          </div>
+        </div>
+
+        <!-- ── ESTRATTO CONTO BANCA ── -->
+        <div id="bpanel-estratto" class="banca-panel">
+          <div class="section-card" style="margin-bottom:16px">
+            <div class="form-grid">
+              <div class="field">
+                <label>Banca</label>
+                <select id="eb-banca" onchange="loadEstrattoBanca()"><option value="">Seleziona banca</option></select>
+              </div>
+              <div class="field"><label>Da</label><input type="date" id="eb-from" onchange="loadEstrattoBanca()" /></div>
+              <div class="field"><label>A</label><input type="date" id="eb-to" onchange="loadEstrattoBanca()" /></div>
+              <div class="field" style="display:flex;align-items:flex-end">
+                <button class="btn-primary sm" onclick="exportEstrattoBancaPDF()">↓ PDF</button>
+              </div>
+            </div>
+          </div>
+          <div class="kpi-grid" style="margin-bottom:16px">
+            <div class="kpi-card saldo">
+              <div class="kpi-label">Saldo iniziale</div>
+              <div class="kpi-value" id="eb-saldo-iniziale" style="color:var(--blue-300)">€ 0,00</div>
+            </div>
+            <div class="kpi-card entrate">
+              <div class="kpi-label">Totale entrate</div>
+              <div class="kpi-value" id="eb-tot-entrate">€ 0,00</div>
+            </div>
+            <div class="kpi-card uscite">
+              <div class="kpi-label">Totale uscite</div>
+              <div class="kpi-value" id="eb-tot-uscite">€ 0,00</div>
+            </div>
+            <div class="kpi-card mese">
+              <div class="kpi-label">Saldo finale</div>
+              <div class="kpi-value" id="eb-saldo-finale">€ 0,00</div>
+            </div>
+          </div>
+          <div class="section-card">
+            <div class="section-header">
+              <h2>Movimenti</h2>
+              <span id="eb-count" style="font-size:12px;color:var(--gray-400);font-family:var(--font-mono)"></span>
+            </div>
+            <div id="estratto-banca-list" class="entries-list">
+              <div class="empty-state">Seleziona una banca</div>
+            </div>
           </div>
         </div>
 
