@@ -3095,9 +3095,6 @@ function pnFornitoriOptsHtml() {
     '<option value="__libero__">✏ Descrizione libera...</option>';
 }
 
-    }
-  }, 50);
-}
 
 // Fix salvaNotaGiorno per salvare fornitore_id dal select
 const _origSalvaNotaGiorno = salvaNotaGiorno;
