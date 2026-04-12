@@ -130,6 +130,21 @@
     <!-- MAIN CONTENT -->
     <main class="main-content">
 
+      <!-- TOPBAR MOBILE -->
+      <div class="mobile-topbar">
+        <button class="hamburger" onclick="toggleMobileMenu()" id="hamburger-btn">
+          <span></span><span></span><span></span>
+        </button>
+        <div class="mobile-logo">
+          <span class="logo-icon sm">K</span>
+          <span class="logo-text">KONTRO</span>
+        </div>
+        <div style="width:40px"></div>
+      </div>
+
+      <!-- OVERLAY MENU MOBILE -->
+      <div class="mobile-overlay hidden" id="mobile-overlay" onclick="closeMobileMenu()"></div>
+
       <!-- TOPBAR -->
       <header class="topbar">
         <div class="topbar-left">

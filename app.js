@@ -4951,3 +4951,38 @@ async function exportTurniPDF() {
   doc.save('KONTRO_Turni_' + currentBusiness.name.replace(/\s/g,'_') + '.pdf');
   showToast('PDF turni scaricato ✓', 'success');
 }
+
+// ============================================
+// MOBILE MENU
+// ============================================
+function toggleMobileMenu() {
+  const sidebar = document.querySelector('.sidebar');
+  const overlay = document.getElementById('mobile-overlay');
+  const btn = document.getElementById('hamburger-btn');
+  const isOpen = sidebar.classList.contains('open');
+  if (isOpen) {
+    closeMobileMenu();
+  } else {
+    sidebar.classList.add('open');
+    overlay.classList.remove('hidden');
+    btn.classList.add('open');
+  }
+}
+
+function closeMobileMenu() {
+  const sidebar = document.querySelector('.sidebar');
+  const overlay = document.getElementById('mobile-overlay');
+  const btn = document.getElementById('hamburger-btn');
+  sidebar.classList.remove('open');
+  overlay.classList.add('hidden');
+  btn.classList.remove('open');
+}
+
+// Chiudi menu quando si clicca una voce
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.nav-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (window.innerWidth <= 768) closeMobileMenu();
+    });
+  });
+});
