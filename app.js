@@ -1201,7 +1201,7 @@ async function exportPDF() {
     doc.setPage(i);
     doc.setFontSize(7);
     doc.setTextColor(156, 163, 175);
-    doc.text('KONTRO — Prima nota digitale · kontro.vercel.app', margin, 290);
+    doc.text('KONTRO — Prima nota digitale · www.kontro.cloud', margin, 290);
     doc.text(`Pagina ${i} di ${pageCount}`, W - margin, 290, { align: 'right' });
   }
 
@@ -3631,7 +3631,7 @@ async function exportEstrattoPDF() {
   // Footer
   doc.setPage(1);
   doc.setFontSize(7); doc.setTextColor(156,163,175); doc.setFont('helvetica','normal');
-  doc.text('KONTRO — Prima nota digitale · kontro.vercel.app', margin, 290);
+  doc.text('KONTRO — Prima nota digitale · www.kontro.cloud', margin, 290);
 
   const filename = 'KONTRO_Estratto_' + fornitoreNome.replace(/\s/g,'_') + '_' + from + '_' + to + '.pdf';
   doc.save(filename);
@@ -3868,7 +3868,7 @@ async function exportEstrattoBancaPDF() {
   doc.text(formatEur(d.saldoFinale), W-margin-2, y+5.5, {align:'right'});
 
   doc.setPage(1); doc.setFontSize(7); doc.setTextColor(156,163,175); doc.setFont('helvetica','normal');
-  doc.text('KONTRO — Prima nota digitale · kontro.vercel.app', margin, 290);
+  doc.text('KONTRO — Prima nota digitale · www.kontro.cloud', margin, 290);
 
   const filename = 'KONTRO_Banca_' + (d.banca?.nome||'').replace(/\s/g,'_') + '_' + d.from + '_' + d.to + '.pdf';
   doc.save(filename);
