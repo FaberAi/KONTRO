@@ -1151,22 +1151,7 @@ async function exportPDF() {
 let pnFornitoriRows = [];
 let pnPrelieviRows = [];
 
-function initPrimaNota() {
-  // Imposta data di oggi
-  const today = new Date().toISOString().split('T')[0];
-  document.getElementById('pn-data').value = today;
-
-  // Popola select sede
-  const sel = document.getElementById('pn-location');
-  sel.innerHTML = '<option value="">Sede principale</option>' +
-    currentLocations.map(l => `<option value="${l.id}">${l.name}</option>`).join('');
-
-  // Costruisci righe dinamiche
-  buildFornitoriRows(5);
-  buildPrelieviRows(3);
-  calcPN();
-  loadNotaGiorno();
-}
+// [rimossa versione obsoleta initPrimaNota v1]
 
 // ── RIGHE DINAMICHE ───────────────────────────────────────────────
 function buildFornitoriRows(n) {
@@ -1573,8 +1558,31 @@ function initPrimaNota() {
     sel.innerHTML = '<option value="">Sede principale</option>' +
       currentLocations.map(l => `<option value="${l.id}">${l.name}</option>`).join('');
   }
+  // Popola i select fornitori nelle righe statiche
+  _buildPNFornitoriSelects();
   calcPN2();
   loadNotaGiorno2();
+}
+
+function _buildPNFornitoriSelects() {
+  if (!fornitoriCache || fornitoriCache.length === 0) return;
+  const optsHtml = '<option value="">— Fornitore —</option>' +
+    fornitoriCache.map(f => `<option value="${f.id}">${f.ragione_sociale}</option>`).join('');
+  for (let i = 0; i < 20; i++) {
+    const el = document.getElementById('fdesc-' + i);
+    if (!el) break;
+    if (el.tagName === 'SELECT') {
+      const val = el.value;
+      el.innerHTML = optsHtml;
+      if (val) el.value = val;
+    } else if (el.tagName === 'INPUT') {
+      const sel = document.createElement('select');
+      sel.id = 'fdesc-' + i;
+      sel.className = 'pn-desc-input';
+      sel.innerHTML = optsHtml;
+      el.parentNode.replaceChild(sel, el);
+    }
+  }
 }
 
 function getV(id) { return parseFloat(document.getElementById(id)?.value) || 0; }
@@ -3087,32 +3095,6 @@ function pnFornitoriOptsHtml() {
     '<option value="__libero__">✏ Descrizione libera...</option>';
 }
 
-// Override initPrimaNota per aggiungere i select
-const _origInitPN = initPrimaNota;
-function initPrimaNota() {
-  _origInitPN();
-  // Dopo init, sostituisci i text input con select se ci sono fornitori
-  setTimeout(() => {
-    if (fornitoriCache.length > 0) populatePNFornitoriSelects();
-  }, 100);
-}
-
-// Aggiorna anche addFornitoreRow per usare select
-const _origAddFornitoreRow = addFornitoreRow;
-function addFornitoreRow() {
-  _origAddFornitoreRow();
-  // Sostituisci l'ultimo text input aggiunto con select
-  setTimeout(() => {
-    if (fornitoriCache.length > 0) {
-      const idx = pnFornitoriCount - 1;
-      const el = document.getElementById('fdesc-' + idx);
-      if (el && el.tagName === 'INPUT') {
-        const sel = document.createElement('select');
-        sel.id = 'fdesc-' + idx;
-        sel.className = 'pn-desc-input';
-        sel.innerHTML = pnFornitoriOptsHtml();
-        el.parentNode.replaceChild(sel, el);
-      }
     }
   }, 50);
 }
