@@ -227,6 +227,7 @@ function showView(name) {
   if (name === 'team') loadTeam();
   if (name === 'primanota') initPrimaNota();
   if (name === 'storico') initStorico();
+  if (name === 'banca') initBanca();
 }
 
 function updateUserUI() {
@@ -1933,4 +1934,387 @@ async function apriGiorno(data, locationId) {
   // Scroll in cima
   window.scrollTo({ top: 0, behavior: 'smooth' });
   showToast('Giorno del ' + new Date(data + 'T12:00:00').toLocaleDateString('it-IT') + ' caricato', 'success');
+}
+
+// ============================================
+// BANCA & FINANZA
+// ============================================
+let bancheCache = [];
+let currentAssegniFilter = 'aperti';
+
+function switchBancaTab(tab) {
+  document.querySelectorAll('.banca-tab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.banca-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('btab-' + tab).classList.add('active');
+  document.getElementById('bpanel-' + tab).classList.add('active');
+}
+
+async function initBanca() {
+  await loadBancheCache();
+  populateBancaSelects();
+  setTodayFields();
+  await Promise.all([
+    loadOverview(),
+    loadBancheList(),
+    loadVersamenti(),
+    loadAssegni(),
+    loadRid()
+  ]);
+}
+
+function setTodayFields() {
+  const today = new Date().toISOString().split('T')[0];
+  ['nv-data','na-emissione','na-scadenza','nr-prossimo'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el && !el.value) el.value = today;
+  });
+}
+
+async function loadBancheCache() {
+  if (!currentBusiness) return;
+  const { data } = await db.from('banche').select('*')
+    .eq('business_id', currentBusiness.id).eq('attivo', true).order('nome');
+  bancheCache = data || [];
+}
+
+function populateBancaSelects() {
+  const opts = '<option value="">Seleziona banca</option>' +
+    bancheCache.map(b => `<option value="${b.id}">${b.nome} — ${b.istituto || ''}</option>`).join('');
+  ['nv-banca','na-banca','nr-banca'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = opts;
+  });
+}
+
+// ── OVERVIEW ─────────────────────────────────────────────────────
+async function loadOverview() {
+  if (!currentBusiness) return;
+  const today = new Date().toISOString().split('T')[0];
+  const in30 = new Date(); in30.setDate(in30.getDate() + 30);
+  const in30str = in30.toISOString().split('T')[0];
+
+  const [{ data: vers }, { data: movUsc }, { data: assAperte }, { data: ridAttivi }] = await Promise.all([
+    db.from('versamenti').select('importo_contante,importo_pos,banca_id').eq('business_id', currentBusiness.id),
+    db.from('movimenti_banca').select('importo,banca_id').eq('business_id', currentBusiness.id).eq('segno','dare'),
+    db.from('assegni').select('*').eq('business_id', currentBusiness.id).eq('incassato', false),
+    db.from('rid_bancari').select('*').eq('business_id', currentBusiness.id).eq('attivo', true)
+  ]);
+
+  // Saldo banche = saldo iniziale + versamenti - movimenti dare
+  let saldoBanche = bancheCache.reduce((s, b) => s + Number(b.saldo_iniziale || 0), 0);
+  saldoBanche += (vers || []).reduce((s, v) => s + Number(v.importo_contante||0) + Number(v.importo_pos||0), 0);
+  saldoBanche -= (movUsc || []).reduce((s, m) => s + Number(m.importo||0), 0);
+
+  const assTot = (assAperte || []).reduce((s, a) => s + Number(a.importo||0), 0);
+  const ridMensile = (ridAttivi || []).reduce((s, r) => {
+    const mult = { mensile:1, bimestrale:0.5, trimestrale:0.33, semestrale:0.17, annuale:0.08 }[r.frequenza] || 1;
+    return s + Number(r.importo||0) * mult;
+  }, 0);
+  const dispReale = saldoBanche - assTot;
+
+  document.getElementById('ov-saldo-banche').textContent = formatEur(saldoBanche);
+  document.getElementById('ov-saldo-sub').textContent = bancheCache.length + ' conti attivi';
+  document.getElementById('ov-assegni').textContent = formatEur(assTot);
+  document.getElementById('ov-assegni-sub').textContent = (assAperte||[]).length + ' assegni';
+  document.getElementById('ov-rid').textContent = formatEur(ridMensile);
+  document.getElementById('ov-rid-sub').textContent = (ridAttivi||[]).length + ' addebiti attivi';
+  document.getElementById('ov-disp').textContent = formatEur(dispReale);
+
+  // Alerts
+  const alerts = [];
+  const scaduti = (assAperte||[]).filter(a => a.data_scadenza < today);
+  const inScadenza = (assAperte||[]).filter(a => a.data_scadenza >= today && a.data_scadenza <= in30str);
+  if (scaduti.length) alerts.push({ type: 'danger', msg: `⚠️ ${scaduti.length} assegni scaduti per ${formatEur(scaduti.reduce((s,a)=>s+Number(a.importo),0))}` });
+  if (inScadenza.length) alerts.push({ type: 'warning', msg: `⏰ ${inScadenza.length} assegni in scadenza nei prossimi 30 giorni: ${formatEur(inScadenza.reduce((s,a)=>s+Number(a.importo),0))}` });
+  if (dispReale < 0) alerts.push({ type: 'danger', msg: `🚨 Disponibilità negativa: ${formatEur(dispReale)}` });
+
+  const ridProssimi = (ridAttivi||[]).filter(r => r.prossimo_addebito && r.prossimo_addebito <= in30str);
+  if (ridProssimi.length) alerts.push({ type: 'info', msg: `📅 ${ridProssimi.length} RID in addebito nei prossimi 30 giorni: ${formatEur(ridProssimi.reduce((s,r)=>s+Number(r.importo),0))}` });
+
+  document.getElementById('ov-alerts').innerHTML = alerts.map(a =>
+    `<div class="ov-alert ${a.type}">${a.msg}</div>`).join('');
+
+  // Previsione 30 giorni
+  buildPrevisione(dispReale, assAperte||[], ridAttivi||[]);
+}
+
+function buildPrevisione(dispReale, assegni, rid) {
+  const rows = [];
+  const today = new Date();
+
+  rows.push({ data: 'Oggi', desc: 'Disponibilità attuale', val: dispReale, cls: dispReale >= 0 ? 'green' : 'red', saldo: true });
+
+  let saldo = dispReale;
+  const eventi = [];
+
+  // Assegni in scadenza nei prossimi 30 gg
+  assegni.forEach(a => {
+    const d = new Date(a.data_scadenza);
+    if (d >= today) eventi.push({ data: d, desc: `Assegno: ${a.beneficiario || 'N/D'}`, importo: -Number(a.importo), tipo: 'assegno' });
+  });
+
+  // RID
+  rid.forEach(r => {
+    if (r.prossimo_addebito) {
+      const d = new Date(r.prossimo_addebito);
+      if (d >= today) eventi.push({ data: d, desc: `RID: ${r.nome}`, importo: -Number(r.importo), tipo: 'rid' });
+    }
+  });
+
+  eventi.sort((a, b) => a.data - b.data);
+  eventi.slice(0, 10).forEach(ev => {
+    saldo += ev.importo;
+    rows.push({
+      data: ev.data.toLocaleDateString('it-IT', { day: '2-digit', month: 'short' }),
+      desc: ev.desc,
+      val: ev.importo,
+      saldo,
+      cls: ev.importo < 0 ? 'red' : 'green'
+    });
+  });
+
+  document.getElementById('ov-previsione').innerHTML = rows.map(r => `
+    <div class="prev-row ${r.saldo ? 'saldo' : ''}">
+      <span class="prev-data">${r.data}</span>
+      <span class="prev-desc">${r.desc}</span>
+      <span class="prev-val ${r.cls}">${r.val >= 0 ? '+' : ''}${formatEur(r.val)}</span>
+      ${r.saldo !== undefined && !r.saldo ? `<span class="prev-val ${r.saldo >= 0 ? 'gold' : 'red'}" style="min-width:100px;text-align:right">${formatEur(r.saldo)}</span>` : '<span></span>'}
+    </div>`).join('') || '<div class="empty-state">Nessun evento nei prossimi 30 giorni</div>';
+}
+
+// ── BANCHE ───────────────────────────────────────────────────────
+function showAddBanca() { document.getElementById('add-banca-form').classList.remove('hidden'); }
+function hideAddBanca() { document.getElementById('add-banca-form').classList.add('hidden'); }
+
+async function saveBanca() {
+  if (!currentBusiness) return;
+  const nome = document.getElementById('nb-nome').value.trim();
+  if (!nome) { showToast('Inserisci il nome del conto', 'error'); return; }
+  const { error } = await db.from('banche').insert({
+    business_id: currentBusiness.id,
+    nome,
+    istituto: document.getElementById('nb-istituto').value.trim(),
+    iban: document.getElementById('nb-iban').value.trim(),
+    tipo: document.getElementById('nb-tipo').value,
+    saldo_iniziale: parseFloat(document.getElementById('nb-saldo').value) || 0
+  });
+  if (error) { showToast('Errore: ' + error.message, 'error'); return; }
+  showToast('Conto aggiunto ✓', 'success');
+  hideAddBanca();
+  await loadBancheCache();
+  populateBancaSelects();
+  loadBancheList();
+  loadOverview();
+}
+
+async function loadBancheList() {
+  if (!currentBusiness) return;
+  const { data } = await db.from('banche').select('*')
+    .eq('business_id', currentBusiness.id).order('nome');
+  const el = document.getElementById('banche-list');
+  if (!data?.length) { el.innerHTML = '<div class="empty-state">Nessun conto configurato</div>'; return; }
+  el.innerHTML = data.map(b => `
+    <div class="banca-card">
+      <div class="bc-nome">${b.nome}</div>
+      <div class="bc-istituto">${b.istituto || '—'}</div>
+      ${b.iban ? `<div class="bc-iban">${b.iban}</div>` : ''}
+      <div class="bc-saldo-label">Saldo iniziale</div>
+      <div class="bc-saldo">${formatEur(b.saldo_iniziale)}</div>
+      <div class="bc-actions">
+        <button class="btn-secondary sm" onclick="deleteBanca('${b.id}')">Elimina</button>
+      </div>
+    </div>`).join('');
+}
+
+async function deleteBanca(id) {
+  if (!confirm('Eliminare questo conto?')) return;
+  await db.from('banche').delete().eq('id', id);
+  await loadBancheCache();
+  populateBancaSelects();
+  loadBancheList();
+  loadOverview();
+  showToast('Conto eliminato', 'success');
+}
+
+// ── VERSAMENTI ────────────────────────────────────────────────────
+async function saveVersamento() {
+  if (!currentBusiness) return;
+  const banca = document.getElementById('nv-banca').value;
+  const contante = parseFloat(document.getElementById('nv-contante').value) || 0;
+  const pos = parseFloat(document.getElementById('nv-pos').value) || 0;
+  if (!banca) { showToast('Seleziona una banca', 'error'); return; }
+  if (!contante && !pos) { showToast('Inserisci almeno un importo', 'error'); return; }
+  const { error } = await db.from('versamenti').insert({
+    business_id: currentBusiness.id,
+    banca_id: banca,
+    data_versamento: document.getElementById('nv-data').value,
+    importo_contante: contante,
+    importo_pos: pos,
+    note: document.getElementById('nv-note').value,
+    created_by: currentUser.id
+  });
+  if (error) { showToast('Errore: ' + error.message, 'error'); return; }
+  showToast('Versamento registrato ✓', 'success');
+  ['nv-contante','nv-pos','nv-note'].forEach(id => document.getElementById(id).value = '');
+  loadVersamenti(); loadOverview();
+}
+
+async function loadVersamenti() {
+  if (!currentBusiness) return;
+  const { data } = await db.from('versamenti').select('*')
+    .eq('business_id', currentBusiness.id)
+    .order('data_versamento', { ascending: false }).limit(20);
+  const el = document.getElementById('versamenti-list');
+  if (!data?.length) { el.innerHTML = '<div class="empty-state">Nessun versamento registrato</div>'; return; }
+  el.innerHTML = data.map(v => {
+    const banca = bancheCache.find(b => b.id === v.banca_id);
+    const tot = Number(v.importo_contante||0) + Number(v.importo_pos||0);
+    return `<div class="entry-item">
+      <div class="entry-dot entrata"></div>
+      <div class="entry-info">
+        <div class="entry-desc">Versamento${banca ? ' → ' + banca.nome : ''}</div>
+        <div class="entry-meta">${formatDate(v.data_versamento)} · Contante: ${formatEur(v.importo_contante)} · POS: ${formatEur(v.importo_pos)}</div>
+      </div>
+      <div class="entry-amount entrata">+${formatEur(tot)}</div>
+      <button class="entry-del" onclick="deleteVersamento('${v.id}')">✕</button>
+    </div>`;
+  }).join('');
+}
+
+async function deleteVersamento(id) {
+  if (!confirm('Eliminare questo versamento?')) return;
+  await db.from('versamenti').delete().eq('id', id);
+  loadVersamenti(); loadOverview();
+  showToast('Versamento eliminato', 'success');
+}
+
+// ── ASSEGNI ───────────────────────────────────────────────────────
+async function saveAssegno() {
+  if (!currentBusiness) return;
+  const importo = parseFloat(document.getElementById('na-importo').value);
+  const scadenza = document.getElementById('na-scadenza').value;
+  if (!importo || importo <= 0) { showToast('Inserisci un importo valido', 'error'); return; }
+  if (!scadenza) { showToast('Inserisci la data di scadenza', 'error'); return; }
+  const { error } = await db.from('assegni').insert({
+    business_id: currentBusiness.id,
+    banca_id: document.getElementById('na-banca').value || null,
+    numero: document.getElementById('na-numero').value.trim(),
+    beneficiario: document.getElementById('na-beneficiario').value.trim(),
+    importo,
+    data_emissione: document.getElementById('na-emissione').value,
+    data_scadenza: scadenza,
+    note: document.getElementById('na-note').value
+  });
+  if (error) { showToast('Errore: ' + error.message, 'error'); return; }
+  showToast('Assegno registrato ✓', 'success');
+  ['na-numero','na-beneficiario','na-importo','na-note'].forEach(id => document.getElementById(id).value = '');
+  loadAssegni(); loadOverview();
+}
+
+async function loadAssegni(filter = null) {
+  if (!currentBusiness) return;
+  if (filter) currentAssegniFilter = filter;
+  let query = db.from('assegni').select('*').eq('business_id', currentBusiness.id).order('data_scadenza');
+  if (currentAssegniFilter === 'aperti') query = query.eq('incassato', false);
+  const { data } = await query;
+  const today = new Date().toISOString().split('T')[0];
+  const in7 = new Date(); in7.setDate(in7.getDate() + 7);
+  const in7str = in7.toISOString().split('T')[0];
+  const el = document.getElementById('assegni-list');
+  if (!data?.length) { el.innerHTML = '<div class="empty-state">Nessun assegno</div>'; return; }
+  el.innerHTML = data.map(a => {
+    const banca = bancheCache.find(b => b.id === a.banca_id);
+    let stato = 'aperto', badge = 'aperto';
+    if (a.incassato) { stato = 'incassato'; badge = 'incassato'; }
+    else if (a.data_scadenza < today) { stato = 'scaduto'; badge = 'scaduto'; }
+    else if (a.data_scadenza <= in7str) { stato = 'scadenza'; badge = 'scadenza'; }
+    return `<div class="assegno-item ${stato}">
+      <div class="ass-info">
+        <div class="ass-num">${a.numero ? 'N° ' + a.numero : ''}</div>
+        <div class="ass-benef">${a.beneficiario || 'N/D'}</div>
+        <div class="ass-meta">Scadenza: ${formatDate(a.data_scadenza)}${banca ? ' · ' + banca.nome : ''}</div>
+      </div>
+      <span class="ass-badge ${badge}">${{ aperto:'Aperto', scadenza:'In scadenza', scaduto:'Scaduto', incassato:'Incassato' }[badge]}</span>
+      <div class="ass-importo ${a.incassato ? 'incassato' : ''}">${formatEur(a.importo)}</div>
+      <div style="display:flex;gap:4px">
+        ${!a.incassato ? `<button class="btn-secondary sm" onclick="incassaAssegno('${a.id}')">Incassa</button>` : ''}
+        <button class="entry-del" onclick="deleteAssegno('${a.id}')">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function filterAssegni(f) { loadAssegni(f); }
+
+async function incassaAssegno(id) {
+  const today = new Date().toISOString().split('T')[0];
+  await db.from('assegni').update({ incassato: true, data_incasso: today }).eq('id', id);
+  loadAssegni(); loadOverview();
+  showToast('Assegno marcato come incassato ✓', 'success');
+}
+
+async function deleteAssegno(id) {
+  if (!confirm('Eliminare questo assegno?')) return;
+  await db.from('assegni').delete().eq('id', id);
+  loadAssegni(); loadOverview();
+  showToast('Assegno eliminato', 'success');
+}
+
+// ── RID/SDD ───────────────────────────────────────────────────────
+async function saveRid() {
+  if (!currentBusiness) return;
+  const nome = document.getElementById('nr-nome').value.trim();
+  const importo = parseFloat(document.getElementById('nr-importo').value);
+  if (!nome) { showToast('Inserisci il nome del RID', 'error'); return; }
+  if (!importo || importo <= 0) { showToast('Inserisci un importo valido', 'error'); return; }
+  const { error } = await db.from('rid_bancari').insert({
+    business_id: currentBusiness.id,
+    banca_id: document.getElementById('nr-banca').value || null,
+    nome,
+    descrizione: document.getElementById('nr-desc').value,
+    importo,
+    frequenza: document.getElementById('nr-frequenza').value,
+    giorno_addebito: parseInt(document.getElementById('nr-giorno').value) || null,
+    prossimo_addebito: document.getElementById('nr-prossimo').value || null
+  });
+  if (error) { showToast('Errore: ' + error.message, 'error'); return; }
+  showToast('RID aggiunto ✓', 'success');
+  ['nr-nome','nr-importo','nr-giorno','nr-desc'].forEach(id => document.getElementById(id).value = '');
+  loadRid(); loadOverview();
+}
+
+async function loadRid() {
+  if (!currentBusiness) return;
+  const { data } = await db.from('rid_bancari').select('*')
+    .eq('business_id', currentBusiness.id).order('nome');
+  const el = document.getElementById('rid-list');
+  if (!data?.length) { el.innerHTML = '<div class="empty-state">Nessun RID configurato</div>'; return; }
+  const freqLabel = { mensile:'Mensile', bimestrale:'Bimestrale', trimestrale:'Trimestrale', semestrale:'Semestrale', annuale:'Annuale' };
+  el.innerHTML = data.map(r => {
+    const banca = bancheCache.find(b => b.id === r.banca_id);
+    return `<div class="rid-item">
+      <div class="rid-info">
+        <div class="rid-nome">${r.nome}</div>
+        <div class="rid-meta">${freqLabel[r.frequenza] || r.frequenza}${r.giorno_addebito ? ' · giorno ' + r.giorno_addebito : ''}${banca ? ' · ' + banca.nome : ''}</div>
+      </div>
+      <div class="rid-prossimo">${r.prossimo_addebito ? 'Prossimo: ' + formatDate(r.prossimo_addebito) : '—'}</div>
+      <div class="rid-importo">- ${formatEur(r.importo)}</div>
+      <div style="display:flex;gap:4px">
+        <button class="entry-del" onclick="toggleRid('${r.id}', ${r.attivo})" title="${r.attivo ? 'Disattiva' : 'Attiva'}">${r.attivo ? '⏸' : '▶'}</button>
+        <button class="entry-del" onclick="deleteRid('${r.id}')">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function toggleRid(id, attivo) {
+  await db.from('rid_bancari').update({ attivo: !attivo }).eq('id', id);
+  loadRid(); loadOverview();
+}
+
+async function deleteRid(id) {
+  if (!confirm('Eliminare questo RID?')) return;
+  await db.from('rid_bancari').delete().eq('id', id);
+  loadRid(); loadOverview();
+  showToast('RID eliminato', 'success');
 }

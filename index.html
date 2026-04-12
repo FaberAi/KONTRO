@@ -86,6 +86,9 @@
         <button class="nav-item" onclick="showView('storico')" data-view="storico">
           <span class="nav-icon">◷</span> Storico
         </button>
+        <button class="nav-item" onclick="showView('banca')" data-view="banca">
+          <span class="nav-icon">🏦</span> Banca & Finanza
+        </button>
         <button class="nav-item" onclick="showView('nuovo')" data-view="nuovo">
           <span class="nav-icon">＋</span> Nuovo movimento
         </button>
@@ -654,6 +657,174 @@
             <div class="empty-state">Nessun giorno registrato</div>
           </div>
         </div>
+      </div>
+
+      <!-- ====== VIEW: BANCA & FINANZA ====== -->
+      <div id="view-banca" class="view">
+
+        <!-- Sub-tabs -->
+        <div class="banca-tabs">
+          <button class="banca-tab active" onclick="switchBancaTab('overview')" id="btab-overview">📊 Overview</button>
+          <button class="banca-tab" onclick="switchBancaTab('banche')" id="btab-banche">🏦 Banche</button>
+          <button class="banca-tab" onclick="switchBancaTab('versamenti')" id="btab-versamenti">💵 Versamenti</button>
+          <button class="banca-tab" onclick="switchBancaTab('assegni')" id="btab-assegni">📝 Assegni</button>
+          <button class="banca-tab" onclick="switchBancaTab('rid')" id="btab-rid">🔄 RID/SDD</button>
+        </div>
+
+        <!-- ── OVERVIEW ── -->
+        <div id="bpanel-overview" class="banca-panel active">
+          <div class="kpi-grid" style="margin-bottom:20px">
+            <div class="kpi-card saldo">
+              <div class="kpi-label">Saldo banche</div>
+              <div class="kpi-value" id="ov-saldo-banche">€ 0,00</div>
+              <div class="kpi-sub" id="ov-saldo-sub">0 conti attivi</div>
+            </div>
+            <div class="kpi-card uscite">
+              <div class="kpi-label">Assegni aperti</div>
+              <div class="kpi-value" id="ov-assegni">€ 0,00</div>
+              <div class="kpi-sub" id="ov-assegni-sub">0 assegni</div>
+            </div>
+            <div class="kpi-card uscite">
+              <div class="kpi-label">RID mensili</div>
+              <div class="kpi-value" id="ov-rid">€ 0,00</div>
+              <div class="kpi-sub" id="ov-rid-sub">0 addebiti attivi</div>
+            </div>
+            <div class="kpi-card mese">
+              <div class="kpi-label">Disponibilità reale</div>
+              <div class="kpi-value" id="ov-disp">€ 0,00</div>
+              <div class="kpi-sub">Saldo - assegni aperti</div>
+            </div>
+          </div>
+
+          <!-- Alert scadenze -->
+          <div id="ov-alerts" class="ov-alerts"></div>
+
+          <!-- Previsione 30 giorni -->
+          <div class="section-card">
+            <div class="section-header">
+              <h2>Previsione fabbisogno 30 giorni</h2>
+            </div>
+            <div id="ov-previsione" class="ov-previsione">
+              <div class="empty-state">Caricamento...</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── BANCHE ── -->
+        <div id="bpanel-banche" class="banca-panel">
+          <div class="section-card">
+            <div class="section-header">
+              <h2>Conti correnti</h2>
+              <button class="btn-primary sm" onclick="showAddBanca()">＋ Aggiungi conto</button>
+            </div>
+            <div id="add-banca-form" class="add-form hidden">
+              <div class="form-grid">
+                <div class="field"><label>Nome conto</label><input type="text" id="nb-nome" placeholder="Es. Conto principale" /></div>
+                <div class="field"><label>Istituto bancario</label><input type="text" id="nb-istituto" placeholder="Es. Intesa Sanpaolo" /></div>
+                <div class="field"><label>IBAN</label><input type="text" id="nb-iban" placeholder="IT60 X054 2811 1010 0000 0123 456" /></div>
+                <div class="field"><label>Tipo</label>
+                  <select id="nb-tipo">
+                    <option value="corrente">Conto corrente</option>
+                    <option value="deposito">Conto deposito</option>
+                    <option value="postale">Conto postale</option>
+                  </select>
+                </div>
+                <div class="field"><label>Saldo iniziale (€)</label><input type="number" id="nb-saldo" step="0.01" placeholder="0,00" /></div>
+              </div>
+              <div class="form-actions">
+                <button class="btn-secondary" onclick="hideAddBanca()">Annulla</button>
+                <button class="btn-primary" onclick="saveBanca()">Aggiungi</button>
+              </div>
+            </div>
+            <div id="banche-list" class="banche-grid">
+              <div class="empty-state">Nessun conto configurato</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── VERSAMENTI ── -->
+        <div id="bpanel-versamenti" class="banca-panel">
+          <div class="section-card" style="margin-bottom:16px">
+            <h2 style="margin-bottom:16px">Nuovo versamento</h2>
+            <div class="form-grid">
+              <div class="field"><label>Data</label><input type="date" id="nv-data" /></div>
+              <div class="field"><label>Banca</label><select id="nv-banca"><option value="">Seleziona banca</option></select></div>
+              <div class="field"><label>Contante (€)</label><input type="number" id="nv-contante" step="0.01" placeholder="0,00" /></div>
+              <div class="field"><label>POS (€)</label><input type="number" id="nv-pos" step="0.01" placeholder="0,00" /></div>
+              <div class="field full"><label>Note</label><input type="text" id="nv-note" placeholder="Note..." /></div>
+            </div>
+            <div class="form-actions">
+              <button class="btn-primary" onclick="saveVersamento()">Registra versamento →</button>
+            </div>
+            <div id="nv-msg" class="auth-message"></div>
+          </div>
+          <div class="section-card">
+            <div class="section-header"><h2>Ultimi versamenti</h2></div>
+            <div id="versamenti-list" class="entries-list"><div class="empty-state">Nessun versamento</div></div>
+          </div>
+        </div>
+
+        <!-- ── ASSEGNI ── -->
+        <div id="bpanel-assegni" class="banca-panel">
+          <div class="section-card" style="margin-bottom:16px">
+            <h2 style="margin-bottom:16px">Nuovo assegno</h2>
+            <div class="form-grid">
+              <div class="field"><label>Numero assegno</label><input type="text" id="na-numero" placeholder="Es. 001234" /></div>
+              <div class="field"><label>Beneficiario</label><input type="text" id="na-beneficiario" placeholder="Nome fornitore..." /></div>
+              <div class="field"><label>Importo (€)</label><input type="number" id="na-importo" step="0.01" placeholder="0,00" /></div>
+              <div class="field"><label>Banca</label><select id="na-banca"><option value="">Seleziona banca</option></select></div>
+              <div class="field"><label>Data emissione</label><input type="date" id="na-emissione" /></div>
+              <div class="field"><label>Data scadenza</label><input type="date" id="na-scadenza" /></div>
+              <div class="field full"><label>Note</label><input type="text" id="na-note" placeholder="Note..." /></div>
+            </div>
+            <div class="form-actions">
+              <button class="btn-primary" onclick="saveAssegno()">Registra assegno →</button>
+            </div>
+            <div id="na-msg" class="auth-message"></div>
+          </div>
+          <div class="section-card">
+            <div class="section-header"><h2>Assegni</h2>
+              <div style="display:flex;gap:8px">
+                <button class="btn-secondary sm" onclick="filterAssegni('aperti')">Aperti</button>
+                <button class="btn-secondary sm" onclick="filterAssegni('tutti')">Tutti</button>
+              </div>
+            </div>
+            <div id="assegni-list" class="entries-list"><div class="empty-state">Nessun assegno</div></div>
+          </div>
+        </div>
+
+        <!-- ── RID/SDD ── -->
+        <div id="bpanel-rid" class="banca-panel">
+          <div class="section-card" style="margin-bottom:16px">
+            <h2 style="margin-bottom:16px">Nuovo RID/SDD</h2>
+            <div class="form-grid">
+              <div class="field"><label>Nome</label><input type="text" id="nr-nome" placeholder="Es. Affitto locale" /></div>
+              <div class="field"><label>Banca</label><select id="nr-banca"><option value="">Seleziona banca</option></select></div>
+              <div class="field"><label>Importo (€)</label><input type="number" id="nr-importo" step="0.01" placeholder="0,00" /></div>
+              <div class="field"><label>Frequenza</label>
+                <select id="nr-frequenza">
+                  <option value="mensile">Mensile</option>
+                  <option value="bimestrale">Bimestrale</option>
+                  <option value="trimestrale">Trimestrale</option>
+                  <option value="semestrale">Semestrale</option>
+                  <option value="annuale">Annuale</option>
+                </select>
+              </div>
+              <div class="field"><label>Giorno addebito</label><input type="number" id="nr-giorno" min="1" max="31" placeholder="Es. 15" /></div>
+              <div class="field"><label>Prossimo addebito</label><input type="date" id="nr-prossimo" /></div>
+              <div class="field full"><label>Descrizione</label><input type="text" id="nr-desc" placeholder="Note..." /></div>
+            </div>
+            <div class="form-actions">
+              <button class="btn-primary" onclick="saveRid()">Aggiungi RID →</button>
+            </div>
+            <div id="nr-msg" class="auth-message"></div>
+          </div>
+          <div class="section-card">
+            <div class="section-header"><h2>RID/SDD attivi</h2></div>
+            <div id="rid-list" class="entries-list"><div class="empty-state">Nessun RID configurato</div></div>
+          </div>
+        </div>
+
       </div>
 
     </main>
