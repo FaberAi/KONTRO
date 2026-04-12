@@ -2194,21 +2194,33 @@ async function saveAssegno() {
   if (!currentBusiness) return;
   const importo = parseFloat(document.getElementById('na-importo').value);
   const scadenza = document.getElementById('na-scadenza').value;
+  const fornitoreId = document.getElementById('na-fornitore')?.value || null;
   if (!importo || importo <= 0) { showToast('Inserisci un importo valido', 'error'); return; }
   if (!scadenza) { showToast('Inserisci la data di scadenza', 'error'); return; }
+
+  // Auto-compila beneficiario dal fornitore selezionato
+  let beneficiario = document.getElementById('na-beneficiario').value.trim();
+  if (!beneficiario && fornitoreId) {
+    const f = fornitoriCache.find(x => x.id === fornitoreId);
+    if (f) beneficiario = f.ragione_sociale;
+  }
+
   const { error } = await db.from('assegni').insert({
     business_id: currentBusiness.id,
     banca_id: document.getElementById('na-banca').value || null,
+    fornitore_id: fornitoreId,
     numero: document.getElementById('na-numero').value.trim(),
-    beneficiario: document.getElementById('na-beneficiario').value.trim(),
+    beneficiario,
     importo,
     data_emissione: document.getElementById('na-emissione').value,
     data_scadenza: scadenza,
+    stato: 'emesso',
     note: document.getElementById('na-note').value
   });
   if (error) { showToast('Errore: ' + error.message, 'error'); return; }
   showToast('Assegno registrato ✓', 'success');
   ['na-numero','na-beneficiario','na-importo','na-note'].forEach(id => document.getElementById(id).value = '');
+  const naF = document.getElementById('na-fornitore'); if (naF) naF.value = '';
   loadAssegni(); loadOverview();
 }
 
@@ -3020,4 +3032,174 @@ async function loadEstratto() {
         ${formatEur(saldoProgScoperto)}
       </div>
     </div>`;
+}
+
+// ============================================
+// PRIMA NOTA — collegamento fornitori
+// ============================================
+function populatePNFornitoriSelects() {
+  // Sostituisce i text input fdesc-N con select dall'anagrafica
+  for (let i = 0; i < 10; i++) {
+    const el = document.getElementById('fdesc-' + i);
+    if (!el) break;
+
+    // Se è già un select, aggiorna solo le opzioni
+    if (el.tagName === 'SELECT') {
+      const val = el.value;
+      el.innerHTML = pnFornitoriOptsHtml();
+      if (val) el.value = val;
+      continue;
+    }
+
+    // Crea select
+    const sel = document.createElement('select');
+    sel.id = 'fdesc-' + i;
+    sel.className = 'pn-desc-input';
+    sel.innerHTML = pnFornitoriOptsHtml();
+
+    // Copia valore testuale se c'era già qualcosa
+    if (el.value) {
+      // Cerca fornitore per nome
+      const match = fornitoriCache.find(f =>
+        f.ragione_sociale.toLowerCase() === el.value.toLowerCase()
+      );
+      if (match) sel.value = match.id;
+    }
+
+    el.parentNode.replaceChild(sel, el);
+  }
+}
+
+function pnFornitoriOptsHtml() {
+  return '<option value="">— Fornitore —</option>' +
+    fornitoriCache.map(f => `<option value="${f.id}">${f.ragione_sociale}</option>`).join('') +
+    '<option value="__libero__">✏ Descrizione libera...</option>';
+}
+
+// Override initPrimaNota per aggiungere i select
+const _origInitPN = initPrimaNota;
+function initPrimaNota() {
+  _origInitPN();
+  // Dopo init, sostituisci i text input con select se ci sono fornitori
+  setTimeout(() => {
+    if (fornitoriCache.length > 0) populatePNFornitoriSelects();
+  }, 100);
+}
+
+// Aggiorna anche addFornitoreRow per usare select
+const _origAddFornitoreRow = addFornitoreRow;
+function addFornitoreRow() {
+  _origAddFornitoreRow();
+  // Sostituisci l'ultimo text input aggiunto con select
+  setTimeout(() => {
+    if (fornitoriCache.length > 0) {
+      const idx = pnFornitoriCount - 1;
+      const el = document.getElementById('fdesc-' + idx);
+      if (el && el.tagName === 'INPUT') {
+        const sel = document.createElement('select');
+        sel.id = 'fdesc-' + idx;
+        sel.className = 'pn-desc-input';
+        sel.innerHTML = pnFornitoriOptsHtml();
+        el.parentNode.replaceChild(sel, el);
+      }
+    }
+  }, 50);
+}
+
+// Fix salvaNotaGiorno per salvare fornitore_id dal select
+const _origSalvaNotaGiorno = salvaNotaGiorno;
+async function salvaNotaGiorno() {
+  // Prima di salvare, aggiorna daily_note_rows con fornitore_id
+  if (!currentBusiness) return;
+  const data = document.getElementById('pn-data').value;
+  if (!data) { showPNMsg('Inserisci la data', 'error'); return; }
+  const locId = document.getElementById('pn-location').value || null;
+  const fc = getV('pn-fc');
+
+  const payload = {
+    business_id: currentBusiness.id, location_id: locId, data, fondo_cassa: fc,
+    incasso_m: getV('incasso-m'), incasso_p: getV('incasso-p'), incasso_s: getV('incasso-s'),
+    money_m: getV('money-m'), money_p: getV('money-p'), money_s: getV('money-s'),
+    sisal_m: getV('sisal-m'), sisal_p: getV('sisal-p'), sisal_s: getV('sisal-s'),
+    fatture_m: getV('fatture-m'), fatture_p: getV('fatture-p'), fatture_s: getV('fatture-s'),
+    giornali_m: getV('giornali-m'), giornali_p: getV('giornali-p'), giornali_s: getV('giornali-s'),
+    pos_m: getV('pos-m'), pos_p: getV('pos-p'), pos_s: getV('pos-s'),
+    carte_m: getV('carte-m'), carte_p: getV('carte-p'), carte_s: getV('carte-s'),
+    bonifici_m: getV('bonifici-m'), bonifici_p: getV('bonifici-p'), bonifici_s: getV('bonifici-s'),
+    fondo_chiusura_m: getV('fc-usc-m'), fondo_chiusura_p: getV('fc-usc-p'), fondo_chiusura_s: getV('fc-usc-s'),
+    compilatore_m: document.getElementById('cm').value,
+    compilatore_p: document.getElementById('cp').value,
+    compilatore_s: document.getElementById('cs').value,
+    note: document.getElementById('pn-note').value,
+    created_by: currentUser.id, updated_at: new Date().toISOString()
+  };
+
+  const { data: saved, error } = await db.from('daily_notes')
+    .upsert(payload, { onConflict: 'business_id,location_id,data' })
+    .select().single();
+  if (error) { showPNMsg('Errore: ' + error.message, 'error'); return; }
+
+  await db.from('daily_note_rows').delete().eq('daily_note_id', saved.id);
+  const rows = [];
+
+  for (let i = 0; i < pnFornitoriCount; i++) {
+    const descEl = document.getElementById('fdesc-' + i);
+    const m = getV('fm-' + i), p = getV('fp-' + i), s = getV('fs-' + i);
+    if (!descEl && !m && !p && !s) continue;
+
+    let descrizione = '';
+    let fornitoreId = null;
+
+    if (descEl?.tagName === 'SELECT') {
+      const val = descEl.value;
+      if (val && val !== '__libero__') {
+        fornitoreId = val;
+        const f = fornitoriCache.find(x => x.id === val);
+        descrizione = f ? f.ragione_sociale : '';
+      }
+    } else if (descEl?.tagName === 'INPUT') {
+      descrizione = descEl.value?.trim() || '';
+    }
+
+    if (m || p || s || descrizione || fornitoreId) {
+      rows.push({
+        daily_note_id: saved.id,
+        business_id: currentBusiness.id,
+        categoria: 'fornitore',
+        descrizione,
+        fornitore_id: fornitoreId,
+        importo_m: m, importo_p: p, importo_s: s,
+        ordine: i
+      });
+    }
+  }
+
+  for (let i = 0; i < pnPrelieviCount; i++) {
+    const desc = document.getElementById('pdesc-' + i)?.value?.trim() || '';
+    const m = getV('pm-' + i), p = getV('pp-' + i), s = getV('ps-' + i);
+    if (m || p || s || desc) {
+      rows.push({
+        daily_note_id: saved.id,
+        business_id: currentBusiness.id,
+        categoria: 'prelievo',
+        descrizione: desc,
+        importo_m: m, importo_p: p, importo_s: s,
+        ordine: i
+      });
+    }
+  }
+
+  if (rows.length) await db.from('daily_note_rows').insert(rows);
+
+  const fcChiusura = getV('fc-usc-s') || getV('fc-usc-p') || getV('fc-usc-m');
+  if (fcChiusura > 0) {
+    const dom = new Date(data); dom.setDate(dom.getDate() + 1);
+    await db.from('daily_notes').upsert({
+      business_id: currentBusiness.id, location_id: locId,
+      data: dom.toISOString().split('T')[0], fondo_cassa: fcChiusura
+    }, { onConflict: 'business_id,location_id,data', ignoreDuplicates: true });
+  }
+
+  showPNMsg('Prima nota salvata ✓' + (fcChiusura > 0 ? ' — fondo cassa domani pre-compilato' : ''), 'success');
+  await loadDashboard();
 }
