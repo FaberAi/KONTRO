@@ -231,7 +231,7 @@ function showScreen(name) {
 
 function showView(name) {
   // Controllo accessi
-  const ownerOnly = ['impostazioni', 'team'];
+  const ownerOnly = ['impostazioni', 'team', 'hr'];
   const adminOnly = ['storico', 'report', 'banca', 'fornitori'];
   if (ownerOnly.includes(name) && currentRole !== 'owner') {
     showToast('Accesso non autorizzato', 'error'); return;
@@ -256,6 +256,7 @@ function showView(name) {
   if (name === 'banca') initBanca();
   if (name === 'fornitori') initFornitori();
   if (name === 'impostazioni') initImpostazioni();
+  if (name === 'hr') initHR();
 }
 
 function updateUserUI() {
@@ -4125,4 +4126,484 @@ async function scalaCcontoBet(betBancaId, totBet, data) {
     descrizione: 'Giocate giornaliere — Prima Nota ' + formatDate(data),
     importo: totBet
   });
+}
+
+// ============================================
+// HR — DIPENDENTI
+// ============================================
+let dipendentiCache = [];
+
+function switchHRTab(tab) {
+  document.querySelectorAll('.banca-tab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.banca-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('hrtab-' + tab).classList.add('active');
+  document.getElementById('hrpanel-' + tab).classList.add('active');
+  if (tab === 'presenze') initPresenze();
+  if (tab === 'acconti') initAcconti();
+  if (tab === 'export') initExportHR();
+}
+
+async function initHR() {
+  await loadDipendentiCache();
+  loadDipendentiList();
+}
+
+async function loadDipendentiCache() {
+  if (!currentBusiness) return;
+  const { data } = await db.from('dipendenti').select('*')
+    .eq('business_id', currentBusiness.id)
+    .eq('attivo', true).order('cognome');
+  dipendentiCache = data || [];
+}
+
+function populateDipendentiSelects() {
+  const opts = '<option value="">Seleziona dipendente</option>' +
+    dipendentiCache.map(d => `<option value="${d.id}">${d.nome} ${d.cognome}</option>`).join('');
+  ['pres-dipendente','acc-dipendente','exp-dipendente','acc-filter-dip'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const first = id === 'acc-filter-dip' ? '<option value="">Tutti i dipendenti</option>'
+      : id === 'exp-dipendente' ? '<option value="">Tutti</option>'
+      : '<option value="">Seleziona dipendente</option>';
+    el.innerHTML = first + dipendentiCache.map(d =>
+      `<option value="${d.id}">${d.nome} ${d.cognome}</option>`).join('');
+  });
+}
+
+// ── ANAGRAFICA ────────────────────────────────────────────────────
+function showAddDipendente() { document.getElementById('add-dipendente-form').classList.remove('hidden'); }
+function hideAddDipendente() { document.getElementById('add-dipendente-form').classList.add('hidden'); }
+
+async function saveDipendente() {
+  if (!currentBusiness) return;
+  const nome = document.getElementById('nd-nome').value.trim();
+  const cognome = document.getElementById('nd-cognome').value.trim();
+  if (!nome || !cognome) { showToast('Inserisci nome e cognome', 'error'); return; }
+  const { error } = await db.from('dipendenti').insert({
+    business_id: currentBusiness.id,
+    nome, cognome,
+    ruolo: document.getElementById('nd-ruolo').value.trim(),
+    data_assunzione: document.getElementById('nd-assunzione').value || null,
+    note: document.getElementById('nd-note').value.trim()
+  });
+  if (error) { showToast('Errore: ' + error.message, 'error'); return; }
+  showToast('Dipendente salvato ✓', 'success');
+  hideAddDipendente();
+  ['nd-nome','nd-cognome','nd-ruolo','nd-note'].forEach(id => document.getElementById(id).value = '');
+  await loadDipendentiCache();
+  populateDipendentiSelects();
+  loadDipendentiList();
+}
+
+async function loadDipendentiList() {
+  if (!currentBusiness) return;
+  const { data } = await db.from('dipendenti').select('*')
+    .eq('business_id', currentBusiness.id).order('cognome');
+  const el = document.getElementById('dipendenti-list');
+  if (!data?.length) { el.innerHTML = '<div class="empty-state">Nessun dipendente registrato</div>'; return; }
+  el.innerHTML = data.map(d => `
+    <div class="dipendente-item">
+      <div class="dip-avatar">${d.nome[0]}${d.cognome[0]}</div>
+      <div class="dip-info">
+        <div class="dip-nome">${d.nome} ${d.cognome}</div>
+        <div class="dip-ruolo">${d.ruolo || '—'}${d.data_assunzione ? ' · dal ' + formatDate(d.data_assunzione) : ''}</div>
+      </div>
+      <button class="btn-secondary sm" onclick="switchHRTab('presenze');document.getElementById('pres-dipendente').value='${d.id}';loadPresenzeMese()">Presenze</button>
+      <button class="btn-secondary sm" onclick="switchHRTab('acconti');document.getElementById('acc-dipendente').value='${d.id}'">Acconti</button>
+      <button class="entry-del" onclick="deleteDipendente('${d.id}')">✕</button>
+    </div>`).join('');
+}
+
+async function deleteDipendente(id) {
+  await db.from('dipendenti').update({ attivo: false }).eq('id', id);
+  await loadDipendentiCache();
+  populateDipendentiSelects();
+  loadDipendentiList();
+  showToast('Dipendente rimosso', 'success');
+}
+
+// ── PRESENZE ──────────────────────────────────────────────────────
+function initPresenze() {
+  populateDipendentiSelects();
+  const months = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
+                  'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+  const meseEl = document.getElementById('pres-mese');
+  const annoEl = document.getElementById('pres-anno');
+  if (meseEl && !meseEl.options.length) {
+    months.forEach((m,i) => {
+      const o = document.createElement('option');
+      o.value = i+1; o.textContent = m;
+      if (i === new Date().getMonth()) o.selected = true;
+      meseEl.appendChild(o);
+    });
+  }
+  if (annoEl && !annoEl.options.length) {
+    for (let y = new Date().getFullYear(); y >= 2023; y--) {
+      const o = document.createElement('option');
+      o.value = y; o.textContent = y;
+      if (y === new Date().getFullYear()) o.selected = true;
+      annoEl.appendChild(o);
+    }
+  }
+  const npData = document.getElementById('np-data');
+  if (npData && !npData.value) npData.value = new Date().toISOString().split('T')[0];
+}
+
+function showAddPresenza() { document.getElementById('add-presenza-form').classList.remove('hidden'); }
+function hideAddPresenza() { document.getElementById('add-presenza-form').classList.add('hidden'); }
+
+async function savePresenza() {
+  const dipId = document.getElementById('pres-dipendente').value;
+  const data = document.getElementById('np-data').value;
+  const tipo = document.getElementById('np-tipo').value;
+  if (!dipId) { showToast('Seleziona dipendente', 'error'); return; }
+  if (!data) { showToast('Inserisci la data', 'error'); return; }
+  const { error } = await db.from('presenze').upsert({
+    business_id: currentBusiness.id,
+    dipendente_id: dipId,
+    data, tipo,
+    ore: parseFloat(document.getElementById('np-ore').value) || 0,
+    motivazione: document.getElementById('np-motivazione').value.trim()
+  }, { onConflict: 'dipendente_id,data,tipo' });
+  if (error) { showToast('Errore: ' + error.message, 'error'); return; }
+  showToast('Presenza salvata ✓', 'success');
+  hideAddPresenza();
+  loadPresenzeMese();
+}
+
+async function loadPresenzeMese() {
+  const dipId = document.getElementById('pres-dipendente').value;
+  const mese = parseInt(document.getElementById('pres-mese')?.value);
+  const anno = parseInt(document.getElementById('pres-anno')?.value);
+  const el = document.getElementById('presenze-list');
+  if (!dipId) { el.innerHTML = '<div class="empty-state">Seleziona dipendente e mese</div>'; return; }
+
+  const from = `${anno}-${String(mese).padStart(2,'0')}-01`;
+  const lastDay = new Date(anno, mese, 0).getDate();
+  const to = `${anno}-${String(mese).padStart(2,'0')}-${lastDay}`;
+
+  const { data } = await db.from('presenze').select('*')
+    .eq('dipendente_id', dipId).gte('data', from).lte('data', to).order('data');
+
+  const presenze = data || [];
+  const tipoLabels = { assenza:'Assenza', ferie:'Ferie', permesso:'Permesso', straordinario:'Straordinario', festivo:'Festivo' };
+
+  // KPI
+  document.getElementById('pr-lavoro').textContent = presenze.filter(p => p.tipo === 'lavoro').length || '—';
+  document.getElementById('pr-assenze').textContent = presenze.filter(p => p.tipo === 'assenza').length;
+  document.getElementById('pr-ferie').textContent = presenze.filter(p => ['ferie','permesso'].includes(p.tipo)).length;
+  const straOre = presenze.filter(p => ['straordinario','festivo'].includes(p.tipo)).reduce((s,p) => s + Number(p.ore||0), 0);
+  document.getElementById('pr-straordinari').textContent = straOre + 'h';
+
+  if (!presenze.length) { el.innerHTML = '<div class="empty-state">Nessuna assenza/straordinario registrato</div>'; return; }
+
+  el.innerHTML = presenze.map(p => `
+    <div class="presenza-card ${p.tipo}">
+      <button class="pc-del" onclick="deletePresenza('${p.id}')">✕</button>
+      <div class="pc-data">${formatDate(p.data)}</div>
+      <div class="pc-tipo ${p.tipo}">${tipoLabels[p.tipo] || p.tipo}${p.ore ? ' · ' + p.ore + 'h' : ''}</div>
+      ${p.motivazione ? `<div class="pc-note">${p.motivazione}</div>` : ''}
+    </div>`).join('');
+}
+
+async function deletePresenza(id) {
+  await db.from('presenze').delete().eq('id', id);
+  loadPresenzeMese();
+  showToast('Presenza eliminata', 'success');
+}
+
+// ── ACCONTI ───────────────────────────────────────────────────────
+function initAcconti() {
+  populateDipendentiSelects();
+  const accData = document.getElementById('acc-data');
+  if (accData && !accData.value) accData.value = new Date().toISOString().split('T')[0];
+  const accBanca = document.getElementById('acc-banca');
+  if (accBanca) {
+    accBanca.innerHTML = '<option value="">Seleziona banca</option>' +
+      bancheCache.filter(b => b.tipo !== 'bet').map(b => `<option value="${b.id}">${b.nome}</option>`).join('');
+  }
+  loadAcconti();
+}
+
+function toggleAccBanca() {
+  const tipo = document.getElementById('acc-tipo').value;
+  const wrap = document.getElementById('acc-banca-wrap');
+  if (wrap) wrap.style.display = tipo === 'bonifico' ? 'block' : 'none';
+}
+
+async function saveAcconto() {
+  if (!currentBusiness) return;
+  const dipId = document.getElementById('acc-dipendente').value;
+  const importo = parseFloat(document.getElementById('acc-importo').value);
+  const tipo = document.getElementById('acc-tipo').value;
+  const data = document.getElementById('acc-data').value;
+  if (!dipId) { showToast('Seleziona dipendente', 'error'); return; }
+  if (!importo || importo <= 0) { showToast('Inserisci importo', 'error'); return; }
+
+  const { error } = await db.from('acconti_stipendio').insert({
+    business_id: currentBusiness.id,
+    dipendente_id: dipId,
+    data, importo, tipo,
+    banca_id: document.getElementById('acc-banca').value || null,
+    note: document.getElementById('acc-note').value.trim(),
+    created_by: currentUser.id
+  });
+  if (error) { showToast('Errore: ' + error.message, 'error'); return; }
+
+  // Collegamento automatico
+  const dip = dipendentiCache.find(d => d.id === dipId);
+  const dipNome = dip ? dip.nome + ' ' + dip.cognome : 'Dipendente';
+
+  if (tipo === 'contanti_cassa') {
+    // Registra uscita in cash_entries
+    await db.from('cash_entries').insert({
+      business_id: currentBusiness.id,
+      user_id: currentUser.id,
+      type: 'uscita', amount: importo,
+      description: 'Acconto stipendio — ' + dipNome,
+      payment_method: 'contanti', entry_date: data
+    });
+  } else if (tipo === 'bonifico') {
+    const bancaId = document.getElementById('acc-banca').value;
+    if (bancaId) {
+      await db.from('movimenti_banca').insert({
+        business_id: currentBusiness.id,
+        banca_id: bancaId, data,
+        segno: 'dare', tipo: 'bonifico',
+        descrizione: 'Acconto stipendio — ' + dipNome,
+        importo
+      });
+    }
+  }
+
+  showToast('Acconto registrato ✓', 'success');
+  ['acc-importo','acc-note'].forEach(id => document.getElementById(id).value = '');
+  loadAcconti();
+}
+
+async function loadAcconti() {
+  if (!currentBusiness) return;
+  const dipFilter = document.getElementById('acc-filter-dip')?.value;
+  let query = db.from('acconti_stipendio')
+    .select('*, dipendenti(nome,cognome)')
+    .eq('business_id', currentBusiness.id)
+    .order('data', { ascending: false }).limit(30);
+  if (dipFilter) query = query.eq('dipendente_id', dipFilter);
+  const { data } = await query;
+  const el = document.getElementById('acconti-list');
+  if (!data?.length) { el.innerHTML = '<div class="empty-state">Nessun acconto registrato</div>'; return; }
+
+  const tipoLabel = { contanti_cassa:'💵 Cassa', contanti_extra:'💰 Extra', bonifico:'🏦 Bonifico', fuori_busta:'🤫 Fuori busta' };
+
+  el.innerHTML = data.map(a => `
+    <div class="acconto-item">
+      <div class="entry-dot uscita"></div>
+      <div class="entry-info">
+        <div class="entry-desc">${a.dipendenti?.nome || ''} ${a.dipendenti?.cognome || ''}</div>
+        <div class="entry-meta">${formatDate(a.data)}${a.note ? ' · ' + a.note : ''}</div>
+      </div>
+      <span class="acc-tipo-badge ${a.tipo}">${tipoLabel[a.tipo] || a.tipo}</span>
+      <div class="entry-amount uscita">- ${formatEur(a.importo)}</div>
+      <button class="entry-del" onclick="deleteAcconto('${a.id}')">✕</button>
+    </div>`).join('');
+}
+
+async function deleteAcconto(id) {
+  await db.from('acconti_stipendio').delete().eq('id', id);
+  loadAcconti();
+  showToast('Acconto eliminato', 'success');
+}
+
+// ── EXPORT CONSULENTE ─────────────────────────────────────────────
+function initExportHR() {
+  populateDipendentiSelects();
+  const months = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
+                  'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+  ['exp-mese'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el && !el.options.length) {
+      months.forEach((m,i) => {
+        const o = document.createElement('option');
+        o.value = i+1; o.textContent = m;
+        if (i === new Date().getMonth()) o.selected = true;
+        el.appendChild(o);
+      });
+    }
+  });
+  ['exp-anno'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el && !el.options.length) {
+      for (let y = new Date().getFullYear(); y >= 2023; y--) {
+        const o = document.createElement('option');
+        o.value = y; o.textContent = y;
+        if (y === new Date().getFullYear()) o.selected = true;
+        el.appendChild(o);
+      }
+    }
+  });
+}
+
+async function exportHRPDF() {
+  const mese = parseInt(document.getElementById('exp-mese').value);
+  const anno = parseInt(document.getElementById('exp-anno').value);
+  const dipId = document.getElementById('exp-dipendente').value;
+  const months = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
+                  'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+
+  const from = `${anno}-${String(mese).padStart(2,'0')}-01`;
+  const lastDay = new Date(anno, mese, 0).getDate();
+  const to = `${anno}-${String(mese).padStart(2,'0')}-${lastDay}`;
+
+  const dipList = dipId ? dipendentiCache.filter(d => d.id === dipId) : dipendentiCache;
+  if (!dipList.length) { showToast('Nessun dipendente', 'error'); return; }
+
+  showToast('Generazione PDF...', '');
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const W = 210, margin = 16;
+
+  for (let di = 0; di < dipList.length; di++) {
+    const dip = dipList[di];
+    if (di > 0) doc.addPage();
+    let y = 0;
+
+    // Header
+    doc.setFillColor(10,15,30); doc.rect(0,0,W,38,'F');
+    doc.setFillColor(37,99,235); doc.roundedRect(margin,10,16,16,2,2,'F');
+    doc.setTextColor(255,255,255); doc.setFontSize(12); doc.setFont('helvetica','bold');
+    doc.text('K', margin+8, 21, {align:'center'});
+    doc.setFontSize(18); doc.text('KONTRO', margin+20, 21);
+    doc.setFontSize(8); doc.setFont('helvetica','normal');
+    doc.setTextColor(156,163,175);
+    doc.text('Riepilogo per consulente paghe', W-margin, 21, {align:'right'});
+    y = 46;
+
+    // Titolo
+    doc.setTextColor(10,15,30); doc.setFontSize(16); doc.setFont('helvetica','bold');
+    doc.text(dip.nome + ' ' + dip.cognome, margin, y); y += 7;
+    doc.setFontSize(10); doc.setTextColor(107,114,128); doc.setFont('helvetica','normal');
+    doc.text((dip.ruolo||'—') + ' · ' + months[mese-1] + ' ' + anno, margin, y);
+    doc.text(currentBusiness?.name || '', W-margin, y, {align:'right'}); y += 10;
+
+    // Carica dati
+    const [{ data: presenze }, { data: acconti }] = await Promise.all([
+      db.from('presenze').select('*').eq('dipendente_id', dip.id).gte('data', from).lte('data', to).order('data'),
+      db.from('acconti_stipendio').select('*').eq('dipendente_id', dip.id).gte('data', from).lte('data', to)
+    ]);
+
+    const assenze = (presenze||[]).filter(p => p.tipo === 'assenza');
+    const ferie = (presenze||[]).filter(p => p.tipo === 'ferie');
+    const permessi = (presenze||[]).filter(p => p.tipo === 'permesso');
+    const straordinari = (presenze||[]).filter(p => p.tipo === 'straordinario');
+    const festivi = (presenze||[]).filter(p => p.tipo === 'festivo');
+    const straOre = [...straordinari, ...festivi].reduce((s,p) => s + Number(p.ore||0), 0);
+
+    // KPI box
+    const kpiW = (W - margin*2 - 12) / 4;
+    const kpis = [
+      { label:'Assenze', val: assenze.length + ' gg', color:[239,68,68] },
+      { label:'Ferie godute', val: ferie.length + ' gg', color:[245,158,11] },
+      { label:'Permessi', val: permessi.length + ' gg', color:[139,92,246] },
+      { label:'Straordinari', val: straOre + 'h', color:[37,99,235] }
+    ];
+    kpis.forEach((k,i) => {
+      const x = margin + i*(kpiW+4);
+      doc.setFillColor(248,250,252); doc.roundedRect(x,y,kpiW,16,2,2,'F');
+      doc.setDrawColor(...k.color); doc.setLineWidth(0.8); doc.roundedRect(x,y,kpiW,16,2,2,'S');
+      doc.setFontSize(7); doc.setFont('helvetica','bold'); doc.setTextColor(107,114,128);
+      doc.text(k.label.toUpperCase(), x+4, y+5.5);
+      doc.setFontSize(12); doc.setTextColor(...k.color);
+      doc.text(k.val, x+4, y+13);
+    });
+    y += 22;
+
+    // Dettaglio assenze/straordinari
+    if (presenze?.length) {
+      doc.setFontSize(11); doc.setFont('helvetica','bold'); doc.setTextColor(10,15,30);
+      doc.text('Dettaglio presenze da segnalare', margin, y); y += 6;
+      doc.setFillColor(10,15,30); doc.rect(margin,y,W-margin*2,7,'F');
+      doc.setTextColor(255,255,255); doc.setFontSize(7.5); doc.setFont('helvetica','bold');
+      doc.text('DATA', margin+2, y+5); doc.text('TIPO', margin+30, y+5);
+      doc.text('ORE', margin+80, y+5); doc.text('MOTIVAZIONE', margin+100, y+5);
+      y += 9;
+      presenze.forEach((p,i) => {
+        if (y > 265) { doc.addPage(); y = 20; }
+        if (i%2===0) { doc.setFillColor(248,250,252); doc.rect(margin,y-3,W-margin*2,7,'F'); }
+        const tipoLabel = {assenza:'Assenza',ferie:'Ferie',permesso:'Permesso',straordinario:'Straordinario',festivo:'Festivo lavorato'}[p.tipo]||p.tipo;
+        doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(10,15,30);
+        doc.text(formatDate(p.data), margin+2, y+2);
+        doc.text(tipoLabel, margin+30, y+2);
+        doc.text(p.ore ? p.ore+'h' : '—', margin+80, y+2);
+        doc.text((p.motivazione||'—').substring(0,40), margin+100, y+2);
+        y += 7;
+      });
+      y += 4;
+    }
+
+    // Acconti (escludi fuori busta)
+    const accontiVisibili = (acconti||[]).filter(a => a.tipo !== 'fuori_busta');
+    if (accontiVisibili.length) {
+      doc.setFontSize(11); doc.setFont('helvetica','bold'); doc.setTextColor(10,15,30);
+      doc.text('Acconti da scalare dalla busta paga', margin, y); y += 6;
+      doc.setFillColor(10,15,30); doc.rect(margin,y,W-margin*2,7,'F');
+      doc.setTextColor(255,255,255); doc.setFontSize(7.5); doc.setFont('helvetica','bold');
+      doc.text('DATA', margin+2, y+5); doc.text('TIPO', margin+30, y+5); doc.text('IMPORTO', W-margin-2, y+5, {align:'right'});
+      y += 9;
+      const tipoAccLabel = {contanti_cassa:'Contanti cassa',contanti_extra:'Contanti extra',bonifico:'Bonifico'};
+      let totAcc = 0;
+      accontiVisibili.forEach((a,i) => {
+        if (i%2===0) { doc.setFillColor(248,250,252); doc.rect(margin,y-3,W-margin*2,7,'F'); }
+        doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(10,15,30);
+        doc.text(formatDate(a.data), margin+2, y+2);
+        doc.text(tipoAccLabel[a.tipo]||a.tipo, margin+30, y+2);
+        doc.setTextColor(239,68,68); doc.setFont('helvetica','bold');
+        doc.text(formatEur(a.importo), W-margin-2, y+2, {align:'right'});
+        totAcc += Number(a.importo); y += 7;
+      });
+      y += 2;
+      doc.setFillColor(10,15,30); doc.rect(margin,y,W-margin*2,8,'F');
+      doc.setTextColor(255,255,255); doc.setFontSize(8); doc.setFont('helvetica','bold');
+      doc.text('TOTALE ACCONTI DA SCALARE', margin+2, y+5.5);
+      doc.setTextColor(248,113,113);
+      doc.text(formatEur(totAcc), W-margin-2, y+5.5, {align:'right'});
+    }
+
+    // Footer
+    doc.setFontSize(7); doc.setTextColor(156,163,175); doc.setFont('helvetica','normal');
+    doc.text('KONTRO — Riepilogo generato il ' + new Date().toLocaleDateString('it-IT') + ' · Documento riservato', margin, 290);
+  }
+
+  const filename = 'KONTRO_HR_' + months[mese-1] + '_' + anno + '.pdf';
+  doc.save(filename);
+  showToast('PDF consulente scaricato ✓', 'success');
+}
+
+async function exportHRCSV() {
+  const mese = parseInt(document.getElementById('exp-mese').value);
+  const anno = parseInt(document.getElementById('exp-anno').value);
+  const dipId = document.getElementById('exp-dipendente').value;
+  const from = `${anno}-${String(mese).padStart(2,'0')}-01`;
+  const lastDay = new Date(anno, mese, 0).getDate();
+  const to = `${anno}-${String(mese).padStart(2,'0')}-${lastDay}`;
+
+  const dipList = dipId ? dipendentiCache.filter(d => d.id === dipId) : dipendentiCache;
+  const rows = [['Dipendente','Ruolo','Tipo','Data','Ore','Motivazione','Importo acconto','Tipo acconto']];
+
+  for (const dip of dipList) {
+    const [{ data: presenze }, { data: acconti }] = await Promise.all([
+      db.from('presenze').select('*').eq('dipendente_id', dip.id).gte('data', from).lte('data', to).order('data'),
+      db.from('acconti_stipendio').select('*').eq('dipendente_id', dip.id).gte('data', from).lte('data', to).neq('tipo', 'fuori_busta')
+    ]);
+    const nome = dip.nome + ' ' + dip.cognome;
+    (presenze||[]).forEach(p => rows.push([nome, dip.ruolo||'', p.tipo, p.data, p.ore||'', p.motivazione||'', '', '']));
+    (acconti||[]).forEach(a => rows.push([nome, dip.ruolo||'', 'acconto', a.data, '', a.note||'', a.importo, a.tipo]));
+  }
+
+  const csv = rows.map(r => r.map(v => `"${v}"`).join(',')).join('\n');
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `KONTRO_HR_${anno}_${String(mese).padStart(2,'0')}.csv`;
+  a.click();
+  showToast('CSV scaricato ✓', 'success');
 }

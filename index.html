@@ -95,6 +95,9 @@
         <button class="nav-item" onclick="showView('impostazioni')" data-view="impostazioni">
           <span class="nav-icon">⚙</span> Impostazioni
         </button>
+        <button class="nav-item" onclick="showView('hr')" data-view="hr">
+          <span class="nav-icon">👥</span> Dipendenti
+        </button>
         <button class="nav-item" onclick="showView('nuovo')" data-view="nuovo">
           <span class="nav-icon">＋</span> Movimenti extra cassa
         </button>
@@ -1188,6 +1191,187 @@
               <button class="btn-primary" onclick="saveAzienda()">Salva modifiche →</button>
             </div>
             <div id="az-msg" class="auth-message"></div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ====== VIEW: HR DIPENDENTI ====== -->
+      <div id="view-hr" class="view">
+
+        <div class="banca-tabs">
+          <button class="banca-tab active" onclick="switchHRTab('dipendenti')" id="hrtab-dipendenti">👥 Dipendenti</button>
+          <button class="banca-tab" onclick="switchHRTab('presenze')" id="hrtab-presenze">📅 Presenze</button>
+          <button class="banca-tab" onclick="switchHRTab('acconti')" id="hrtab-acconti">💸 Acconti</button>
+          <button class="banca-tab" onclick="switchHRTab('export')" id="hrtab-export">📤 Export consulente</button>
+        </div>
+
+        <!-- ── DIPENDENTI ── -->
+        <div id="hrpanel-dipendenti" class="banca-panel active">
+          <div class="section-card">
+            <div class="section-header">
+              <h2>Dipendenti</h2>
+              <button class="btn-primary sm" onclick="showAddDipendente()">＋ Nuovo dipendente</button>
+            </div>
+            <div id="add-dipendente-form" class="add-form hidden">
+              <div class="form-grid">
+                <div class="field"><label>Nome</label><input type="text" id="nd-nome" placeholder="Mario" /></div>
+                <div class="field"><label>Cognome</label><input type="text" id="nd-cognome" placeholder="Rossi" /></div>
+                <div class="field"><label>Ruolo</label><input type="text" id="nd-ruolo" placeholder="Es. Barista, Cameriere..." /></div>
+                <div class="field"><label>Data assunzione</label><input type="date" id="nd-assunzione" /></div>
+                <div class="field full"><label>Note</label><input type="text" id="nd-note" placeholder="Note..." /></div>
+              </div>
+              <div class="form-actions">
+                <button class="btn-secondary" onclick="hideAddDipendente()">Annulla</button>
+                <button class="btn-primary" onclick="saveDipendente()">Salva dipendente</button>
+              </div>
+            </div>
+            <div id="dipendenti-list" class="entries-list">
+              <div class="empty-state">Nessun dipendente</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── PRESENZE ── -->
+        <div id="hrpanel-presenze" class="banca-panel">
+          <div class="section-card" style="margin-bottom:16px">
+            <div class="form-grid">
+              <div class="field">
+                <label>Dipendente</label>
+                <select id="pres-dipendente" onchange="loadPresenzeMese()">
+                  <option value="">Seleziona dipendente</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Mese</label>
+                <select id="pres-mese" onchange="loadPresenzeMese()"></select>
+              </div>
+              <div class="field">
+                <label>Anno</label>
+                <select id="pres-anno" onchange="loadPresenzeMese()"></select>
+              </div>
+            </div>
+          </div>
+
+          <!-- KPI presenze -->
+          <div class="kpi-grid" style="margin-bottom:16px">
+            <div class="kpi-card entrate">
+              <div class="kpi-label">Giorni lavoro</div>
+              <div class="kpi-value" id="pr-lavoro" style="color:var(--green-400)">0</div>
+            </div>
+            <div class="kpi-card uscite">
+              <div class="kpi-label">Assenze</div>
+              <div class="kpi-value" id="pr-assenze" style="color:var(--red-400)">0</div>
+            </div>
+            <div class="kpi-card mese">
+              <div class="kpi-label">Ferie / Permessi</div>
+              <div class="kpi-value" id="pr-ferie" style="color:var(--gold-light)">0</div>
+            </div>
+            <div class="kpi-card saldo">
+              <div class="kpi-label">Straordinari (ore)</div>
+              <div class="kpi-value" id="pr-straordinari" style="color:var(--blue-300)">0h</div>
+            </div>
+          </div>
+
+          <!-- Calendario presenze -->
+          <div class="section-card">
+            <div class="section-header">
+              <h2>Calendario</h2>
+              <button class="btn-primary sm" onclick="showAddPresenza()">＋ Aggiungi</button>
+            </div>
+            <div id="add-presenza-form" class="add-form hidden">
+              <div class="form-grid">
+                <div class="field"><label>Data</label><input type="date" id="np-data" /></div>
+                <div class="field"><label>Tipo</label>
+                  <select id="np-tipo">
+                    <option value="assenza">Assenza</option>
+                    <option value="ferie">Ferie</option>
+                    <option value="permesso">Permesso</option>
+                    <option value="straordinario">Straordinario</option>
+                    <option value="festivo">Festivo lavorato</option>
+                  </select>
+                </div>
+                <div class="field"><label>Ore (per straordinari)</label><input type="number" id="np-ore" step="0.5" placeholder="Es. 2" /></div>
+                <div class="field"><label>Motivazione</label><input type="text" id="np-motivazione" placeholder="Es. Malattia, Visita medica..." /></div>
+              </div>
+              <div class="form-actions">
+                <button class="btn-secondary" onclick="hideAddPresenza()">Annulla</button>
+                <button class="btn-primary" onclick="savePresenza()">Salva</button>
+              </div>
+            </div>
+            <div id="presenze-list" class="presenze-grid">
+              <div class="empty-state">Seleziona dipendente e mese</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── ACCONTI ── -->
+        <div id="hrpanel-acconti" class="banca-panel">
+          <div class="section-card" style="margin-bottom:16px">
+            <h2 style="margin-bottom:16px">Nuovo acconto stipendio</h2>
+            <div class="form-grid">
+              <div class="field"><label>Dipendente</label><select id="acc-dipendente"><option value="">Seleziona</option></select></div>
+              <div class="field"><label>Data</label><input type="date" id="acc-data" /></div>
+              <div class="field"><label>Importo (€)</label><input type="number" id="acc-importo" step="0.01" placeholder="0,00" /></div>
+              <div class="field"><label>Tipo pagamento</label>
+                <select id="acc-tipo" onchange="toggleAccBanca()">
+                  <option value="contanti_cassa">💵 Contanti da cassa (Prima Nota)</option>
+                  <option value="contanti_extra">💰 Contanti extra cassa</option>
+                  <option value="bonifico">🏦 Bonifico bancario</option>
+                  <option value="fuori_busta">🤫 Fuori busta</option>
+                </select>
+              </div>
+              <div class="field" id="acc-banca-wrap" style="display:none">
+                <label>Banca</label>
+                <select id="acc-banca"><option value="">Seleziona banca</option></select>
+              </div>
+              <div class="field full"><label>Note</label><input type="text" id="acc-note" placeholder="Note..." /></div>
+            </div>
+            <div class="form-actions">
+              <button class="btn-primary" onclick="saveAcconto()">Registra acconto →</button>
+            </div>
+            <div id="acc-msg" class="auth-message"></div>
+          </div>
+
+          <div class="section-card">
+            <div class="section-header">
+              <h2>Acconti registrati</h2>
+              <select id="acc-filter-dip" class="filter-input" onchange="loadAcconti()">
+                <option value="">Tutti i dipendenti</option>
+              </select>
+            </div>
+            <div id="acconti-list" class="entries-list">
+              <div class="empty-state">Nessun acconto registrato</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── EXPORT ── -->
+        <div id="hrpanel-export" class="banca-panel">
+          <div class="section-card" style="margin-bottom:16px">
+            <h2 style="margin-bottom:16px">Export per consulente paghe</h2>
+            <div class="form-grid">
+              <div class="field">
+                <label>Dipendente</label>
+                <select id="exp-dipendente"><option value="">Tutti</option></select>
+              </div>
+              <div class="field">
+                <label>Mese</label>
+                <select id="exp-mese"></select>
+              </div>
+              <div class="field">
+                <label>Anno</label>
+                <select id="exp-anno"></select>
+              </div>
+            </div>
+            <div class="form-actions">
+              <button class="btn-primary" onclick="exportHRPDF()">↓ PDF consulente</button>
+              <button class="btn-secondary" onclick="exportHRCSV()">↓ CSV / Excel</button>
+            </div>
+          </div>
+
+          <div id="export-preview" class="section-card">
+            <div class="empty-state">Seleziona dipendente e mese per l'anteprima</div>
           </div>
         </div>
 
