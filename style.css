@@ -2357,14 +2357,21 @@ html, body {
 
   .sidebar {
     display: flex !important;
+    position: fixed;
+    left: 0; top: 0; bottom: 0;
+    width: 260px;
+    background: #050810 !important;
     transform: translateX(-100%);
     transition: transform 0.3s ease;
-    z-index: 160;
-    top: 0;
-    box-shadow: 4px 0 20px rgba(0,0,0,0.5);
+    z-index: 300;
+    box-shadow: 4px 0 24px rgba(0,0,0,0.8);
   }
 
   .sidebar.open { transform: translateX(0); }
+
+  .mobile-overlay {
+    z-index: 250;
+  }
 
   .view { padding: 16px; }
   .kpi-grid { grid-template-columns: 1fr 1fr; }
