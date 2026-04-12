@@ -2407,8 +2407,27 @@ async function loadFornitoriList() {
     .eq('business_id', currentBusiness.id).order('ragione_sociale');
   const el = document.getElementById('fornitori-list');
   if (!data?.length) { el.innerHTML = '<div class="empty-state">Nessun fornitore registrato</div>'; return; }
-  el.innerHTML = data.map(f => `
-    <div class="fornitore-item">
+
+  // Carica fatture aperte e assegni emessi per tutti i fornitori in una volta
+  const [{ data: fatture }, { data: assegni }] = await Promise.all([
+    db.from('fatture_fornitori').select('fornitore_id, importo_totale, stato')
+      .eq('business_id', currentBusiness.id)
+      .in('stato', ['aperta', 'pagata_parziale']),
+    db.from('assegni').select('fornitore_id, importo, stato')
+      .eq('business_id', currentBusiness.id)
+      .in('stato', ['emesso', 'da_addebitare'])
+  ]);
+
+  el.innerHTML = data.map(f => {
+    const ftFornitore = (fatture||[]).filter(x => x.fornitore_id === f.id);
+    const assFornitore = (assegni||[]).filter(x => x.fornitore_id === f.id);
+    const totFatture = ftFornitore.reduce((s, x) => s + Number(x.importo_totale), 0);
+    const totAssegni = assFornitore.reduce((s, x) => s + Number(x.importo), 0);
+    const saldoNetto = totFatture - totAssegni;
+    const haDebiti = totFatture > 0;
+
+    return `
+    <div class="fornitore-item ${haDebiti ? 'has-debiti' : ''}">
       <div class="fornitore-avatar">${f.ragione_sociale[0].toUpperCase()}</div>
       <div class="fornitore-info">
         <div class="fornitore-nome">${f.ragione_sociale}</div>
@@ -2417,13 +2436,30 @@ async function loadFornitoriList() {
           ${f.email ? ' · ' + f.email : ''}
           ${f.telefono ? ' · ' + f.telefono : ''}
         </div>
-        ${f.indirizzo ? `<div class="fornitore-meta">${f.indirizzo}</div>` : ''}
       </div>
+
+      ${haDebiti ? `
+      <div class="fornitore-esposizione">
+        <div class="fe-col">
+          <div class="fe-label">Fatture aperte</div>
+          <div class="fe-val red">${formatEur(totFatture)}</div>
+        </div>
+        <div class="fe-col">
+          <div class="fe-label">Assegni emessi</div>
+          <div class="fe-val gold">${totAssegni > 0 ? '- ' + formatEur(totAssegni) : '—'}</div>
+        </div>
+        <div class="fe-col highlight">
+          <div class="fe-label">Saldo netto</div>
+          <div class="fe-val ${saldoNetto <= 0 ? 'green' : 'red'}">${formatEur(saldoNetto)}</div>
+        </div>
+      </div>` : `<div class="fe-col" style="text-align:center"><div class="fe-val green" style="font-size:13px">✓ Saldo zero</div></div>`}
+
       <div style="display:flex;gap:6px;flex-shrink:0">
-        <button class="btn-secondary sm" onclick="switchFornitoriTab('estratto');document.getElementById('ec-fornitore').value='${f.id}';loadEstratto()">Estratto conto</button>
+        <button class="btn-secondary sm" onclick="switchFornitoriTab('estratto');document.getElementById('ec-fornitore').value='${f.id}';loadEstratto()">Estratto</button>
         <button class="entry-del" onclick="deleteFornitore('${f.id}')">✕</button>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 async function deleteFornitore(id) {
