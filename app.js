@@ -3281,3 +3281,353 @@ async function loadCurrentUserPermissions() {
     impostazioni: false
   };
 }
+
+// ============================================
+// FATTURE FORNITORE IN FORM ASSEGNO
+// ============================================
+let fattureAssegnoSelezionate = new Set();
+
+async function loadFattureFornitoreAssegno() {
+  const fornitoreId = document.getElementById('na-fornitore').value;
+  const wrap = document.getElementById('na-fatture-wrap');
+  const listEl = document.getElementById('na-fatture-list');
+
+  fattureAssegnoSelezionate.clear();
+
+  if (!fornitoreId || !currentBusiness) {
+    wrap.style.display = 'none';
+    return;
+  }
+
+  // Carica fatture aperte del fornitore
+  const { data: fatture } = await db.from('fatture_fornitori')
+    .select('*')
+    .eq('business_id', currentBusiness.id)
+    .eq('fornitore_id', fornitoreId)
+    .in('stato', ['aperta', 'pagata_parziale'])
+    .order('data_scadenza');
+
+  if (!fatture?.length) {
+    wrap.style.display = 'block';
+    listEl.innerHTML = '<div class="empty-state" style="padding:12px">Nessuna fattura aperta per questo fornitore</div>';
+    return;
+  }
+
+  wrap.style.display = 'block';
+  listEl.innerHTML = fatture.map(f => `
+    <div class="fattura-assegno-item" id="fai-${f.id}" onclick="toggleFatturaAssegno('${f.id}', ${f.importo_totale})">
+      <input type="checkbox" id="chk-${f.id}" onclick="event.stopPropagation();toggleFatturaAssegno('${f.id}', ${f.importo_totale})" />
+      <div class="fa-info">
+        <div class="fa-numero">${f.numero ? 'N° ' + f.numero : 'Fattura'} · ${f.data_fattura ? formatDate(f.data_fattura) : ''}</div>
+        <div class="fa-scadenza">Scadenza: ${f.data_scadenza ? formatDate(f.data_scadenza) : '—'}</div>
+      </div>
+      <div class="fa-importo">${formatEur(f.importo_totale)}</div>
+    </div>`).join('') + '<div class="fatture-assegno-totale"><span class="fat-tot-label">Totale selezionato</span><span class="fat-tot-val" id="fat-tot-val">€ 0,00</span></div>';
+}
+
+function toggleFatturaAssegno(id, importo) {
+  const item = document.getElementById('fai-' + id);
+  const chk = document.getElementById('chk-' + id);
+
+  if (fattureAssegnoSelezionate.has(id)) {
+    fattureAssegnoSelezionate.delete(id);
+    item.classList.remove('selected');
+    chk.checked = false;
+  } else {
+    fattureAssegnoSelezionate.add(id);
+    item.classList.add('selected');
+    chk.checked = true;
+  }
+
+  // Aggiorna totale e auto-compila importo assegno
+  updateTotaleSelezionato();
+}
+
+function updateTotaleSelezionato() {
+  const totEl = document.getElementById('fat-tot-val');
+  if (!totEl) return;
+
+  // Somma importi dalle fatture selezionate
+  let tot = 0;
+  fattureAssegnoSelezionate.forEach(id => {
+    const chk = document.getElementById('chk-' + id);
+    if (chk) {
+      // Leggi importo dal data attribute
+      const item = document.getElementById('fai-' + id);
+      const importoEl = item?.querySelector('.fa-importo');
+      if (importoEl) {
+        const txt = importoEl.textContent.replace('€','').replace('.','').replace(',','.').trim();
+        tot += parseFloat(txt) || 0;
+      }
+    }
+  });
+
+  totEl.textContent = formatEur(tot);
+
+  // Auto-compila importo assegno
+  if (tot > 0) {
+    const impEl = document.getElementById('na-importo');
+    if (impEl && !impEl.value) impEl.value = tot.toFixed(2);
+  }
+}
+
+// Override saveAssegno per collegare le fatture
+const _origSaveAssegno = saveAssegno;
+async function saveAssegno() {
+  if (!currentBusiness) return;
+  const importo = parseFloat(document.getElementById('na-importo').value);
+  const scadenza = document.getElementById('na-scadenza').value;
+  const fornitoreId = document.getElementById('na-fornitore')?.value || null;
+
+  if (!importo || importo <= 0) { showToast('Inserisci un importo valido', 'error'); return; }
+  if (!scadenza) { showToast('Inserisci la data di scadenza', 'error'); return; }
+
+  let beneficiario = document.getElementById('na-beneficiario').value.trim();
+  if (!beneficiario && fornitoreId) {
+    const f = fornitoriCache.find(x => x.id === fornitoreId);
+    if (f) beneficiario = f.ragione_sociale;
+  }
+
+  const { data: assegno, error } = await db.from('assegni').insert({
+    business_id: currentBusiness.id,
+    banca_id: document.getElementById('na-banca').value || null,
+    fornitore_id: fornitoreId,
+    numero: document.getElementById('na-numero').value.trim(),
+    beneficiario,
+    importo,
+    data_emissione: document.getElementById('na-emissione').value,
+    data_scadenza: scadenza,
+    stato: 'emesso',
+    note: document.getElementById('na-note').value
+  }).select().single();
+
+  if (error) { showToast('Errore: ' + error.message, 'error'); return; }
+
+  // Collega fatture selezionate e calcola giorni pagamento
+  if (fattureAssegnoSelezionate.size > 0 && assegno) {
+    const oggi = new Date().toISOString().split('T')[0];
+
+    for (const fatturaId of fattureAssegnoSelezionate) {
+      // Carica fattura per calcolare giorni
+      const { data: fatt } = await db.from('fatture_fornitori')
+        .select('data_fattura, data_scadenza, importo_totale')
+        .eq('id', fatturaId).single();
+
+      // Calcola giorni dalla data fattura all'emissione assegno
+      let giorniPagamento = null;
+      if (fatt?.data_fattura) {
+        const diff = new Date(oggi) - new Date(fatt.data_fattura);
+        giorniPagamento = Math.round(diff / 86400000);
+      }
+
+      // Aggiorna fattura come pagata
+      await db.from('fatture_fornitori').update({
+        stato: 'pagata',
+        metodo_pagamento: 'assegno',
+        note: (fatt?.note ? fatt.note + ' · ' : '') + 'Pagata con assegno N° ' + (document.getElementById('na-numero').value || assegno.id)
+      }).eq('id', fatturaId);
+
+      // Salva giorni pagamento per statistiche
+      if (giorniPagamento !== null && fornitoreId) {
+        await db.from('fornitori').update({
+          note: `Tempo medio pagamento aggiornato: ${giorniPagamento} giorni`
+        }).eq('id', fornitoreId);
+      }
+    }
+
+    showToast(`Assegno registrato ✓ · ${fattureAssegnoSelezionate.size} fattura/e collegate`, 'success');
+  } else {
+    showToast('Assegno registrato ✓', 'success');
+  }
+
+  // Reset form
+  ['na-numero','na-beneficiario','na-importo','na-note'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  const naF = document.getElementById('na-fornitore'); if (naF) naF.value = '';
+  const naFW = document.getElementById('na-fatture-wrap'); if (naFW) naFW.style.display = 'none';
+  fattureAssegnoSelezionate.clear();
+
+  loadAssegniV2();
+  loadOverview();
+}
+
+// ============================================
+// EXPORT PDF ESTRATTO CONTO FORNITORE
+// ============================================
+async function exportEstrattoPDF() {
+  const fornitoreId = document.getElementById('ec-fornitore').value;
+  if (!fornitoreId || !currentBusiness) {
+    showToast('Seleziona prima un fornitore', 'error'); return;
+  }
+
+  const from = document.getElementById('ec-from').value;
+  const to = document.getElementById('ec-to').value;
+  const fornitore = fornitoriCache.find(f => f.id === fornitoreId);
+  const fornitoreNome = fornitore?.ragione_sociale || 'Fornitore';
+
+  showToast('Generazione PDF...', '');
+
+  const [{ data: fatture }, { data: assegni }] = await Promise.all([
+    db.from('fatture_fornitori').select('*')
+      .eq('business_id', currentBusiness.id)
+      .eq('fornitore_id', fornitoreId)
+      .gte('data_fattura', from).lte('data_fattura', to)
+      .order('data_fattura'),
+    db.from('assegni').select('*')
+      .eq('business_id', currentBusiness.id)
+      .eq('fornitore_id', fornitoreId)
+      .gte('data_emissione', from).lte('data_emissione', to)
+      .order('data_emissione')
+  ]);
+
+  const totFatturato = (fatture||[]).reduce((s,f) => s + Number(f.importo_totale), 0);
+  const assEmessi = (assegni||[]).filter(a => (a.stato||'emesso') !== 'addebitato');
+  const assAddebitati = (assegni||[]).filter(a => (a.stato||'emesso') === 'addebitato');
+  const totEmesso = assEmessi.reduce((s,a) => s + Number(a.importo), 0);
+  const totAddebitato = assAddebitati.reduce((s,a) => s + Number(a.importo), 0);
+  const saldoContabile = totFatturato - totEmesso - totAddebitato;
+  const saldoEffettivo = totFatturato - totAddebitato;
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const W = 210;
+  const margin = 16;
+  let y = 0;
+
+  // ── HEADER ──
+  doc.setFillColor(10, 15, 30);
+  doc.rect(0, 0, W, 38, 'F');
+  doc.setFillColor(37, 99, 235);
+  doc.roundedRect(margin, 10, 16, 16, 2, 2, 'F');
+  doc.setTextColor(255,255,255);
+  doc.setFontSize(12); doc.setFont('helvetica','bold');
+  doc.text('K', margin + 8, 21, { align: 'center' });
+  doc.setFontSize(18); doc.text('KONTRO', margin + 20, 21);
+  doc.setFontSize(8); doc.setFont('helvetica','normal');
+  doc.setTextColor(156,163,175);
+  doc.text('Generato il ' + new Date().toLocaleDateString('it-IT'), W - margin, 21, { align: 'right' });
+  y = 46;
+
+  // ── TITOLO ──
+  doc.setTextColor(10,15,30);
+  doc.setFontSize(16); doc.setFont('helvetica','bold');
+  doc.text('Estratto Conto Fornitore', margin, y);
+  y += 7;
+  doc.setFontSize(11); doc.setFont('helvetica','normal');
+  doc.setTextColor(37,99,235);
+  doc.text(fornitoreNome, margin, y);
+  y += 5;
+  doc.setFontSize(9); doc.setTextColor(107,114,128);
+  doc.text('Periodo: ' + formatDate(from) + ' — ' + formatDate(to), margin, y);
+  doc.text(currentBusiness?.name || '', W - margin, y, { align: 'right' });
+  y += 10;
+
+  // ── KPI BOX ──
+  const kpiW = (W - margin * 2 - 12) / 4;
+  const kpis = [
+    { label: 'Fatturato', val: formatEur(totFatturato), color: [239,68,68] },
+    { label: 'Assegni emessi', val: formatEur(totEmesso), color: [245,158,11] },
+    { label: 'Saldo contabile', val: formatEur(saldoContabile), color: [245,158,11] },
+    { label: 'Saldo effettivo', val: formatEur(saldoEffettivo), color: saldoEffettivo > 0 ? [239,68,68] : [16,185,129] }
+  ];
+
+  kpis.forEach((k, i) => {
+    const x = margin + i * (kpiW + 4);
+    doc.setFillColor(248,250,252);
+    doc.roundedRect(x, y, kpiW, 16, 2, 2, 'F');
+    doc.setDrawColor(...k.color);
+    doc.setLineWidth(0.8);
+    doc.roundedRect(x, y, kpiW, 16, 2, 2, 'S');
+    doc.setFontSize(7); doc.setFont('helvetica','bold');
+    doc.setTextColor(107,114,128);
+    doc.text(k.label.toUpperCase(), x + 4, y + 5.5);
+    doc.setFontSize(10); doc.setTextColor(...k.color);
+    doc.text(k.val, x + 4, y + 12);
+  });
+  y += 22;
+
+  // ── TABELLA MOVIMENTI ──
+  doc.setFontSize(11); doc.setFont('helvetica','bold');
+  doc.setTextColor(10,15,30);
+  doc.text('Dettaglio movimenti', margin, y);
+  y += 6;
+
+  // Header tabella
+  doc.setFillColor(10,15,30);
+  doc.rect(margin, y, W - margin*2, 7, 'F');
+  doc.setTextColor(255,255,255);
+  doc.setFontSize(7.5); doc.setFont('helvetica','bold');
+  doc.text('DATA', margin+2, y+5);
+  doc.text('TIPO', margin+24, y+5);
+  doc.text('DESCRIZIONE', margin+44, y+5);
+  doc.text('IMPORTO', margin+120, y+5);
+  doc.text('S. CONTABILE', margin+145, y+5);
+  doc.text('S. EFFETTIVO', W-margin-2, y+5, { align:'right' });
+  y += 9;
+
+  // Righe movimenti
+  const movimenti = [
+    ...(fatture||[]).map(f => ({
+      data: f.data_fattura, tipo: 'Fattura',
+      desc: (f.numero ? 'N° '+f.numero : '') + (f.data_scadenza ? ' scad.'+formatDate(f.data_scadenza) : ''),
+      importo: Number(f.importo_totale), effetto: 'debito'
+    })),
+    ...(assegni||[]).map(a => {
+      const isAd = (a.stato||'emesso') === 'addebitato';
+      return {
+        data: a.data_emissione, tipo: isAd ? 'Ass. addebitato' : 'Ass. emesso',
+        desc: (a.numero ? 'N° '+a.numero+' ' : '') + 'scad.'+formatDate(a.data_scadenza),
+        importo: Number(a.importo), effetto: isAd ? 'pagato' : 'emesso'
+      };
+    })
+  ].sort((a,b) => new Date(a.data) - new Date(b.data));
+
+  let sC = 0, sE = 0;
+  doc.setFont('helvetica','normal');
+  movimenti.forEach((m, i) => {
+    if (y > 270) { doc.addPage(); y = 20; }
+    if (m.effetto === 'debito') { sC += m.importo; sE += m.importo; }
+    else if (m.effetto === 'emesso') { sC -= m.importo; }
+    else if (m.effetto === 'pagato') { sE -= m.importo; }
+
+    if (i % 2 === 0) { doc.setFillColor(248,250,252); doc.rect(margin, y-3, W-margin*2, 7, 'F'); }
+
+    doc.setTextColor(107,114,128); doc.setFontSize(7.5);
+    doc.text(formatDate(m.data), margin+2, y+2);
+    doc.setTextColor(10,15,30);
+    doc.text(m.tipo, margin+24, y+2);
+    doc.text(m.desc.substring(0,28), margin+44, y+2);
+    m.effetto === 'debito' ? doc.setTextColor(239,68,68) : doc.setTextColor(16,185,129);
+    doc.setFont('helvetica','bold');
+    doc.text((m.effetto==='debito'?'+':'-')+formatEur(m.importo), margin+120, y+2);
+    sC >= 0 ? doc.setTextColor(245,158,11) : doc.setTextColor(16,185,129);
+    doc.text(formatEur(sC), margin+145, y+2);
+    sE >= 0 ? doc.setTextColor(239,68,68) : doc.setTextColor(16,185,129);
+    doc.text(formatEur(sE), W-margin-2, y+2, { align:'right' });
+    doc.setFont('helvetica','normal');
+    y += 7;
+  });
+
+  // Riga totale
+  y += 2;
+  doc.setDrawColor(10,15,30); doc.setLineWidth(0.3);
+  doc.line(margin, y, W-margin, y); y += 4;
+  doc.setFillColor(10,15,30); doc.rect(margin, y, W-margin*2, 8, 'F');
+  doc.setTextColor(255,255,255); doc.setFontSize(8); doc.setFont('helvetica','bold');
+  doc.text('TOTALE PERIODO', margin+2, y+5.5);
+  doc.text(formatEur(totFatturato), margin+120, y+5.5);
+  saldoContabile >= 0 ? doc.setTextColor(245,158,11) : doc.setTextColor(52,211,153);
+  doc.text(formatEur(saldoContabile), margin+145, y+5.5);
+  saldoEffettivo >= 0 ? doc.setTextColor(248,113,113) : doc.setTextColor(52,211,153);
+  doc.text(formatEur(saldoEffettivo), W-margin-2, y+5.5, { align:'right' });
+
+  // Footer
+  doc.setPage(1);
+  doc.setFontSize(7); doc.setTextColor(156,163,175); doc.setFont('helvetica','normal');
+  doc.text('KONTRO — Prima nota digitale · kontro.vercel.app', margin, 290);
+
+  const filename = 'KONTRO_Estratto_' + fornitoreNome.replace(/\s/g,'_') + '_' + from + '_' + to + '.pdf';
+  doc.save(filename);
+  showToast('PDF scaricato ✓', 'success');
+}

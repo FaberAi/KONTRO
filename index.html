@@ -776,8 +776,12 @@
             <h2 style="margin-bottom:16px">Nuovo assegno</h2>
             <div class="form-grid">
               <div class="field"><label>Numero assegno</label><input type="text" id="na-numero" placeholder="Es. 001234" /></div>
-              <div class="field"><label>Beneficiario</label><input type="text" id="na-beneficiario" placeholder="Nome fornitore..." /></div>
-              <div class="field"><label>Fornitore (opzionale)</label><select id="na-fornitore"><option value="">Nessun fornitore collegato</option></select></div>
+              <div class="field"><label>Fornitore</label><select id="na-fornitore" onchange="loadFattureFornitoreAssegno()"><option value="">Seleziona o lascia libero</option></select></div>
+              <!-- Fatture aperte del fornitore -->
+              <div class="field full" id="na-fatture-wrap" style="display:none">
+                <label>Fatture aperte — seleziona quelle che stai pagando</label>
+                <div id="na-fatture-list" class="fatture-assegno-list"></div>
+              </div>
               <div class="field"><label>Importo (€)</label><input type="number" id="na-importo" step="0.01" placeholder="0,00" /></div>
               <div class="field"><label>Banca</label><select id="na-banca"><option value="">Seleziona banca</option></select></div>
               <div class="field"><label>Data emissione</label><input type="date" id="na-emissione" /></div>
@@ -987,7 +991,10 @@
           </div>
 
           <div class="section-card">
-            <div class="section-header"><h2>Movimenti fornitore</h2></div>
+            <div class="section-header">
+              <h2>Movimenti fornitore</h2>
+              <button class="btn-primary sm" onclick="exportEstrattoPDF()">↓ PDF</button>
+            </div>
             <div id="estratto-list" class="entries-list"><div class="empty-state">Seleziona un fornitore</div></div>
           </div>
         </div>
