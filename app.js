@@ -4138,6 +4138,8 @@ function switchHRTab(tab) {
   document.querySelectorAll('.banca-panel').forEach(p => p.classList.remove('active'));
   document.getElementById('hrtab-' + tab).classList.add('active');
   document.getElementById('hrpanel-' + tab).classList.add('active');
+  if (tab === 'organico') initOrganico();
+  if (tab === 'turni') initTurni();
   if (tab === 'presenze') initPresenze();
   if (tab === 'acconti') initAcconti();
   if (tab === 'export') initExportHR();
@@ -4629,4 +4631,323 @@ function populateSedeDipendente() {
   if (!sel) return;
   sel.innerHTML = '<option value="">Sede principale</option>' +
     currentLocations.map(l => `<option value="${l.id}">${l.name}</option>`).join('');
+}
+
+// ============================================
+// ORGANICO & TURNI
+// ============================================
+const GIORNI = ['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
+const GIORNI_FULL = ['Domenica','Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato'];
+let currentTurnoDipId = null;
+let currentTurnoGiorno = null;
+let turniCache = [];
+
+async function initOrganico() {
+  await loadDipendentiCache();
+  buildOggiList();
+  buildOrganicoBySede();
+}
+
+async function initTurni() {
+  await loadDipendentiCache();
+  // Popola filtro sede
+  const sel = document.getElementById('turni-sede-filter');
+  if (sel) {
+    sel.innerHTML = '<option value="">Tutte le sedi</option>' +
+      currentLocations.map(l => `<option value="${l.id}">${l.name}</option>`).join('');
+  }
+  await loadTurni();
+}
+
+async function loadTurni() {
+  if (!currentBusiness) return;
+  const sedeFilter = document.getElementById('turni-sede-filter')?.value;
+
+  // Carica tutti i turni
+  const { data: turni } = await db.from('turni_dipendenti')
+    .select('*, dipendenti(id,nome,cognome,ruolo,location_id)')
+    .eq('business_id', currentBusiness.id);
+  turniCache = turni || [];
+
+  // Filtra dipendenti per sede
+  let dipList = [...dipendentiCache];
+  if (sedeFilter) dipList = dipList.filter(d => d.location_id === sedeFilter);
+
+  const todayDow = new Date().getDay();
+  const el = document.getElementById('turni-grid');
+
+  if (!dipList.length) {
+    el.innerHTML = '<div class="empty-state">Nessun dipendente in questa sede</div>';
+    return;
+  }
+
+  // Costruisci tabella
+  let html = '<table class="turni-table"><thead><tr>';
+  html += '<th class="th-nome">Dipendente</th>';
+  GIORNI.forEach((g, i) => {
+    const isOggi = i === todayDow;
+    html += `<th${isOggi ? ' class="oggi-col"' : ''}>${g}${isOggi ? ' ◉' : ''}</th>`;
+  });
+  html += '</tr></thead><tbody>';
+
+  dipList.forEach(dip => {
+    const loc = currentLocations.find(l => l.id === dip.location_id);
+    html += `<tr>
+      <td class="td-nome">
+        <div>${dip.nome} ${dip.cognome}</div>
+        <div style="font-size:11px;color:var(--gray-400);font-family:var(--font-mono)">${dip.ruolo||''}${loc ? ' · '+loc.name : ''}</div>
+      </td>`;
+
+    GIORNI.forEach((g, dow) => {
+      const isOggi = dow === todayDow;
+      const turno = turniCache.find(t => t.dipendente_id === dip.id && t.giorno_settimana === dow);
+      let cellHtml = '';
+
+      if (!turno) {
+        cellHtml = `<div class="turno-cell vuoto" onclick="openModalTurno('${dip.id}','${dip.nome} ${dip.cognome}',${dow})">
+          <div class="tc-label">+ imposta</div>
+        </div>`;
+      } else if (turno.tipo === 'riposo') {
+        cellHtml = `<div class="turno-cell riposo" onclick="openModalTurno('${dip.id}','${dip.nome} ${dip.cognome}',${dow})">
+          <div class="tc-label">Riposo</div>
+        </div>`;
+      } else {
+        const inizio = turno.ora_inizio ? turno.ora_inizio.substring(0,5) : '';
+        const fine = turno.ora_fine ? turno.ora_fine.substring(0,5) : '';
+        cellHtml = `<div class="turno-cell lavoro" onclick="openModalTurno('${dip.id}','${dip.nome} ${dip.cognome}',${dow})">
+          <div class="tc-ore">${inizio}</div>
+          <div class="tc-ore">${fine}</div>
+        </div>`;
+      }
+
+      html += `<td${isOggi ? ' class="oggi-col"' : ''}>${cellHtml}</td>`;
+    });
+
+    html += '</tr>';
+  });
+
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+// ── ORGANICO PER SEDE ──────────────────────────────────────────────
+async function buildOrganicoBySede() {
+  const { data: dips } = await db.from('dipendenti')
+    .select('*, locations(name)')
+    .eq('business_id', currentBusiness.id)
+    .eq('attivo', true);
+
+  const el = document.getElementById('org-sedi-grid');
+  if (!dips?.length) { el.innerHTML = '<div class="empty-state">Nessun dipendente</div>'; return; }
+
+  const bySede = {};
+  dips.forEach(d => {
+    const k = d.locations?.name || 'Sede principale';
+    if (!bySede[k]) bySede[k] = [];
+    bySede[k].push(d);
+  });
+
+  const todayDow = new Date().getDay();
+  const { data: turni } = await db.from('turni_dipendenti')
+    .select('dipendente_id,tipo,ora_inizio,ora_fine')
+    .eq('business_id', currentBusiness.id)
+    .eq('giorno_settimana', todayDow);
+
+  el.innerHTML = Object.entries(bySede).map(([sede, dipList]) => `
+    <div class="org-sede-card">
+      <div class="org-sede-header">
+        <span class="org-sede-nome">📍 ${sede}</span>
+        <span class="org-sede-count">${dipList.length} dipendenti</span>
+      </div>
+      <div class="org-sede-body">
+        ${dipList.map(d => {
+          const turno = (turni||[]).find(t => t.dipendente_id === d.id);
+          const lavora = turno && turno.tipo === 'lavoro';
+          const riposo = turno && turno.tipo === 'riposo';
+          const orario = turno && lavora ? turno.ora_inizio?.substring(0,5) + ' - ' + turno.ora_fine?.substring(0,5) : '';
+          return `<div class="org-dip-row">
+            <div class="org-dip-avatar">${d.nome[0]}${d.cognome[0]}</div>
+            <div style="flex:1">
+              <div class="org-dip-nome">${d.nome} ${d.cognome}</div>
+              <div class="org-dip-ruolo">${d.ruolo||'—'}${d.telefono ? ' · ' + d.telefono : ''}</div>
+            </div>
+            <span class="org-oggi-badge ${lavora?'lavora':riposo?'riposo':''}">
+              ${lavora ? (orario||'Lavora') : riposo ? 'Riposo' : 'N/D'}
+            </span>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`).join('');
+}
+
+async function buildOggiList() {
+  const todayDow = new Date().getDay();
+  const todayStr = new Date().toLocaleDateString('it-IT', { weekday:'long', day:'numeric', month:'long' });
+  const oggiEl = document.getElementById('org-oggi-data');
+  if (oggiEl) oggiEl.textContent = todayStr.charAt(0).toUpperCase() + todayStr.slice(1);
+
+  const { data: turni } = await db.from('turni_dipendenti')
+    .select('*, dipendenti(nome,cognome,ruolo)')
+    .eq('business_id', currentBusiness.id)
+    .eq('giorno_settimana', todayDow)
+    .eq('tipo', 'lavoro');
+
+  const el = document.getElementById('org-oggi-list');
+  if (!turni?.length) {
+    el.innerHTML = '<div class="empty-state">Nessun turno configurato per oggi</div>';
+    return;
+  }
+
+  el.innerHTML = turni.map(t => {
+    const inizio = t.ora_inizio?.substring(0,5) || '';
+    const fine = t.ora_fine?.substring(0,5) || '';
+    return `<div class="entry-item">
+      <div class="entry-dot entrata"></div>
+      <div class="entry-info">
+        <div class="entry-desc">${t.dipendenti?.nome} ${t.dipendenti?.cognome}</div>
+        <div class="entry-meta">${t.dipendenti?.ruolo||'—'}${t.note ? ' · '+t.note : ''}</div>
+      </div>
+      <div style="font-family:var(--font-mono);font-size:13px;color:var(--green-400);font-weight:600">
+        ${inizio} → ${fine}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── MODAL TURNO ───────────────────────────────────────────────────
+function openModalTurno(dipId, dipNome, dow) {
+  currentTurnoDipId = dipId;
+  currentTurnoGiorno = dow;
+
+  document.getElementById('modal-turno-title').textContent = dipNome + ' — ' + GIORNI_FULL[dow];
+  document.getElementById('modal-turno-info').innerHTML = `
+    <div class="mi-label">Imposta turno per</div>
+    <div class="mi-value" style="font-size:15px">${dipNome}</div>
+    <div class="mi-meta">${GIORNI_FULL[dow]}</div>`;
+
+  // Precompila con turno esistente
+  const existing = turniCache.find(t => t.dipendente_id === dipId && t.giorno_settimana === dow);
+  if (existing) {
+    document.getElementById('turno-tipo').value = existing.tipo;
+    document.getElementById('turno-inizio').value = existing.ora_inizio?.substring(0,5) || '08:00';
+    document.getElementById('turno-fine').value = existing.ora_fine?.substring(0,5) || '16:00';
+    document.getElementById('turno-note').value = existing.note || '';
+  } else {
+    document.getElementById('turno-tipo').value = 'lavoro';
+    document.getElementById('turno-inizio').value = '08:00';
+    document.getElementById('turno-fine').value = '16:00';
+    document.getElementById('turno-note').value = '';
+  }
+  toggleTurnoOrario();
+  document.getElementById('modal-turno').classList.remove('hidden');
+}
+
+function closeModalTurno() {
+  document.getElementById('modal-turno').classList.add('hidden');
+  currentTurnoDipId = null; currentTurnoGiorno = null;
+}
+
+function toggleTurnoOrario() {
+  const tipo = document.getElementById('turno-tipo').value;
+  const show = tipo === 'lavoro';
+  document.getElementById('turno-orario-wrap').style.display = show ? 'block' : 'none';
+  document.getElementById('turno-fine-wrap').style.display = show ? 'block' : 'none';
+}
+
+async function saveTurno() {
+  if (!currentTurnoDipId || currentTurnoGiorno === null || !currentBusiness) return;
+  const tipo = document.getElementById('turno-tipo').value;
+  const { error } = await db.from('turni_dipendenti').upsert({
+    business_id: currentBusiness.id,
+    dipendente_id: currentTurnoDipId,
+    giorno_settimana: currentTurnoGiorno,
+    tipo,
+    ora_inizio: tipo === 'lavoro' ? document.getElementById('turno-inizio').value : null,
+    ora_fine: tipo === 'lavoro' ? document.getElementById('turno-fine').value : null,
+    note: document.getElementById('turno-note').value.trim()
+  }, { onConflict: 'dipendente_id,giorno_settimana' });
+
+  if (error) { showToast('Errore: ' + error.message, 'error'); return; }
+  closeModalTurno();
+  showToast('Turno salvato ✓', 'success');
+  await loadTurni();
+  buildOggiList();
+}
+
+// ── EXPORT PDF TURNI ──────────────────────────────────────────────
+async function exportTurniPDF() {
+  if (!currentBusiness) return;
+  showToast('Generazione PDF turni...', '');
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const W = 297, H = 210, margin = 12;
+  let y = 0;
+
+  // Header
+  doc.setFillColor(10,15,30); doc.rect(0,0,W,30,'F');
+  doc.setFillColor(37,99,235); doc.roundedRect(margin,8,14,14,2,2,'F');
+  doc.setTextColor(255,255,255); doc.setFontSize(10); doc.setFont('helvetica','bold');
+  doc.text('K', margin+7, 18, {align:'center'});
+  doc.setFontSize(16); doc.text('KONTRO — Piano Turni Settimanale', margin+18, 18);
+  doc.setFontSize(8); doc.setFont('helvetica','normal');
+  doc.setTextColor(156,163,175);
+  doc.text(currentBusiness?.name + ' · ' + new Date().toLocaleDateString('it-IT'), W-margin, 18, {align:'right'});
+  y = 38;
+
+  // Tabella
+  const colW = (W - margin*2 - 50) / 7;
+  const todayDow = new Date().getDay();
+
+  // Header tabella
+  doc.setFillColor(10,15,30); doc.rect(margin, y, W-margin*2, 8, 'F');
+  doc.setTextColor(255,255,255); doc.setFontSize(8); doc.setFont('helvetica','bold');
+  doc.text('Dipendente', margin+2, y+5.5);
+  GIORNI_FULL.forEach((g, i) => {
+    const x = margin + 50 + i * colW;
+    if (i === todayDow) { doc.setFillColor(37,99,235); doc.rect(x, y, colW, 8, 'F'); }
+    doc.setTextColor(i === todayDow ? 255 : 200, i === todayDow ? 255 : 200, i === todayDow ? 255 : 200);
+    doc.text(g, x + colW/2, y+5.5, {align:'center'});
+  });
+  y += 10;
+
+  // Righe dipendenti
+  dipendentiCache.forEach((dip, di) => {
+    if (y > H - 20) { doc.addPage(); y = 20; }
+    if (di % 2 === 0) { doc.setFillColor(248,250,252); doc.rect(margin, y-2, W-margin*2, 14, 'F'); }
+
+    doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(10,15,30);
+    doc.text(dip.nome + ' ' + dip.cognome, margin+2, y+4);
+    doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(107,114,128);
+    doc.text(dip.ruolo||'', margin+2, y+9);
+
+    GIORNI_FULL.forEach((g, dow) => {
+      const x = margin + 50 + dow * colW;
+      const turno = turniCache.find(t => t.dipendente_id === dip.id && t.giorno_settimana === dow);
+
+      if (!turno) {
+        doc.setTextColor(200,200,200); doc.setFontSize(7);
+        doc.text('—', x + colW/2, y+6, {align:'center'});
+      } else if (turno.tipo === 'riposo') {
+        doc.setFillColor(240,240,240); doc.roundedRect(x+2, y, colW-4, 12, 2, 2, 'F');
+        doc.setTextColor(150,150,150); doc.setFont('helvetica','italic'); doc.setFontSize(7);
+        doc.text('Riposo', x + colW/2, y+7, {align:'center'});
+      } else {
+        doc.setFillColor(236,253,245); doc.roundedRect(x+2, y, colW-4, 12, 2, 2, 'F');
+        doc.setTextColor(5,150,105); doc.setFont('helvetica','bold'); doc.setFontSize(7.5);
+        const inizio = turno.ora_inizio?.substring(0,5)||'';
+        const fine = turno.ora_fine?.substring(0,5)||'';
+        doc.text(inizio, x + colW/2, y+5, {align:'center'});
+        doc.text(fine, x + colW/2, y+10, {align:'center'});
+      }
+    });
+    y += 14;
+  });
+
+  // Footer
+  doc.setFontSize(7); doc.setTextColor(156,163,175); doc.setFont('helvetica','normal');
+  doc.text('KONTRO · Piano turni generato il ' + new Date().toLocaleDateString('it-IT'), margin, H-5);
+
+  doc.save('KONTRO_Turni_' + currentBusiness.name.replace(/\s/g,'_') + '.pdf');
+  showToast('PDF turni scaricato ✓', 'success');
 }

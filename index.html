@@ -1201,9 +1201,11 @@
 
         <div class="banca-tabs">
           <button class="banca-tab active" onclick="switchHRTab('dipendenti')" id="hrtab-dipendenti">👥 Dipendenti</button>
+          <button class="banca-tab" onclick="switchHRTab('organico')" id="hrtab-organico">🏢 Organico</button>
+          <button class="banca-tab" onclick="switchHRTab('turni')" id="hrtab-turni">🕐 Turni</button>
           <button class="banca-tab" onclick="switchHRTab('presenze')" id="hrtab-presenze">📅 Presenze</button>
           <button class="banca-tab" onclick="switchHRTab('acconti')" id="hrtab-acconti">💸 Acconti</button>
-          <button class="banca-tab" onclick="switchHRTab('export')" id="hrtab-export">📤 Export consulente</button>
+          <button class="banca-tab" onclick="switchHRTab('export')" id="hrtab-export">📤 Export</button>
         </div>
 
         <!-- ── DIPENDENTI ── -->
@@ -1230,6 +1232,81 @@
             </div>
             <div id="dipendenti-list" class="entries-list">
               <div class="empty-state">Nessun dipendente</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── ORGANICO PER SEDE ── -->
+        <div id="hrpanel-organico" class="banca-panel">
+          <!-- Chi lavora oggi -->
+          <div class="section-card" style="margin-bottom:16px">
+            <div class="section-header">
+              <h2>👤 Chi lavora oggi</h2>
+              <span id="org-oggi-data" style="font-family:var(--font-mono);font-size:12px;color:var(--gray-400)"></span>
+            </div>
+            <div id="org-oggi-list" class="entries-list">
+              <div class="empty-state">Caricamento...</div>
+            </div>
+          </div>
+
+          <!-- Organico per sede -->
+          <div id="org-sedi-grid" class="org-sedi-grid">
+            <div class="empty-state">Caricamento...</div>
+          </div>
+        </div>
+
+        <!-- ── TURNI SETTIMANALI ── -->
+        <div id="hrpanel-turni" class="banca-panel">
+          <div class="section-card" style="margin-bottom:16px">
+            <div class="section-header">
+              <h2>Piano turni settimanale</h2>
+              <div style="display:flex;gap:8px">
+                <select id="turni-sede-filter" class="filter-input" onchange="loadTurni()">
+                  <option value="">Tutte le sedi</option>
+                </select>
+                <button class="btn-primary sm" onclick="exportTurniPDF()">↓ PDF</button>
+              </div>
+            </div>
+            <div id="turni-grid" class="turni-grid-wrap">
+              <div class="empty-state">Caricamento...</div>
+            </div>
+          </div>
+
+          <!-- Form modifica turno -->
+          <div id="modal-turno" class="modal-overlay hidden">
+            <div class="modal-card">
+              <div class="modal-header">
+                <h3 id="modal-turno-title">Imposta turno</h3>
+                <button class="modal-close" onclick="closeModalTurno()">✕</button>
+              </div>
+              <div class="modal-body">
+                <div id="modal-turno-info" class="modal-info-box" style="margin-bottom:16px"></div>
+                <div class="form-grid">
+                  <div class="field">
+                    <label>Tipo</label>
+                    <select id="turno-tipo" onchange="toggleTurnoOrario()">
+                      <option value="lavoro">Lavoro</option>
+                      <option value="riposo">Giorno di riposo</option>
+                    </select>
+                  </div>
+                  <div class="field" id="turno-orario-wrap">
+                    <label>Ora inizio</label>
+                    <input type="time" id="turno-inizio" value="08:00" />
+                  </div>
+                  <div class="field" id="turno-fine-wrap">
+                    <label>Ora fine</label>
+                    <input type="time" id="turno-fine" value="16:00" />
+                  </div>
+                  <div class="field full">
+                    <label>Note</label>
+                    <input type="text" id="turno-note" placeholder="Es. Solo mattina, Apertura..." />
+                  </div>
+                </div>
+              </div>
+              <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeModalTurno()">Annulla</button>
+                <button class="btn-primary" onclick="saveTurno()">Salva turno →</button>
+              </div>
             </div>
           </div>
         </div>
