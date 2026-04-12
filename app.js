@@ -424,7 +424,7 @@ function showMovMsg(msg, type) {
 }
 
 async function deleteEntry(id) {
-  if (!confirm('Eliminare questo movimento?')) return;
+  
   const { error } = await db.from('cash_entries').delete().eq('id', id);
   if (error) { showToast('Errore eliminazione', 'error'); return; }
   showToast('Movimento eliminato', 'success');
@@ -2002,7 +2002,7 @@ async function loadBancheList() {
 }
 
 async function deleteBanca(id) {
-  if (!confirm('Eliminare questo conto?')) return;
+  
   await db.from('banche').delete().eq('id', id);
   await loadBancheCache();
   populateBancaSelects();
@@ -2057,7 +2057,7 @@ async function loadVersamenti() {
 }
 
 async function deleteVersamento(id) {
-  if (!confirm('Eliminare questo versamento?')) return;
+  
   await db.from('versamenti').delete().eq('id', id);
   loadVersamenti(); loadOverview();
   showToast('Versamento eliminato', 'success');
@@ -2141,10 +2141,10 @@ async function incassaAssegno(id) {
 }
 
 async function deleteAssegno(id) {
-  if (!confirm('Eliminare questo assegno?')) return;
-  await db.from('assegni').delete().eq('id', id);
-  loadAssegni(); loadOverview();
-  showToast('Assegno eliminato', 'success');
+  const { error } = await db.from('assegni').delete().eq('id', id);
+  if (error) { showToast('Errore eliminazione: ' + error.message, 'error'); return; }
+  loadAssegniV2(); loadOverview();
+  showToast('Assegno eliminato ✓', 'success');
 }
 
 // ── RID/SDD ───────────────────────────────────────────────────────
@@ -2200,7 +2200,7 @@ async function toggleRid(id, attivo) {
 }
 
 async function deleteRid(id) {
-  if (!confirm('Eliminare questo RID?')) return;
+  
   await db.from('rid_bancari').delete().eq('id', id);
   loadRid(); loadOverview();
   showToast('RID eliminato', 'success');
@@ -2349,7 +2349,7 @@ async function loadFornitoriList() {
 }
 
 async function deleteFornitore(id) {
-  if (!confirm('Eliminare questo fornitore?')) return;
+  
   await db.from('fornitori').update({ attivo: false }).eq('id', id);
   await loadFornitoriCache();
   populateFornitoriSelects();
@@ -2456,7 +2456,7 @@ async function pagaFattura(id) {
 }
 
 async function deleteFattura(id) {
-  if (!confirm('Eliminare questa fattura?')) return;
+  
   await db.from('fatture_fornitori').delete().eq('id', id);
   loadFatture();
   showToast('Fattura eliminata', 'success');
@@ -2472,52 +2472,6 @@ function initEstratto() {
   if (ecTo && !ecTo.value) ecTo.value = today;
 }
 
-async function loadEstratto() {
-  const fornitoreId = document.getElementById('ec-fornitore').value;
-  if (!fornitoreId || !currentBusiness) {
-    document.getElementById('estratto-list').innerHTML = '<div class="empty-state">Seleziona un fornitore</div>';
-    return;
-  }
-  const from = document.getElementById('ec-from').value;
-  const to = document.getElementById('ec-to').value;
-
-  const [{ data: fatture }, { data: assegni }] = await Promise.all([
-    db.from('fatture_fornitori').select('*').eq('business_id', currentBusiness.id)
-      .eq('fornitore_id', fornitoreId)
-      .gte('data_fattura', from).lte('data_fattura', to),
-    db.from('assegni').select('*').eq('business_id', currentBusiness.id)
-      .eq('fornitore_id', fornitoreId)
-      .gte('data_emissione', from).lte('data_emissione', to)
-  ]);
-
-  const totFatturato = (fatture||[]).reduce((s,f)=>s+Number(f.importo_totale),0);
-  const totPagato = (fatture||[]).filter(f=>f.stato==='pagata').reduce((s,f)=>s+Number(f.importo_totale),0);
-  const totAssegni = (assegni||[]).reduce((s,a)=>s+Number(a.importo),0);
-
-  document.getElementById('ec-fatturato').textContent = formatEur(totFatturato);
-  document.getElementById('ec-pagato').textContent = formatEur(totPagato);
-  document.getElementById('ec-saldo').textContent = formatEur(totFatturato - totPagato);
-  document.getElementById('ec-assegni').textContent = formatEur(totAssegni);
-
-  // Merge e ordina per data
-  const movimenti = [
-    ...(fatture||[]).map(f => ({ data: f.data_fattura, tipo: 'fattura', desc: `Fattura ${f.numero||''}`, importo: Number(f.importo_totale), stato: f.stato, segno: 'dare' })),
-    ...(assegni||[]).map(a => ({ data: a.data_emissione, tipo: 'assegno', desc: `Assegno ${a.numero||''} scad. ${formatDate(a.data_scadenza)}`, importo: Number(a.importo), stato: a.incassato ? 'incassato' : 'aperto', segno: 'avere' }))
-  ].sort((a, b) => new Date(b.data) - new Date(a.data));
-
-  const el = document.getElementById('estratto-list');
-  if (!movimenti.length) { el.innerHTML = '<div class="empty-state">Nessun movimento nel periodo</div>'; return; }
-
-  el.innerHTML = movimenti.map(m => `
-    <div class="ec-item">
-      <div class="ec-tipo">${m.tipo === 'fattura' ? '🧾' : '📝'}</div>
-      <div class="ec-info">
-        <div class="ec-desc">${m.desc}</div>
-        <div class="ec-meta">${formatDate(m.data)} · ${m.stato}</div>
-      </div>
-      <div class="ec-val ${m.segno}">${m.segno === 'dare' ? '-' : '+'}${formatEur(m.importo)}</div>
-    </div>`).join('');
-}
 
 // ============================================
 // MODALE PAGAMENTO ASSEGNO
@@ -2791,122 +2745,97 @@ async function loadEstratto() {
   ]);
 
   const totFatturato = (fatture||[]).reduce((s,f) => s + Number(f.importo_totale), 0);
-
-  // Assegni emessi = dati al fornitore ma banca non ancora addebitata
   const assEmessi = (assegni||[]).filter(a => (a.stato||'emesso') !== 'addebitato');
-  const totEmesso = assEmessi.reduce((s,a) => s + Number(a.importo), 0);
-
-  // Assegni addebitati = usciti effettivamente dalla banca
   const assAddebitati = (assegni||[]).filter(a => (a.stato||'emesso') === 'addebitato');
+  const totEmesso = assEmessi.reduce((s,a) => s + Number(a.importo), 0);
   const totAddebitato = assAddebitati.reduce((s,a) => s + Number(a.importo), 0);
 
-  // Saldo scoperto = fatturato - assegni emessi (parte non coperta da nessun assegno)
-  const saldoScoperto = totFatturato - totEmesso - totAddebitato;
-
-  // Saldo da pagare = fatturato - addebitato (debito reale residuo, include anche assegni emessi non ancora incassati)
-  const saldoDaPagare = totFatturato - totAddebitato;
+  // Saldo contabile = fatturato - assegni emessi - addebitati
+  const saldoContabileTot = totFatturato - totEmesso - totAddebitato;
+  // Saldo effettivo = fatturato - solo addebitati (banca)
+  const saldoEffettivoTot = totFatturato - totAddebitato;
 
   document.getElementById('ec-fatturato').textContent = formatEur(totFatturato);
   document.getElementById('ec-assegni').textContent = formatEur(totEmesso);
-  document.getElementById('ec-scoperto').textContent = formatEur(Math.max(0, saldoScoperto));
-  document.getElementById('ec-saldo').textContent = formatEur(Math.max(0, saldoDaPagare));
-
-  // Colora KPI saldo da pagare
+  const scopEl = document.getElementById('ec-scoperto');
+  if (scopEl) scopEl.textContent = formatEur(Math.max(0, saldoContabileTot));
   const saldoEl = document.getElementById('ec-saldo');
-  if (saldoEl) saldoEl.style.color = saldoDaPagare <= 0 ? 'var(--green-400)' : 'var(--red-400)';
+  if (saldoEl) {
+    saldoEl.textContent = formatEur(Math.max(0, saldoEffettivoTot));
+    saldoEl.style.color = saldoEffettivoTot <= 0 ? 'var(--green-400)' : 'var(--red-400)';
+  }
 
-  // ── LISTA MOVIMENTI con saldo progressivo ──
   const movimenti = [
-    ...(fatture||[]).map(f => ({
-      data: f.data_fattura,
-      sortData: f.data_fattura,
-      tipo: 'fattura',
-      icon: '🧾',
-      desc: `Fattura ${f.numero || ''}`,
-      meta: `Emessa: ${formatDate(f.data_fattura)}${f.data_scadenza ? ' · Scad: ' + formatDate(f.data_scadenza) : ''} · ${{aperta:'Aperta',pagata:'Pagata',pagata_parziale:'Parz. pagata'}[f.stato]||f.stato}`,
-      importo: Number(f.importo_totale),
-      effetto: 'debito'   // aumenta il debito
-    })),
-    ...(assegni||[]).map(a => {
-      const stato = a.stato || (a.incassato ? 'addebitato' : 'emesso');
-      const isAddebitato = stato === 'addebitato';
+    ...(fatture||[]).map(function(f) {
       return {
-        // L'assegno si "vede" alla data di emissione ma impatta la banca alla scadenza
-        data: a.data_emissione,
-        dataAddebito: a.data_scadenza,
+        sortData: f.data_fattura,
+        tipo: 'fattura', icon: '🧾',
+        desc: 'Fattura ' + (f.numero || ''),
+        meta: 'Emessa: ' + formatDate(f.data_fattura) + (f.data_scadenza ? ' · Scad: ' + formatDate(f.data_scadenza) : '') + ' · ' + ({aperta:'Aperta',pagata:'Pagata',pagata_parziale:'Parz. pagata'}[f.stato]||f.stato),
+        importo: Number(f.importo_totale),
+        effetto: 'debito'
+      };
+    }),
+    ...(assegni||[]).map(function(a) {
+      const stato = a.stato || (a.incassato ? 'addebitato' : 'emesso');
+      const isAd = stato === 'addebitato';
+      const isPost = a.data_emissione !== a.data_scadenza;
+      return {
         sortData: a.data_emissione,
-        tipo: 'assegno',
-        icon: isAddebitato ? '✅' : '📝',
-        desc: `Assegno ${a.numero ? 'N° ' + a.numero : ''}${a.data_emissione !== a.data_scadenza ? ' — Postdatato' : ''}`,
-        meta: isAddebitato
-          ? `Emesso: ${formatDate(a.data_emissione)} · Addebitato in banca: ${formatDate(a.data_incasso || a.data_scadenza)} ✓`
-          : `Emesso: ${formatDate(a.data_emissione)} · Addebito banca previsto: ${formatDate(a.data_scadenza)} ⏳`,
+        tipo: 'assegno', icon: isAd ? '✅' : '📝',
+        desc: 'Assegno ' + (a.numero ? 'N° ' + a.numero + ' ' : '') + (isPost ? '— Postdatato' : '— A vista'),
+        meta: isAd
+          ? 'Emesso: ' + formatDate(a.data_emissione) + ' · Addebitato in banca: ' + formatDate(a.data_incasso||a.data_scadenza) + ' ✓'
+          : 'Emesso: ' + formatDate(a.data_emissione) + ' · Addebito banca previsto: ' + formatDate(a.data_scadenza) + ' ⏳',
         importo: Number(a.importo),
-        effetto: isAddebitato ? 'pagato' : 'emesso',
-        addebitato: isAddebitato
+        effetto: isAd ? 'pagato' : 'emesso'
       };
     })
-  ].sort((a, b) => new Date(a.sortData) - new Date(b.sortData));
+  ].sort(function(a,b) { return new Date(a.sortData) - new Date(b.sortData); });
 
   const el = document.getElementById('estratto-list');
   if (!movimenti.length) { el.innerHTML = '<div class="empty-state">Nessun movimento nel periodo</div>'; return; }
 
-  // Saldo progressivo: debito sale con fatture, scende con pagamenti confermati
-  let saldoProgDaPagare = 0;  // saldo effettivo (solo addebitati)
-  let saldoProgScoperto = 0;  // saldo scoperto (fatture - emessi - addebitati)
+  let saldoC = 0, saldoE = 0;
+  var rows = movimenti.map(function(m) {
+    if (m.effetto === 'debito') { saldoC += m.importo; saldoE += m.importo; }
+    else if (m.effetto === 'emesso') { saldoC -= m.importo; }
+    else if (m.effetto === 'pagato') { saldoE -= m.importo; }
 
-  el.innerHTML = `
-    <div class="ec-header-row">
-      <span style="flex:0 0 28px"></span>
-      <span style="flex:1">Movimento</span>
-      <span style="min-width:100px;text-align:right;font-size:10px;color:var(--gray-500);text-transform:uppercase;letter-spacing:.06em">Importo</span>
-      <span style="min-width:120px;text-align:right;font-size:10px;color:var(--red-400);text-transform:uppercase;letter-spacing:.06em">Saldo da pagare</span>
-      <span style="min-width:120px;text-align:right;font-size:10px;color:var(--gold);text-transform:uppercase;letter-spacing:.06em">Saldo scoperto</span>
-    </div>
-    ${movimenti.map(m => {
-      if (m.effetto === 'debito') {
-        saldoProgDaPagare += m.importo;
-        saldoProgScoperto += m.importo;
-      } else if (m.effetto === 'emesso') {
-        saldoProgScoperto -= m.importo;
-        // saldoProgDaPagare NON cambia — assegno emesso non è ancora uscito dalla banca
-      } else if (m.effetto === 'pagato') {
-        saldoProgDaPagare -= m.importo;
-        // saldoProgScoperto già scalato quando era emesso
-      }
+    var importoColor = m.effetto === 'debito' ? 'dare' : 'avere';
+    var opacity = m.effetto === 'emesso' ? 'opacity:0.85;' : '';
+    var cColor = saldoC > 0 ? 'var(--gold-light)' : 'var(--green-400)';
+    var eColor = saldoE > 0 ? 'var(--red-400)' : 'var(--green-400)';
 
-      const importoColor = m.effetto === 'debito' ? 'dare' : 'avere';
-      const opacity = m.effetto === 'emesso' ? 'opacity:0.75' : '';
+    return '<div class="ec-item" style="' + opacity + '">'
+      + '<div class="ec-tipo">' + m.icon + '</div>'
+      + '<div class="ec-info"><div class="ec-desc">' + m.desc + '</div><div class="ec-meta">' + m.meta + '</div></div>'
+      + '<div class="ec-val ' + importoColor + '" style="min-width:110px;text-align:right">' + (m.effetto === 'debito' ? '+' : '-') + formatEur(m.importo) + '</div>'
+      + '<div style="min-width:130px;text-align:right;font-family:var(--font-mono);font-size:13px;font-weight:500;color:' + cColor + '">' + formatEur(saldoC) + '</div>'
+      + '<div style="min-width:130px;text-align:right;font-family:var(--font-mono);font-size:13px;font-weight:500;color:' + eColor + '">' + formatEur(saldoE) + '</div>'
+      + '</div>';
+  });
 
-      return `<div class="ec-item" style="${opacity}">
-        <div class="ec-tipo">${m.icon}</div>
-        <div class="ec-info">
-          <div class="ec-desc">${m.desc}</div>
-          <div class="ec-meta">${m.meta}</div>
-        </div>
-        <div class="ec-val ${importoColor}" style="min-width:100px;text-align:right">
-          ${m.effetto === 'debito' ? '+' : '-'}${formatEur(m.importo)}
-        </div>
-        <div class="ec-val" style="min-width:120px;text-align:right;color:${saldoProgDaPagare > 0 ? 'var(--red-400)' : 'var(--green-400)'}">
-          ${formatEur(saldoProgDaPagare)}
-        </div>
-        <div class="ec-val" style="min-width:120px;text-align:right;color:${saldoProgScoperto > 0 ? 'var(--gold-light)' : 'var(--green-400)'}">
-          ${formatEur(saldoProgScoperto)}
-        </div>
-      </div>`;
-    }).join('')}
-    <div class="ec-item" style="background:var(--navy-950);border:1px solid rgba(255,255,255,0.08);font-weight:700">
-      <div class="ec-tipo">📊</div>
-      <div class="ec-info"><div class="ec-desc">TOTALE PERIODO</div></div>
-      <div class="ec-val" style="min-width:100px;text-align:right;color:var(--gray-400)">${formatEur(totFatturato)}</div>
-      <div class="ec-val" style="min-width:120px;text-align:right;color:${saldoProgDaPagare > 0 ? 'var(--red-400)' : 'var(--green-400)'};font-size:15px">
-        ${formatEur(saldoProgDaPagare)}
-      </div>
-      <div class="ec-val" style="min-width:120px;text-align:right;color:${saldoProgScoperto > 0 ? 'var(--gold-light)' : 'var(--green-400)'};font-size:15px">
-        ${formatEur(saldoProgScoperto)}
-      </div>
-    </div>`;
+  var header = '<div class="ec-header-row">'
+    + '<span style="flex:0 0 28px"></span>'
+    + '<span style="flex:1">Movimento</span>'
+    + '<span style="min-width:110px;text-align:right;font-size:10px;color:var(--gray-500);text-transform:uppercase;letter-spacing:.06em">Importo</span>'
+    + '<span style="min-width:130px;text-align:right;font-size:10px;color:var(--gold);text-transform:uppercase;letter-spacing:.06em">Saldo contabile</span>'
+    + '<span style="min-width:130px;text-align:right;font-size:10px;color:var(--blue-300);text-transform:uppercase;letter-spacing:.06em">Saldo effettivo</span>'
+    + '</div>';
+
+  var footer = '<div class="ec-item" style="background:var(--navy-950);border:1px solid rgba(255,255,255,0.08);font-weight:700;margin-top:8px">'
+    + '<div class="ec-tipo">📊</div>'
+    + '<div class="ec-info"><div class="ec-desc" style="font-weight:700">TOTALE PERIODO</div></div>'
+    + '<div style="min-width:110px;text-align:right;font-family:var(--font-mono);font-size:13px;color:var(--gray-400)">' + formatEur(totFatturato) + '</div>'
+    + '<div style="min-width:130px;text-align:right;font-family:var(--font-mono);font-size:15px;font-weight:700;color:' + (saldoC > 0 ? 'var(--gold-light)' : 'var(--green-400)') + '">' + formatEur(saldoC) + '</div>'
+    + '<div style="min-width:130px;text-align:right;font-family:var(--font-mono);font-size:15px;font-weight:700;color:' + (saldoE > 0 ? 'var(--red-400)' : 'var(--green-400)') + '">' + formatEur(saldoE) + '</div>'
+    + '</div>';
+
+  el.innerHTML = header + rows.join('') + footer;
 }
+
+
 
 // ============================================
 // PRIMA NOTA — collegamento fornitori
@@ -3046,4 +2975,22 @@ async function salvaNotaGiorno() {
 
   showPNMsg('Prima nota salvata ✓' + (fcChiusura > 0 ? ' — fondo cassa domani pre-compilato' : ''), 'success');
   await loadDashboard();
+}
+
+// ============================================
+// MOVIMENTI BANCARI — elimina
+// ============================================
+async function deleteMovimentoBanca(id) {
+  if (!confirm('Eliminare questo movimento bancario?')) return;
+  await db.from('movimenti_banca').delete().eq('id', id);
+  loadOverview();
+  showToast('Movimento eliminato', 'success');
+}
+
+async function deleteAssegnoCompleto(id) {
+  if (!confirm('Eliminare questo assegno? L\'operazione è irreversibile.')) return;
+  await db.from('assegni').delete().eq('id', id);
+  loadAssegniV2();
+  loadOverview();
+  showToast('Assegno eliminato', 'success');
 }
