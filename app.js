@@ -2238,7 +2238,7 @@ async function loadAssegni(filter = null) {
       <span class="ass-badge ${badge}">${{ aperto:'Aperto', scadenza:'In scadenza', scaduto:'Scaduto', incassato:'Incassato' }[badge]}</span>
       <div class="ass-importo ${a.incassato ? 'incassato' : ''}">${formatEur(a.importo)}</div>
       <div style="display:flex;gap:4px">
-        ${!a.incassato ? `<button class="btn-secondary sm" onclick="incassaAssegno('${a.id}')">Incassa</button>` : ''}
+        ${!a.incassato ? `<button class="btn-secondary sm" onclick="apriModalePagamento('${a.id}')">Paga</button>` : ''}
         <button class="entry-del" onclick="deleteAssegno('${a.id}')">✕</button>
       </div>
     </div>`;
@@ -2595,4 +2595,341 @@ async function loadEstratto() {
       </div>
       <div class="ec-val ${m.segno}">${m.segno === 'dare' ? '-' : '+'}${formatEur(m.importo)}</div>
     </div>`).join('');
+}
+
+// ============================================
+// MODALE PAGAMENTO ASSEGNO
+// ============================================
+let currentAssegnoId = null;
+let currentAssegnoData = null;
+
+function apriModalePagamento(id) {
+  // Trova l'assegno dalla lista già caricata
+  currentAssegnoId = id;
+  openModalAssegno(id);
+}
+
+async function openModalAssegno(id) {
+  const { data: ass } = await db.from('assegni').select('*, fornitori(ragione_sociale)')
+    .eq('id', id).single();
+  if (!ass) return;
+
+  currentAssegnoData = ass;
+
+  // Popola info box
+  document.getElementById('modal-assegno-info').innerHTML = `
+    <div class="mi-label">Assegno da pagare</div>
+    <div class="mi-value">${formatEur(ass.importo)}</div>
+    <div class="mi-meta">
+      ${ass.beneficiario ? 'A: ' + ass.beneficiario : ''}
+      ${ass.fornitori ? ' · ' + ass.fornitori.ragione_sociale : ''}
+      ${ass.numero ? ' · N° ' + ass.numero : ''}
+      · Scadenza: ${formatDate(ass.data_scadenza)}
+    </div>
+  `;
+
+  // Data default = oggi
+  document.getElementById('pag-data').value = new Date().toISOString().split('T')[0];
+
+  // Popola select banca
+  const bancaEl = document.getElementById('pag-banca');
+  bancaEl.innerHTML = '<option value="">Seleziona banca</option>' +
+    bancheCache.map(b => `<option value="${b.id}">${b.nome} — ${b.istituto || ''}</option>`).join('');
+  if (ass.banca_id) bancaEl.value = ass.banca_id;
+
+  document.getElementById('pag-note').value = '';
+  document.getElementById('modal-paga-assegno').classList.remove('hidden');
+}
+
+function closeModalAssegno() {
+  document.getElementById('modal-paga-assegno').classList.add('hidden');
+  currentAssegnoId = null;
+  currentAssegnoData = null;
+}
+
+async function confermaPagamentoAssegno() {
+  if (!currentAssegnoId) return;
+  const dataIncasso = document.getElementById('pag-data').value;
+  const bancaId = document.getElementById('pag-banca').value;
+  const note = document.getElementById('pag-note').value.trim();
+
+  if (!dataIncasso) { showToast('Inserisci la data di pagamento', 'error'); return; }
+
+  // Marca assegno come incassato
+  await db.from('assegni').update({
+    incassato: true,
+    data_incasso: dataIncasso,
+    note: note || currentAssegnoData.note
+  }).eq('id', currentAssegnoId);
+
+  // Registra movimento bancario in uscita se banca selezionata
+  if (bancaId && currentAssegnoData) {
+    await db.from('movimenti_banca').insert({
+      business_id: currentBusiness.id,
+      banca_id: bancaId,
+      data: dataIncasso,
+      segno: 'dare',
+      tipo: 'assegno',
+      descrizione: `Assegno ${currentAssegnoData.numero || ''} - ${currentAssegnoData.beneficiario || 'N/D'}`,
+      importo: currentAssegnoData.importo
+    });
+  }
+
+  closeModalAssegno();
+  showToast('Pagamento registrato ✓', 'success');
+  loadAssegni();
+  loadOverview();
+}
+
+// ============================================
+// ASSEGNI v2 — Logica postdatati
+// ============================================
+
+// Stati assegno:
+// emesso      → assegno dato al fornitore, banca non ancora addebitata
+// da_addebitare → scadenza passata, banca deve essere addebitata
+// addebitato  → banca addebitata, tutto chiuso
+
+async function loadAssegniV2(filter = null) {
+  if (!currentBusiness) return;
+  if (filter) currentAssegniFilter = filter;
+
+  let query = db.from('assegni').select('*, fornitori(ragione_sociale)')
+    .eq('business_id', currentBusiness.id)
+    .order('data_scadenza');
+
+  if (currentAssegniFilter === 'aperti') {
+    query = query.in('stato', ['emesso', 'da_addebitare']);
+  }
+
+  const { data } = await query;
+  const today = new Date().toISOString().split('T')[0];
+  const in7 = new Date(); in7.setDate(in7.getDate() + 7);
+  const in7str = in7.toISOString().split('T')[0];
+  const el = document.getElementById('assegni-list');
+  if (!data?.length) { el.innerHTML = '<div class="empty-state">Nessun assegno</div>'; return; }
+
+  el.innerHTML = data.map(a => {
+    const banca = bancheCache.find(b => b.id === a.banca_id);
+    const stato = a.stato || (a.incassato ? 'addebitato' : 'emesso');
+
+    // Determina classe visiva e badge
+    let cls, badge, badgeLabel;
+    if (stato === 'addebitato') {
+      cls = 'incassato'; badge = 'incassato'; badgeLabel = '✓ Addebitato';
+    } else if (stato === 'da_addebitare' || (stato === 'emesso' && a.data_scadenza < today)) {
+      cls = 'scaduto'; badge = 'scaduto'; badgeLabel = '⚠ Da addebitare';
+    } else if (a.data_scadenza <= in7str) {
+      cls = 'scadenza'; badge = 'scadenza'; badgeLabel = '⏰ In scadenza';
+    } else {
+      cls = 'aperto'; badge = 'aperto'; badgeLabel = '📝 Emesso';
+    }
+
+    const isPostdatato = a.data_emissione && a.data_scadenza > a.data_emissione;
+    const giorniScadenza = Math.ceil((new Date(a.data_scadenza) - new Date()) / 86400000);
+
+    return `<div class="assegno-item ${cls}">
+      <div class="ass-info">
+        <div class="ass-num">${a.numero ? 'N° ' + a.numero : ''}${isPostdatato ? ' <span style="font-size:10px;color:var(--gold-light);font-weight:600">POSTDATATO</span>' : ''}</div>
+        <div class="ass-benef">${a.beneficiario || a.fornitori?.ragione_sociale || 'N/D'}</div>
+        <div class="ass-meta">
+          Emesso: ${formatDate(a.data_emissione)} · Scadenza: ${formatDate(a.data_scadenza)}
+          ${banca ? ' · ' + banca.nome : ''}
+          ${stato !== 'addebitato' && giorniScadenza > 0 ? ` · tra ${giorniScadenza} giorni` : ''}
+          ${stato !== 'addebitato' && giorniScadenza <= 0 ? ` · scaduto ${Math.abs(giorniScadenza)} giorni fa` : ''}
+        </div>
+      </div>
+      <span class="ass-badge ${badge}">${badgeLabel}</span>
+      <div class="ass-importo ${stato === 'addebitato' ? 'incassato' : ''}">${formatEur(a.importo)}</div>
+      <div style="display:flex;gap:4px;flex-shrink:0">
+        ${stato !== 'addebitato' ? `<button class="btn-secondary sm" onclick="apriModaleAddebito('${a.id}')">Registra addebito</button>` : ''}
+        <button class="entry-del" onclick="deleteAssegno('${a.id}')">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// Override loadAssegni
+function loadAssegni(f) { loadAssegniV2(f); }
+
+// ── MODALE ADDEBITO BANCA ─────────────────────────────────────────
+async function apriModaleAddebito(id) {
+  const { data: ass } = await db.from('assegni')
+    .select('*, fornitori(ragione_sociale)').eq('id', id).single();
+  if (!ass) return;
+
+  currentAssegnoId = id;
+  currentAssegnoData = ass;
+
+  // Popola info box
+  document.getElementById('modal-assegno-info').innerHTML = `
+    <div class="mi-label">Assegno — Registra addebito banca</div>
+    <div class="mi-value">${formatEur(ass.importo)}</div>
+    <div class="mi-meta">
+      ${ass.beneficiario || ass.fornitori?.ragione_sociale || 'N/D'}
+      ${ass.numero ? ' · N° ' + ass.numero : ''}
+      · Scadenza: ${formatDate(ass.data_scadenza)}
+      ${ass.data_scadenza > new Date().toISOString().split('T')[0]
+        ? ' <span style="color:var(--gold-light)">(postdatato)</span>'
+        : ' <span style="color:var(--red-400)">(scaduto)</span>'}
+    </div>
+    <div style="margin-top:8px;font-size:11px;color:var(--gray-400);font-family:var(--font-mono)">
+      Il fornitore ha già ricevuto questo assegno. Ora registri l'uscita effettiva dalla banca.
+    </div>`;
+
+  // Data default = data scadenza assegno
+  document.getElementById('pag-data').value = ass.data_scadenza;
+
+  // Popola banca
+  const bancaEl = document.getElementById('pag-banca');
+  bancaEl.innerHTML = '<option value="">Seleziona banca</option>' +
+    bancheCache.map(b => `<option value="${b.id}">${b.nome}${b.istituto ? ' — ' + b.istituto : ''}</option>`).join('');
+  if (ass.banca_id) bancaEl.value = ass.banca_id;
+
+  document.getElementById('pag-note').value = '';
+  document.getElementById('modal-paga-assegno').classList.remove('hidden');
+}
+
+async function confermaPagamentoAssegno() {
+  if (!currentAssegnoId || !currentAssegnoData) return;
+
+  const dataAddebito = document.getElementById('pag-data').value;
+  const bancaId = document.getElementById('pag-banca').value;
+  const note = document.getElementById('pag-note').value.trim();
+
+  if (!dataAddebito) { showToast('Inserisci la data di addebito', 'error'); return; }
+  if (!bancaId) { showToast('Seleziona la banca', 'error'); return; }
+
+  // Aggiorna stato assegno → addebitato
+  await db.from('assegni').update({
+    stato: 'addebitato',
+    incassato: true,
+    data_incasso: dataAddebito,
+    banca_id: bancaId,
+    note: note || currentAssegnoData.note
+  }).eq('id', currentAssegnoId);
+
+  // Registra movimento banca in uscita
+  await db.from('movimenti_banca').insert({
+    business_id: currentBusiness.id,
+    banca_id: bancaId,
+    data: dataAddebito,
+    segno: 'dare',
+    tipo: 'assegno',
+    descrizione: `Assegno ${currentAssegnoData.numero ? 'N° ' + currentAssegnoData.numero + ' ' : ''}— ${currentAssegnoData.beneficiario || 'N/D'}`,
+    importo: currentAssegnoData.importo
+  });
+
+  // Se era collegato a una fattura fornitore → aggiorna stato fattura
+  if (currentAssegnoData.fornitore_id) {
+    // Controlla fatture aperte del fornitore
+    const { data: fatture } = await db.from('fatture_fornitori')
+      .select('*')
+      .eq('business_id', currentBusiness.id)
+      .eq('fornitore_id', currentAssegnoData.fornitore_id)
+      .in('stato', ['aperta', 'pagata_parziale'])
+      .order('data_scadenza');
+
+    if (fatture?.length) {
+      // Segna la prima fattura come pagata se importo corrisponde
+      const fattura = fatture[0];
+      if (Math.abs(Number(fattura.importo_totale) - Number(currentAssegnoData.importo)) < 0.01) {
+        await db.from('fatture_fornitori').update({ stato: 'pagata' }).eq('id', fattura.id);
+      }
+    }
+  }
+
+  closeModalAssegno();
+  showToast('Addebito banca registrato ✓', 'success');
+  loadAssegniV2();
+  loadOverview();
+}
+
+// ── ESTRATTO CONTO V2 — con esposizione finanziaria ──────────────
+async function loadEstratto() {
+  const fornitoreId = document.getElementById('ec-fornitore').value;
+  if (!fornitoreId || !currentBusiness) {
+    document.getElementById('estratto-list').innerHTML = '<div class="empty-state">Seleziona un fornitore</div>';
+    return;
+  }
+  const from = document.getElementById('ec-from').value;
+  const to = document.getElementById('ec-to').value;
+
+  const [{ data: fatture }, { data: assegni }] = await Promise.all([
+    db.from('fatture_fornitori').select('*')
+      .eq('business_id', currentBusiness.id)
+      .eq('fornitore_id', fornitoreId)
+      .gte('data_fattura', from).lte('data_fattura', to)
+      .order('data_fattura'),
+    db.from('assegni').select('*')
+      .eq('business_id', currentBusiness.id)
+      .eq('fornitore_id', fornitoreId)
+      .gte('data_emissione', from).lte('data_emissione', to)
+      .order('data_emissione')
+  ]);
+
+  const totFatturato = (fatture||[]).reduce((s,f) => s + Number(f.importo_totale), 0);
+  const totAddebitato = (assegni||[]).filter(a => a.stato === 'addebitato').reduce((s,a) => s + Number(a.importo), 0);
+  const totEmesso = (assegni||[]).filter(a => a.stato !== 'addebitato').reduce((s,a) => s + Number(a.importo), 0);
+  const saldoAperto = totFatturato - totAddebitato - totEmesso;
+
+  document.getElementById('ec-fatturato').textContent = formatEur(totFatturato);
+  document.getElementById('ec-pagato').textContent = formatEur(totAddebitato);
+  document.getElementById('ec-saldo').textContent = formatEur(saldoAperto);
+  document.getElementById('ec-assegni').textContent = formatEur(totEmesso);
+
+  // Merge movimenti ordinati per data
+  const movimenti = [
+    ...(fatture||[]).map(f => ({
+      data: f.data_fattura,
+      tipo: 'fattura',
+      icon: '🧾',
+      desc: `Fattura ${f.numero || ''}`,
+      meta: `Scadenza: ${f.data_scadenza ? formatDate(f.data_scadenza) : '—'} · ${({aperta:'Aperta',pagata:'Pagata',pagata_parziale:'Parz. pagata'})[f.stato]||f.stato}`,
+      importo: Number(f.importo_totale),
+      segno: 'dare'
+    })),
+    ...(assegni||[]).map(a => {
+      const stato = a.stato || (a.incassato ? 'addebitato' : 'emesso');
+      const isAddebitato = stato === 'addebitato';
+      return {
+        data: a.data_emissione,
+        dataScadenza: a.data_scadenza,
+        tipo: 'assegno',
+        icon: '📝',
+        desc: `Assegno ${a.numero ? 'N° ' + a.numero : ''} ${a.data_emissione !== a.data_scadenza ? '(postdatato)' : ''}`,
+        meta: `Emesso: ${formatDate(a.data_emissione)} · Addebito banca: ${formatDate(a.data_scadenza)} · ${isAddebitato ? '✓ Addebitato' : '⏳ In attesa addebito'}`,
+        importo: Number(a.importo),
+        segno: isAddebitato ? 'avere' : 'avere_pending',
+        addebitato: isAddebitato
+      };
+    })
+  ].sort((a, b) => new Date(a.data) - new Date(b.data));
+
+  // Calcola saldo progressivo
+  let saldoProg = 0;
+  const el = document.getElementById('estratto-list');
+  if (!movimenti.length) { el.innerHTML = '<div class="empty-state">Nessun movimento nel periodo</div>'; return; }
+
+  el.innerHTML = movimenti.map(m => {
+    if (m.segno === 'dare') saldoProg += m.importo;
+    else if (m.segno === 'avere') saldoProg -= m.importo;
+    else if (m.segno === 'avere_pending') saldoProg -= m.importo; // già scalato dall'esposizione
+
+    const valColor = m.segno === 'dare' ? 'dare' : m.addebitato ? 'avere' : 'avere_pending';
+
+    return `<div class="ec-item">
+      <div class="ec-tipo">${m.icon}</div>
+      <div class="ec-info">
+        <div class="ec-desc">${m.desc}</div>
+        <div class="ec-meta">${m.meta}</div>
+      </div>
+      <div class="ec-val ${valColor === 'dare' ? 'dare' : 'avere'}" style="${!m.addebitato && m.tipo==='assegno' ? 'opacity:0.6' : ''}">
+        ${m.segno === 'dare' ? '+' : '-'}${formatEur(m.importo)}
+      </div>
+      <div class="ec-val" style="min-width:100px;text-align:right;color:${saldoProg > 0 ? 'var(--red-400)' : 'var(--green-400)'}">
+        ${formatEur(saldoProg)}
+      </div>
+    </div>`;
+  }).join('');
 }
