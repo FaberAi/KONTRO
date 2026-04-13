@@ -1720,10 +1720,38 @@ async function loadNotaGiorno2() {
   });
 
   calcPN();
+
+  // Mostra bottone elimina solo a owner/admin quando la nota esiste
+  const btnElimina = document.getElementById('btn-elimina-nota');
+  if (btnElimina) {
+    const canDelete = ['owner','admin'].includes(currentRole);
+    btnElimina.style.display = (canDelete && nota) ? 'inline-flex' : 'none';
+    btnElimina.dataset.noteId = nota?.id || '';
+  }
 }
 
 // Override loadNotaGiorno
 function loadNotaGiorno() { loadNotaGiorno2(); }
+
+async function eliminaNotaGiorno() {
+  if (!['owner','admin'].includes(currentRole)) {
+    showToast('Non autorizzato', 'error'); return;
+  }
+  const btn = document.getElementById('btn-elimina-nota');
+  const noteId = btn?.dataset.noteId;
+  if (!noteId) { showToast('Nessuna nota da eliminare', 'error'); return; }
+
+  const data = document.getElementById('pn-data')?.value;
+  if (!confirm(`Eliminare definitivamente la prima nota del ${data}?\nL'operazione è irreversibile.`)) return;
+
+  const { error } = await db.from('daily_notes').delete().eq('id', noteId);
+  if (error) { showToast('Errore: ' + error.message, 'error'); return; }
+
+  showToast('Prima nota eliminata', 'success');
+  btn.style.display = 'none';
+  btn.dataset.noteId = '';
+  resetPN();
+}
 
 
 // ============================================
