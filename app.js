@@ -2402,12 +2402,27 @@ async function loadFornitoriList() {
 }
 
 async function deleteFornitore(id) {
-  
-  await db.from('fornitori').update({ attivo: false }).eq('id', id);
+  // Controlla se ci sono fatture registrate per questo fornitore
+  const { count } = await db.from('fatture')
+    .select('id', { count: 'exact', head: true })
+    .eq('fornitore_id', id);
+
+  if (count > 0) {
+    // Ha fatture → solo disattiva (soft delete)
+    if (!confirm(`Questo fornitore ha ${count} fattura/e registrata/e.\nVerrà disattivato ma non eliminato definitivamente.\nContinuare?`)) return;
+    await db.from('fornitori').update({ attivo: false }).eq('id', id);
+    showToast('Fornitore disattivato', 'success');
+  } else {
+    // Nessuna fattura → elimina definitivamente
+    if (!confirm('Eliminare definitivamente questo fornitore?\nL\'operazione è irreversibile.')) return;
+    const { error } = await db.from('fornitori').delete().eq('id', id);
+    if (error) { showToast('Errore: ' + error.message, 'error'); return; }
+    showToast('Fornitore eliminato', 'success');
+  }
+
   await loadFornitoriCache();
   populateFornitoriSelects();
   loadFornitoriList();
-  showToast('Fornitore eliminato', 'success');
 }
 
 // ── FATTURE ───────────────────────────────────────────────────────
