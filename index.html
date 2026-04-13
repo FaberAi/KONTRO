@@ -1239,6 +1239,7 @@
                 <div class="field"><label>Sede</label><select id="nd-sede"><option value="">Sede principale</option></select></div>
                 <div class="field full"><label>Note</label><input type="text" id="nd-note" placeholder="Note..." /></div>
                 <div class="field"><label>Telefono</label><input type="text" id="nd-telefono" placeholder="Es. +39 333 1234567" /></div>
+              <div class="field"><label>Colore badge</label><input type="color" id="nd-colore" value="#3b82f6" style="height:42px;padding:4px;cursor:pointer" /></div>
               </div>
               <div class="form-actions">
                 <button class="btn-secondary" onclick="hideAddDipendente()">Annulla</button>
@@ -1275,53 +1276,23 @@
           <div class="section-card" style="margin-bottom:16px">
             <div class="section-header">
               <h2>Piano turni settimanale</h2>
-              <div style="display:flex;gap:8px">
-                <select id="turni-sede-filter" class="filter-input" onchange="loadTurni()">
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <select id="turni-sede-filter" class="filter-input" onchange="loadPlanningSettimanale()">
                   <option value="">Tutte le sedi</option>
                 </select>
-                <button class="btn-primary sm" onclick="exportTurniPDF()">↓ PDF</button>
+                <button class="btn-secondary sm" onclick="exportTurniPDF()">↓ PDF</button>
+                <button class="btn-secondary sm" onclick="condividiPlanningWhatsApp()">📤 WhatsApp</button>
               </div>
+            </div>
+            <!-- Navigazione settimana -->
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+              <button class="btn-secondary sm" onclick="navSettimana(-1)">← Prec.</button>
+              <input type="date" id="planning-data-nav" class="filter-input" onchange="loadPlanningSettimanale()" style="flex:1;max-width:180px" />
+              <button class="btn-secondary sm" onclick="navSettimanaOggi()">Oggi</button>
+              <button class="btn-secondary sm" onclick="navSettimana(1)">Succ. →</button>
             </div>
             <div id="turni-grid" class="turni-grid-wrap">
               <div class="empty-state">Caricamento...</div>
-            </div>
-          </div>
-
-          <!-- Form modifica turno -->
-          <div id="modal-turno" class="modal-overlay hidden">
-            <div class="modal-card">
-              <div class="modal-header">
-                <h3 id="modal-turno-title">Imposta turno</h3>
-                <button class="modal-close" onclick="closeModalTurno()">✕</button>
-              </div>
-              <div class="modal-body">
-                <div id="modal-turno-info" class="modal-info-box" style="margin-bottom:16px"></div>
-                <div class="form-grid">
-                  <div class="field">
-                    <label>Tipo</label>
-                    <select id="turno-tipo" onchange="toggleTurnoOrario()">
-                      <option value="lavoro">Lavoro</option>
-                      <option value="riposo">Giorno di riposo</option>
-                    </select>
-                  </div>
-                  <div class="field" id="turno-orario-wrap">
-                    <label>Ora inizio</label>
-                    <input type="time" id="turno-inizio" value="08:00" />
-                  </div>
-                  <div class="field" id="turno-fine-wrap">
-                    <label>Ora fine</label>
-                    <input type="time" id="turno-fine" value="16:00" />
-                  </div>
-                  <div class="field full">
-                    <label>Note</label>
-                    <input type="text" id="turno-note" placeholder="Es. Solo mattina, Apertura..." />
-                  </div>
-                </div>
-              </div>
-              <div class="modal-footer">
-                <button class="btn-secondary" onclick="closeModalTurno()">Annulla</button>
-                <button class="btn-primary" onclick="saveTurno()">Salva turno →</button>
-              </div>
             </div>
           </div>
         </div>
