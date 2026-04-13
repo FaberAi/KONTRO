@@ -4404,7 +4404,6 @@ async function deleteDipendente(id) {
   const totale = (cPresenze||0) + (cAcconti||0) + (cTurni||0);
 
   if (totale > 0) {
-    // Ha dati storici → solo disattiva
     const dettaglio = [
       cPresenze > 0 ? `${cPresenze} presenze` : '',
       cAcconti  > 0 ? `${cAcconti} acconti` : '',
@@ -4412,13 +4411,13 @@ async function deleteDipendente(id) {
     ].filter(Boolean).join(', ');
 
     if (!confirm(`Questo dipendente ha dati storici (${dettaglio}).\nVerrà disattivato ma non eliminato per conservare lo storico.\nContinuare?`)) return;
-    await db.from('dipendenti').update({ attivo: false }).eq('id', id);
+    const { error } = await db.from('dipendenti').update({ attivo: false }).eq('id', id);
+    if (error) { showToast('Errore: ' + error.message, 'error'); return; }
     showToast('Dipendente disattivato', 'success');
   } else {
-    // Nessun dato → elimina definitivamente
     if (!confirm('Eliminare definitivamente questo dipendente?\nL\'operazione è irreversibile.')) return;
     const { error } = await db.from('dipendenti').delete().eq('id', id);
-    if (error) { showToast('Errore: ' + error.message, 'error'); return; }
+    if (error) { showToast('Errore eliminazione: ' + error.message, 'error'); return; }
     showToast('Dipendente eliminato', 'success');
   }
 
