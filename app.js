@@ -1489,90 +1489,76 @@ function getV(id) { return parseFloat(document.getElementById(id)?.value) || 0; 
 
 function calcPN2() {
   const fc = getV('pn-fc');
-  // Tutte le voci entrata (incluse grattavinci, sisal, conto-bet)
   const vociFisse = ['incasso','money','grattavinci','sisal','conto-bet','fatture','giornali'];
   const uscVoci = ['pos','carte','bonifici'];
 
-  // Totali per voce — aggiorna la colonna TOT di ogni riga
-  vociFisse.forEach(k => {
-    const tot = getV(k+'-m') + getV(k+'-p') + getV(k+'-s');
-    const el = document.getElementById('tot-'+k);
-    if (el) el.textContent = fmtPN(tot);
-  });
-  uscVoci.forEach(k => {
-    const tot = getV(k+'-m') + getV(k+'-p') + getV(k+'-s');
-    const el = document.getElementById('tot-'+k);
-    if (el) el.textContent = fmtPN(tot);
-  });
-
-  // Totali fornitori per turno + aggiorna tot per riga
+  // ── Totali fornitori per turno ──
   let fM=0, fP=0, fS=0;
   for (let i = 0; i < pnFornitoriCount; i++) {
-    const m = getV('fm-'+i), p = getV('fp-'+i), s = getV('fs-'+i);
-    fM += m; fP += p; fS += s;
-    const totEl = document.getElementById('ftot-'+i);
-    if (totEl) totEl.textContent = fmtPN(m+p+s);
+    fM += getV('fm-'+i); fP += getV('fp-'+i); fS += getV('fs-'+i);
   }
 
-  // Totali prelievi per turno + aggiorna tot per riga
+  // ── Totali prelievi per turno ──
   let pM=0, pP=0, pS=0;
   for (let i = 0; i < pnPrelieviCount; i++) {
-    const m = getV('pm-'+i), p = getV('pp-'+i), s = getV('ps-'+i);
-    pM += m; pP += p; pS += s;
-    const totEl = document.getElementById('ptot-'+i);
-    if (totEl) totEl.textContent = fmtPN(m+p+s);
+    pM += getV('pm-'+i); pP += getV('pp-'+i); pS += getV('ps-'+i);
   }
 
-  // Fondo chiusura
+  // ── Fondo chiusura ──
   const fcUscM = getV('fc-usc-m'), fcUscP = getV('fc-usc-p'), fcUscS = getV('fc-usc-s');
-  const fcUscEl = document.getElementById('tot-fc-usc');
-  if (fcUscEl) fcUscEl.textContent = fmtPN(fcUscM+fcUscP+fcUscS);
 
-  // Totali entrate cumulativi per chiusura parziale (come Love Me)
-  // Mattina: fc + valori M
-  // Pomeriggio: fc + valori M + valori P (quanto c'è in cassa alla chiusura PM)
-  // Sera: fc + valori M + P + S (chiusura giornata)
-  const rawM = vociFisse.reduce((s,k) => s + getV(k+'-m'), 0);
-  const rawP = vociFisse.reduce((s,k) => s + getV(k+'-p'), 0);
-  const rawS = vociFisse.reduce((s,k) => s + getV(k+'-s'), 0);
-  const entM   = fc + rawM;
-  const entP   = fc + rawM + rawP;
-  const entS   = fc + rawM + rawP + rawS;
-  const entTot = entS; // la sera è la chiusura finale
+  // ── ENTRATE per turno (come Love Me: emSum = fc + voci M) ──
+  // Ogni turno ha le sue entrate INDIPENDENTI — il fc va in ogni turno
+  // perché ogni chiusura parziale deve includere il fondo iniziale
+  const emM = fc + vociFisse.reduce((s,k) => s + getV(k+'-m'), 0);
+  const emP = fc + vociFisse.reduce((s,k) => s + getV(k+'-p'), 0);
+  const emS = fc + vociFisse.reduce((s,k) => s + getV(k+'-s'), 0);
 
+  // ── USCITE per turno (come Love Me: umSum = uscite M) ──
+  const umM = uscVoci.reduce((s,k) => s + getV(k+'-m'), 0) + fM + pM + fcUscM;
+  const umP = uscVoci.reduce((s,k) => s + getV(k+'-p'), 0) + fP + pP + fcUscP;
+  const umS = uscVoci.reduce((s,k) => s + getV(k+'-s'), 0) + fS + pS + fcUscS;
+
+  // ── DIFFERENZE per turno (come Love Me: dm = emSum - umSum) ──
+  const dm = emM - umM;
+  const dp = emP - umP;
+  const ds = emS - umS;
+
+  // ── TOTALI GIORNALIERI (come Love Me: etSum = fc + effFixed = totale finale) ──
+  // Il totale giornaliero usa la logica Love Me: fc una sola volta + tutti i valori
+  const etTot = fc + vociFisse.reduce((s,k) => s + getV(k+'-m') + getV(k+'-p') + getV(k+'-s'), 0);
+  const utTot = umM + umP + umS;
+  const dt = etTot - utTot; // differenza totale (= "dt" di Love Me)
+
+  // ── INCASSO (come Love Me: ig = incasso_eff + |dt|) ──
+  // Per turno: incasso_turno + |diff_turno|
+  const incM = getV('incasso-m') + Math.abs(dm);
+  const incP = getV('incasso-p') + Math.abs(dp);
+  const incS = getV('incasso-s') + Math.abs(ds);
+  // Giornaliero = incasso totale cassa + |diff totale| (identico a Love Me)
+  const ig = getV('incasso-m') + getV('incasso-p') + getV('incasso-s') + Math.abs(dt);
+
+  // ── AGGIORNA UI ──
   const setT = (id, v) => { const el = document.getElementById(id); if(el) el.textContent = fmtPN(v); };
-  setT('tot-ent-m', entM); setT('tot-ent-p', entP); setT('tot-ent-s', entS);
 
-  // Totali uscite cumulativi per chiusura parziale
-  const uscRawM = uscVoci.reduce((s,k)=>s+getV(k+'-m'),0) + fM + pM + fcUscM;
-  const uscRawP = uscVoci.reduce((s,k)=>s+getV(k+'-p'),0) + fP + pP + fcUscP;
-  const uscRawS = uscVoci.reduce((s,k)=>s+getV(k+'-s'),0) + fS + pS + fcUscS;
-  const uscM   = uscRawM;
-  const uscP   = uscRawM + uscRawP;
-  const uscS   = uscRawM + uscRawP + uscRawS;
-  const uscTot = uscS;
+  setT('tot-ent-m', emM); setT('tot-ent-p', emP); setT('tot-ent-s', emS);
+  setT('tot-usc-m', umM); setT('tot-usc-p', umP); setT('tot-usc-s', umS);
 
-  setT('tot-usc-m', uscM); setT('tot-usc-p', uscP); setT('tot-usc-s', uscS);
-
-  // Differenze
-  const dM = entM-uscM, dP = entP-uscP, dS = entS-uscS, dTot = dS;
-  [['diff-m',dM],['diff-p',dP],['diff-s',dS]].forEach(([id,d]) => {
+  [['diff-m',dm],['diff-p',dp],['diff-s',ds]].forEach(([id,d]) => {
     const el = document.getElementById(id);
     if (el) {
-      el.textContent = (d>=0?'+ ':'- ') + fmtPN(d);
+      el.textContent = (d>=0?'+ ':'- ') + fmtPN(Math.abs(d));
       el.className = 'td-tot' + (d>0?' alarm':'');
     }
   });
 
-  // Incasso per turno
-  const incM = getV('incasso-m') + Math.abs(dM);
-  const incP = getV('incasso-p') + Math.abs(dP);
-  const incS = getV('incasso-s') + Math.abs(dS);
-  setT('r-inc-m', incM); setT('r-inc-p', incP);
-  setT('r-inc-s', incS); setT('r-inc-tot', incM+incP+incS);
+  setT('r-inc-m', incM);
+  setT('r-inc-p', incP);
+  setT('r-inc-s', incS);
+  setT('r-inc-tot', ig);
 
   const allarme = document.getElementById('pn-allarme');
-  if (allarme) allarme.classList.toggle('hidden', dTot <= 0);
+  if (allarme) allarme.classList.toggle('hidden', dt <= 0);
 }
 
 // Override calcPN con la v2
