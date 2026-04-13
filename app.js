@@ -4133,7 +4133,7 @@ async function buildConciliazioneFiscale(periodo) {
 
   const [{ data: note }, { data: vers }] = await Promise.all([
     db.from('daily_notes')
-      .select('incasso_eff,money_eff,grattavinci_eff,sisal_eff,conto_bet_eff,incasso_m,incasso_p,incasso_s,money_m,money_p,money_s,grattavinci_m,grattavinci_p,grattavinci_s,sisal_m,sisal_p,sisal_s,conto_bet_m,conto_bet_p,conto_bet_s')
+      .select('incasso_eff,money_eff,grattavinci_eff,sisal_eff,conto_bet_eff,incasso_m,incasso_p,incasso_s,money_m,money_p,money_s,grattavinci_m,grattavinci_p,grattavinci_s,sisal_m,sisal_p,sisal_s,conto_bet_m,conto_bet_p,conto_bet_s,carte_m,carte_p,carte_s,bonifici_m,bonifici_p,bonifici_s')
       .eq('business_id', currentBusiness.id).gte('data', dataFrom),
     db.from('versamenti').select('importo_contante,importo_pos')
       .eq('business_id', currentBusiness.id).gte('data_versamento', dataFrom)
@@ -4154,16 +4154,18 @@ async function buildConciliazioneFiscale(periodo) {
   const totGrattavinci = (note||[]).reduce((a,n) => a + effNote(n,'grattavinci'), 0);
   const totSisal       = (note||[]).reduce((a,n) => a + effNote(n,'sisal'), 0);
   const totContoBet    = (note||[]).reduce((a,n) => a + effNote(n,'conto_bet'), 0);
+  const totCarte       = (note||[]).reduce((a,n) => a + effNote(n,'carte'), 0);
+  const totBonifici    = (note||[]).reduce((a,n) => a + effNote(n,'bonifici'), 0);
 
   // Totale fiscale = solo Incasso Cassa
   const totFiscale = totIncasso;
   // Totale cash gestito = tutte le voci
   const totCash = totIncasso + totMoney + totGrattavinci + totSisal + totContoBet;
 
-  // Versamenti in banca
+  // Versamenti in banca = contante+POS versati + carte + bonifici (già in banca)
   const totContante = (vers||[]).reduce((a,v) => a + Number(v.importo_contante||0), 0);
   const totPOS      = (vers||[]).reduce((a,v) => a + Number(v.importo_pos||0), 0);
-  const totVersato  = totContante + totPOS;
+  const totVersato  = totContante + totPOS + totCarte + totBonifici;
 
   // Delta fiscale vs versato
   const delta = totFiscale - totVersato;
@@ -4229,6 +4231,14 @@ async function buildConciliazioneFiscale(periodo) {
           <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">
             <span style="font-size:13px">POS versato</span>
             <span>${fmtE(totPOS)}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">
+            <span style="font-size:13px">Carte di credito</span>
+            <span>${fmtE(totCarte)}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">
+            <span style="font-size:13px">Bonifici bancari</span>
+            <span>${fmtE(totBonifici)}</span>
           </div>
           <div style="display:flex;justify-content:space-between;padding:8px 0 0">
             <strong>Totale versato</strong>
