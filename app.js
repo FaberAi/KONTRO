@@ -1,899 +1,5336 @@
-// ── CONFIG ───────────────────────────────────────────────────────────────────
-const SUPABASE_URL = 'https://eqkvagnfmsxvbwlvhvbk.supabase.co';
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVxa3ZhZ25mbXN4dmJ3bHZodmJrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxNDAxMTksImV4cCI6MjA5MDcxNjExOX0.AFkpaBPeWnqaEcq5Hxhq9dh7PqgPdm1IABZLpm6n-Wo';
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+// ============================================
+// KONTRO — Logica Applicazione
+// ============================================
 
-// ── STATE ─────────────────────────────────────────────────────────────────────
-let currentUser = null, currentProfilo = null, currentLocale = 'loveme_bar';
-let fornitoriCache = [], bancheCache = [];
-let righeFornitoriM = [], righeFornitoriT = [], righeDescFornitori = [];
-let righePreleviM   = [], righePreleviT   = [], righeDescPrelievi  = [];
+let currentUser = null;
+let currentBusiness = null;
+let currentLocations = [];
+let selectedLocation = null;
+let selectedType = 'entrata';
 
-const LOCALE_LABEL = { loveme_bar: 'Love Me Bar', loveme_corso: 'Café del Corso' };
+// ============================================
+// INIT
+// ============================================
+document.addEventListener('DOMContentLoaded', async () => {
+  setTodayDate();
+  populateReportSelects();
 
-// ── INIT ──────────────────────────────────────────────────────────────────────
-window.addEventListener('load', async () => {
-  const { data: { session } } = await sb.auth.getSession();
-  if (session) { currentUser = session.user; await avviaApp(); }
-  else showScreen('login');
+  const { data: { session } } = await db.auth.getSession();
+  await checkInviteToken();
+  if (session) {
+    currentUser = session.user;
+    await initApp();
+  } else {
+    showScreen('login');
+  }
+
+  db.auth.onAuthStateChange(async (event, session) => {
+    if (event === 'SIGNED_IN' && session) {
+      currentUser = session.user;
+      await initApp();
+    } else if (event === 'SIGNED_OUT') {
+      showScreen('login');
+    }
+  });
 });
+
+function setTodayDate() {
+  const today = new Date().toISOString().split('T')[0];
+  const dateEl = document.getElementById('mov-date');
+  if (dateEl) dateEl.value = today;
+
+  const fromEl = document.getElementById('filter-from');
+  const toEl = document.getElementById('filter-to');
+  if (fromEl) fromEl.value = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
+  if (toEl) toEl.value = today;
+
+  const pageDate = document.getElementById('page-date');
+  if (pageDate) {
+    pageDate.textContent = new Date().toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  }
+}
+
+async function initApp() {
+  showScreen('app');
+  await loadBusiness();
+  await loadLocations();
+  await loadCategories();
+  // Carica cache fornitori e banche all'avvio
+  if (currentBusiness) {
+    const [{ data: forn }, { data: banche }] = await Promise.all([
+      db.from('fornitori').select('id,ragione_sociale')
+        .eq('business_id', currentBusiness.id).eq('attivo', true).order('ragione_sociale'),
+      db.from('banche').select('*')
+        .eq('business_id', currentBusiness.id).eq('attivo', true).order('nome')
+    ]);
+    fornitoriCache = forn || [];
+    bancheCache = banche || [];
+  }
+  await loadDashboard();
+  if (currentRole === 'cashier') await loadCurrentUserPermissions();
+  updateUserUI();
+}
+
+// ============================================
+// AUTH
+// ============================================
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach((b, i) => {
+    b.classList.toggle('active', (i === 0 && tab === 'login') || (i === 1 && tab === 'register'));
+  });
+  document.getElementById('tab-login').classList.toggle('active', tab === 'login');
+  document.getElementById('tab-register').classList.toggle('active', tab === 'register');
+}
 
 async function doLogin() {
   const email = document.getElementById('login-email').value.trim();
-  const pwd   = document.getElementById('login-password').value;
-  const errEl = document.getElementById('login-error');
-  errEl.style.display = 'none';
-  if (!email || !pwd) { errEl.textContent = 'Inserisci email e password'; errEl.style.display = 'block'; return; }
-  const btn = document.querySelector('#screen-login .btn-primary');
-  btn.textContent = 'Accesso in corso...'; btn.disabled = true;
-  try {
-    const { data, error } = await sb.auth.signInWithPassword({ email, password: pwd });
-    if (error) throw error;
-    currentUser = data.user;
-    await avviaApp();
-  } catch(e) {
-    errEl.textContent = 'Email o password non corretti'; errEl.style.display = 'block';
-    btn.textContent = 'Accedi'; btn.disabled = false;
+  const password = document.getElementById('login-password').value;
+  const msg = document.getElementById('auth-message');
+
+  if (!email || !password) { showAuthMsg('Inserisci email e password', 'error'); return; }
+
+  showAuthMsg('Accesso in corso...', '');
+  const { error } = await db.auth.signInWithPassword({ email, password });
+  if (error) { showAuthMsg(error.message, 'error'); return; }
+  showAuthMsg('Accesso effettuato!', 'success');
+}
+
+async function doRegister() {
+  const name = document.getElementById('reg-name').value.trim();
+  const email = document.getElementById('reg-email').value.trim();
+  const password = document.getElementById('reg-password').value;
+  const businessName = document.getElementById('reg-business').value.trim();
+
+  if (!name || !email || !password || !businessName) {
+    showAuthMsg('Compila tutti i campi', 'error'); return;
   }
+
+  showAuthMsg('Creazione account...', '');
+
+  const { data, error } = await db.auth.signUp({
+    email, password,
+    options: { data: { full_name: name } }
+  });
+
+  if (error) { showAuthMsg(error.message, 'error'); return; }
+
+  if (data.user) {
+    // Crea azienda
+    const { data: biz, error: bizErr } = await db
+      .from('businesses')
+      .insert({ name: businessName, email })
+      .select().single();
+
+    if (!bizErr && biz) {
+      await db.from('user_roles').insert({
+        user_id: data.user.id,
+        business_id: biz.id,
+        role: 'owner'
+      });
+      await db.rpc('create_default_categories', { p_business_id: biz.id });
+    }
+  }
+
+  showAuthMsg('Account creato! Controlla la tua email per confermare.', 'success');
 }
 
 async function doLogout() {
-  await sb.auth.signOut();
-  currentUser = null; currentProfilo = null;
-  showScreen('login');
-  const btn = document.querySelector('#screen-login .btn-primary');
-  if (btn) { btn.textContent = 'Accedi'; btn.disabled = false; }
+  await db.auth.signOut();
+  currentUser = null;
+  currentBusiness = null;
+  currentLocations = [];
 }
 
-async function avviaApp() {
-  await loadProfilo();
-  await Promise.all([caricaFornitoriCache(), caricaBancheCache()]);
-  showApp();
+function showAuthMsg(msg, type) {
+  const el = document.getElementById('auth-message');
+  el.textContent = msg;
+  el.className = 'auth-message ' + type;
 }
 
-async function loadProfilo() {
-  const { data } = await sb.from('pn_utenti').select('*').eq('email', currentUser.email).single();
-  currentProfilo = data;
-  if (data?.locale) currentLocale = data.locale;
+// ============================================
+// BUSINESS & LOCATIONS
+// ============================================
+let currentRole = null;
+
+async function loadBusiness() {
+  const { data } = await db
+    .from('user_roles')
+    .select('business_id, role, businesses(*)')
+    .eq('user_id', currentUser.id)
+    .single();
+
+  if (data) {
+    currentBusiness = data.businesses;
+    currentRole = data.role; // 'owner', 'admin', 'cashier'
+  }
 }
 
-// ── CACHE ─────────────────────────────────────────────────────────────────────
-async function caricaFornitoriCache() {
-  const { data } = await sb.from('pn_fornitori').select('id,ragione_sociale').eq('attivo', true).order('ragione_sociale');
-  fornitoriCache = data || [];
+async function loadLocations() {
+  if (!currentBusiness) return;
+
+  const { data } = await db
+    .from('locations')
+    .select('*')
+    .eq('business_id', currentBusiness.id)
+    .eq('active', true);
+
+  currentLocations = data || [];
+  populateLocationSelects();
+  renderLocationsList();
 }
-async function caricaBancheCache() {
-  const { data } = await sb.from('pn_banche').select('id,nome,istituto,tipo,saldo_iniziale').eq('attivo', true).order('nome');
-  bancheCache = data || [];
-}
-function bancaOptsHtml() {
-  return '<option value="">— banca —</option>' + bancheCache.map(b => `<option value="${b.id}">${b.nome}</option>`).join('');
-}
-function fornitorOptsHtml() {
-  return '<option value="">— descrizione libera —</option>' + fornitoriCache.map(f => `<option value="${f.id}">${f.ragione_sociale}</option>`).join('');
-}
-function refreshFornitoriInTabella() {
-  document.querySelectorAll('.sel-fornitore').forEach(sel => {
-    const val = sel.value;
-    sel.innerHTML = fornitorOptsHtml();
-    if (val) sel.value = val;
+
+function populateLocationSelects() {
+  const selects = ['location-select', 'mov-location'];
+  selects.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const firstOption = id === 'location-select' ? '<option value="">Tutte le sedi</option>' : '<option value="">Sede principale</option>';
+    el.innerHTML = firstOption + currentLocations.map(l =>
+      `<option value="${l.id}">${l.name}</option>`
+    ).join('');
   });
 }
 
-// ── SCREEN / PAGE ─────────────────────────────────────────────────────────────
-function showScreen(id) {
+function onLocationChange() {
+  selectedLocation = document.getElementById('location-select').value || null;
+  loadDashboard();
+}
+
+// ============================================
+// CATEGORIES
+// ============================================
+async function loadCategories() {
+  if (!currentBusiness) return;
+
+  const { data } = await db
+    .from('categories')
+    .select('*')
+    .eq('business_id', currentBusiness.id)
+    .eq('active', true)
+    .order('name');
+
+  window.allCategories = data || [];
+  filterCategoriesByType(selectedType);
+}
+
+function filterCategoriesByType(type) {
+  const cats = (window.allCategories || []).filter(c => c.type === type);
+  const el = document.getElementById('mov-category');
+  if (!el) return;
+  el.innerHTML = '<option value="">Seleziona categoria</option>' +
+    cats.map(c => `<option value="${c.id}">${c.icon} ${c.name}</option>`).join('');
+}
+
+// ============================================
+// UI HELPERS
+// ============================================
+function showScreen(name) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  document.getElementById('screen-' + id).classList.add('active');
+  document.getElementById(`screen-${name}`).classList.add('active');
 }
 
-function showApp() {
-  showScreen('app');
-  const isAdmin = currentProfilo?.ruolo === 'admin';
-  const mostraLocaleSwitch = isAdmin || !currentProfilo?.locale;
-  document.getElementById('user-badge').textContent = currentProfilo?.nome || currentUser.email;
-  document.getElementById('bottom-nav').style.display = isAdmin ? 'flex' : 'none';
-  document.getElementById('locale-switch').style.display = mostraLocaleSwitch ? 'flex' : 'none';
-  if (mostraLocaleSwitch) {
-    document.getElementById('ls-bar').classList.toggle('active', currentLocale === 'loveme_bar');
-    document.getElementById('ls-corso').classList.toggle('active', currentLocale === 'loveme_corso');
+function showView(name) {
+  // Controllo accessi
+  const ownerOnly = ['impostazioni', 'team', 'hr'];
+  const adminOnly = ['storico', 'report', 'banca', 'fornitori'];
+  if (ownerOnly.includes(name) && currentRole !== 'owner') {
+    showToast('Accesso non autorizzato', 'error'); return;
   }
-  setTodayDate();
-  buildPrimaNota();
-  showPage('compila');
-  updateLocaleLabel();
-  loadNotaDelGiorno();
+  if (adminOnly.includes(name) && currentRole === 'cashier') {
+    showToast('Accesso non autorizzato', 'error'); return;
+  }
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById(`view-${name}`).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => {
+    n.classList.toggle('active', n.dataset.view === name);
+  });
+  const titles = { dashboard: 'Dashboard', primanota: 'Prima Nota', nuovo: 'Movimenti extra cassa', movimenti: 'Movimenti', report: 'Report', sedi: 'Sedi', team: 'Team' };
+  document.getElementById('page-title').textContent = titles[name] || name;
+
+  if (name === 'movimenti') loadMovimenti();
+  if (name === 'report') loadReport();
+  if (name === 'sedi') renderLocationsList();
+  if (name === 'team') loadTeam();
+  if (name === 'primanota') initPrimaNota();
+  if (name === 'storico') initStorico();
+  if (name === 'banca') initBanca();
+  if (name === 'fornitori') initFornitori();
+  if (name === 'impostazioni') initImpostazioni();
+  if (name === 'hr') initHR();
 }
 
-function showPage(page) {
-  const pagineSoloAdmin = ['storico','dashboard','admin','assegni','banca','fornitori','contabilita','dipendenti'];
-  if (pagineSoloAdmin.includes(page) && currentProfilo?.ruolo !== 'admin') page = 'compila';
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-  document.getElementById('page-' + page).classList.add('active');
-  const nb = document.getElementById('nav-' + page); if (nb) nb.classList.add('active');
-  if (page === 'storico') loadStorico();
-  if (page === 'dashboard') loadDashboard();
-  if (page === 'admin') loadUtenti();
-  if (page === 'contabilita') loadFornioriContabilita();
-  // ✅ FIX 1: carica la lista fornitori quando si apre la pagina anagrafica
-  if (page === 'fornitori') loadFornitori();
+function updateUserUI() {
+  const name = currentUser?.user_metadata?.full_name || currentUser?.email?.split('@')[0] || '?';
+  const initial = name[0].toUpperCase();
+  document.getElementById('user-avatar').textContent = initial;
+  document.getElementById('user-name-sidebar').textContent = name;
+  document.getElementById('business-name-sidebar').textContent = currentBusiness?.name || '—';
+
+  // Controllo accessi per ruolo
+  const isOwner = currentRole === 'owner';
+  const isAdmin = currentRole === 'admin' || isOwner;
+  const isCashier = currentRole === 'cashier';
+
+  // Per i cassieri usa i permessi personalizzati
+  const perms = window.userPerms || {};
+
+  document.querySelectorAll('.nav-item').forEach(btn => {
+    const view = btn.dataset.view;
+    if (!view) return;
+
+    let visible = true;
+
+    if (isOwner) {
+      visible = true; // owner vede tutto
+    } else if (isAdmin) {
+      visible = !['team','impostazioni'].includes(view);
+    } else if (isCashier) {
+      // Cassiere vede solo quello che gli è stato abilitato
+      const permMap = {
+        dashboard: true,
+        primanota: true,
+        sedi: true,
+        movimenti: perms.movimenti,
+        storico: perms.storico,
+        report: perms.report,
+        banca: perms.banca,
+        fornitori: perms.fornitori,
+        team: false,
+        impostazioni: false
+      };
+      visible = permMap[view] ?? false;
+    }
+
+    btn.style.display = visible ? 'flex' : 'none';
+  });
+
+  // Mostra badge ruolo nella sidebar
+  const roleLabels = { owner: 'Owner', admin: 'Admin', cashier: 'Cassiere' };
+  document.getElementById('business-name-sidebar').textContent =
+    (currentBusiness?.name || '—') + ' · ' + (roleLabels[currentRole] || '');
 }
 
-function switchLocale(loc) {
-  currentLocale = loc;
-  document.getElementById('ls-bar').classList.toggle('active', loc === 'loveme_bar');
-  document.getElementById('ls-corso').classList.toggle('active', loc === 'loveme_corso');
-  updateLocaleLabel(); buildPrimaNota(); loadNotaDelGiorno();
-}
-function updateLocaleLabel() {
-  document.getElementById('compila-locale-label').textContent = LOCALE_LABEL[currentLocale];
+function setType(type) {
+  selectedType = type;
+  document.getElementById('btn-entrata').classList.toggle('active', type === 'entrata');
+  document.getElementById('btn-uscita').classList.toggle('active', type === 'uscita');
+  filterCategoriesByType(type);
 }
 
-// ── PRIMA NOTA — STRUTTURA ────────────────────────────────────────────────────
-function buildPrimaNota() {
-  buildSezioneFornitori(5);
-  buildSezionePrelievi(3);
-  updateBancaSelects();
-  calc();
+function showToast(msg, type = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `toast ${type} show`;
+  setTimeout(() => t.classList.remove('show'), 3000);
 }
 
-// ── SEZIONE FORNITORI ─────────────────────────────────────────────────────────
-function buildSezioneFornitori(nRighe) {
-  const tbody = document.getElementById('tbody-fornitori');
-  if (!tbody) return;
-  tbody.innerHTML = '';
-  righeFornitoriM = []; righeFornitoriT = []; righeDescFornitori = [];
-  for (let i = 0; i < nRighe; i++) aggiungiRigaFornitoreDOM(tbody, i);
+function formatEur(n) {
+  return '€ ' + Number(n || 0).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function aggiungiRigaFornitorePulsante() {
-  const tbody = document.getElementById('tbody-fornitori');
-  const idx = righeFornitoriM.length;
-  aggiungiRigaFornitoreDOM(tbody, idx);
+function formatDate(d) {
+  return new Date(d).toLocaleDateString('it-IT');
 }
 
-function aggiungiRigaFornitoreDOM(tbody, idx) {
-  const tr = document.createElement('tr');
-  const im = mkNumInput(); im.oninput = calc;
-  const it = mkNumInput(); it.oninput = calc;
-  righeFornitoriM.push(im);
-  righeFornitoriT.push(it);
+const paymentLabels = {
+  contanti: '💵 Contanti', carta: '💳 Carta',
+  bonifico: '🏦 Bonifico', assegno: '📝 Assegno', altro: '📌 Altro'
+};
 
-  let descEl;
-  if (fornitoriCache.length > 0) {
-    descEl = document.createElement('select');
-    descEl.className = 'ni-select sel-fornitore';
-    descEl.innerHTML = fornitorOptsHtml();
+// ============================================
+// DASHBOARD
+// ============================================
+async function loadDashboard() {
+  if (!currentBusiness) return;
+  const today = new Date().toISOString().split('T')[0];
+  const firstDay = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
+
+  let query = db.from('cash_entries').select('*')
+    .eq('business_id', currentBusiness.id);
+
+  if (selectedLocation) query = query.eq('location_id', selectedLocation);
+
+  const { data: allData } = await query;
+  const all = allData || [];
+
+  const todayData = all.filter(e => e.entry_date === today);
+  const monthData = all.filter(e => e.entry_date >= firstDay);
+
+  const todayIn = todayData.filter(e => e.type === 'entrata').reduce((s, e) => s + Number(e.amount), 0);
+  const todayOut = todayData.filter(e => e.type === 'uscita').reduce((s, e) => s + Number(e.amount), 0);
+  const monthIn = monthData.filter(e => e.type === 'entrata').reduce((s, e) => s + Number(e.amount), 0);
+  const monthOut = monthData.filter(e => e.type === 'uscita').reduce((s, e) => s + Number(e.amount), 0);
+
+  document.getElementById('kpi-entrate').textContent = formatEur(todayIn);
+  document.getElementById('kpi-uscite').textContent = formatEur(todayOut);
+  document.getElementById('kpi-saldo').textContent = formatEur(todayIn - todayOut);
+  document.getElementById('kpi-mese').textContent = formatEur(monthIn - monthOut);
+  document.getElementById('kpi-entrate-count').textContent = todayData.filter(e => e.type === 'entrata').length + ' movimenti';
+  document.getElementById('kpi-uscite-count').textContent = todayData.filter(e => e.type === 'uscita').length + ' movimenti';
+
+  const recent = [...all].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 8);
+  renderEntries(recent, 'recent-entries');
+  loadCharts();
+  loadPrevisioni();
+}
+
+// ============================================
+// MOVIMENTI
+// ============================================
+async function loadMovimenti() {
+  if (!currentBusiness) return;
+
+  const from = document.getElementById('filter-from').value;
+  const to = document.getElementById('filter-to').value;
+  const type = document.getElementById('filter-type').value;
+  const payment = document.getElementById('filter-payment').value;
+
+  let query = db.from('cash_entries').select('*')
+    .eq('business_id', currentBusiness.id)
+    .order('entry_date', { ascending: false })
+    .order('created_at', { ascending: false });
+
+  if (from) query = query.gte('entry_date', from);
+  if (to) query = query.lte('entry_date', to);
+  if (type) query = query.eq('type', type);
+  if (payment) query = query.eq('payment_method', payment);
+  if (selectedLocation) query = query.eq('location_id', selectedLocation);
+
+  const { data } = await query;
+  const entries = data || [];
+
+  const totIn = entries.filter(e => e.type === 'entrata').reduce((s, e) => s + Number(e.amount), 0);
+  const totOut = entries.filter(e => e.type === 'uscita').reduce((s, e) => s + Number(e.amount), 0);
+
+  document.getElementById('ft-entrate').textContent = formatEur(totIn);
+  document.getElementById('ft-uscite').textContent = formatEur(totOut);
+  document.getElementById('ft-saldo').textContent = formatEur(totIn - totOut);
+
+  renderEntries(entries, 'all-entries', true);
+}
+
+function renderEntries(entries, containerId, showDate = false) {
+  const el = document.getElementById(containerId);
+  if (!entries.length) { el.innerHTML = '<div class="empty-state">Nessun movimento trovato</div>'; return; }
+
+  el.innerHTML = entries.map(e => {
+    const cat = (window.allCategories || []).find(c => c.id === e.category_id);
+    const catName = cat ? `${cat.icon} ${cat.name}` : '—';
+    const loc = currentLocations.find(l => l.id === e.location_id);
+    const meta = [
+      showDate ? formatDate(e.entry_date) : null,
+      catName,
+      paymentLabels[e.payment_method] || e.payment_method,
+      loc ? loc.name : null
+    ].filter(Boolean).join(' · ');
+
+    return `
+      <div class="entry-item">
+        <div class="entry-dot ${e.type}"></div>
+        <div class="entry-info">
+          <div class="entry-desc">${e.description || (e.type === 'entrata' ? 'Entrata' : 'Uscita')}</div>
+          <div class="entry-meta">${meta}</div>
+        </div>
+        <div class="entry-amount ${e.type}">${e.type === 'entrata' ? '+' : '-'}${formatEur(e.amount)}</div>
+        <div class="entry-actions">
+          <button class="entry-del" onclick="deleteEntry('${e.id}')" title="Elimina">✕</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+async function saveMovimento() {
+  if (!currentBusiness) return;
+
+  const amount = parseFloat(document.getElementById('mov-amount').value);
+  const date = document.getElementById('mov-date').value;
+  const category = document.getElementById('mov-category').value;
+  const payment = document.getElementById('mov-payment').value;
+  const location = document.getElementById('mov-location').value;
+  const description = document.getElementById('mov-description').value.trim();
+  const notes = document.getElementById('mov-notes').value.trim();
+
+  if (!amount || amount <= 0) { showMovMsg('Inserisci un importo valido', 'error'); return; }
+  if (!date) { showMovMsg('Seleziona una data', 'error'); return; }
+
+  const { error } = await db.from('cash_entries').insert({
+    business_id: currentBusiness.id,
+    location_id: location || null,
+    user_id: currentUser.id,
+    category_id: category || null,
+    type: selectedType,
+    amount,
+    description: description || null,
+    payment_method: payment,
+    entry_date: date,
+    notes: notes || null
+  });
+
+  if (error) { showMovMsg('Errore: ' + error.message, 'error'); return; }
+
+  showToast('Movimento salvato ✓', 'success');
+  document.getElementById('mov-amount').value = '';
+  document.getElementById('mov-description').value = '';
+  document.getElementById('mov-notes').value = '';
+
+  await loadDashboard();
+  showView('dashboard');
+}
+
+function showMovMsg(msg, type) {
+  const el = document.getElementById('mov-message');
+  el.textContent = msg;
+  el.className = 'auth-message ' + type;
+  setTimeout(() => el.textContent = '', 3000);
+}
+
+async function deleteEntry(id) {
+  
+  const { error } = await db.from('cash_entries').delete().eq('id', id);
+  if (error) { showToast('Errore eliminazione', 'error'); return; }
+  showToast('Movimento eliminato', 'success');
+  await loadDashboard();
+  await loadMovimenti();
+}
+
+// ============================================
+// EXPORT CSV
+// ============================================
+async function exportCSV() {
+  if (!currentBusiness) return;
+
+  const from = document.getElementById('filter-from').value;
+  const to = document.getElementById('filter-to').value;
+
+  let query = db.from('cash_entries').select('*')
+    .eq('business_id', currentBusiness.id)
+    .order('entry_date', { ascending: false });
+
+  if (from) query = query.gte('entry_date', from);
+  if (to) query = query.lte('entry_date', to);
+
+  const { data } = await query;
+  if (!data?.length) { showToast('Nessun dato da esportare', ''); return; }
+
+  const header = ['Data', 'Tipo', 'Importo', 'Categoria', 'Metodo', 'Descrizione', 'Note'];
+  const rows = data.map(e => {
+    const cat = (window.allCategories || []).find(c => c.id === e.category_id);
+    return [
+      e.entry_date, e.type, e.amount,
+      cat ? cat.name : '', e.payment_method || '',
+      e.description || '', e.notes || ''
+    ].map(v => `"${v}"`).join(',');
+  });
+
+  const csv = [header.join(','), ...rows].join('\n');
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `kontro_${from}_${to}.csv`;
+  a.click();
+  showToast('CSV scaricato ✓', 'success');
+}
+
+// ============================================
+// REPORT
+// ============================================
+function populateReportSelects() {
+  const months = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
+                  'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+  const monthEl = document.getElementById('report-month');
+  const yearEl = document.getElementById('report-year');
+  if (!monthEl) return;
+
+  months.forEach((m, i) => {
+    const o = document.createElement('option');
+    o.value = i + 1;
+    o.textContent = m;
+    if (i === new Date().getMonth()) o.selected = true;
+    monthEl.appendChild(o);
+  });
+
+  for (let y = new Date().getFullYear(); y >= 2023; y--) {
+    const o = document.createElement('option');
+    o.value = y; o.textContent = y;
+    if (y === new Date().getFullYear()) o.selected = true;
+    yearEl.appendChild(o);
+  }
+}
+
+async function loadReport() {
+  if (!currentBusiness) return;
+
+  const month = parseInt(document.getElementById('report-month').value);
+  const year = parseInt(document.getElementById('report-year').value);
+  const from = `${year}-${String(month).padStart(2,'0')}-01`;
+  const lastDay = new Date(year, month, 0).getDate();
+  const to = `${year}-${String(month).padStart(2,'0')}-${lastDay}`;
+
+  const { data } = await db.from('cash_entries').select('*')
+    .eq('business_id', currentBusiness.id)
+    .gte('entry_date', from).lte('entry_date', to);
+
+  const entries = data || [];
+  const totIn = entries.filter(e => e.type === 'entrata').reduce((s, e) => s + Number(e.amount), 0);
+  const totOut = entries.filter(e => e.type === 'uscita').reduce((s, e) => s + Number(e.amount), 0);
+  const saldo = totIn - totOut;
+
+  const methodGroups = {};
+  entries.forEach(e => {
+    const m = e.payment_method || 'altro';
+    if (!methodGroups[m]) methodGroups[m] = 0;
+    methodGroups[m] += Number(e.amount);
+  });
+
+  document.getElementById('report-content').innerHTML = `
+    <div class="report-row"><span class="label">Totale entrate</span><span class="val-positive">${formatEur(totIn)}</span></div>
+    <div class="report-row"><span class="label">Totale uscite</span><span class="val-negative">${formatEur(totOut)}</span></div>
+    <div class="report-row"><span class="label">Saldo netto</span><span class="${saldo >= 0 ? 'val-neutral' : 'val-negative'}">${formatEur(saldo)}</span></div>
+    <div class="report-row"><span class="label">Numero movimenti</span><span class="val-neutral">${entries.length}</span></div>
+    <hr style="border-color:rgba(255,255,255,0.05);margin:8px 0">
+    ${Object.entries(methodGroups).map(([m, v]) =>
+      `<div class="report-row"><span class="label">${paymentLabels[m] || m}</span><span class="val-neutral">${formatEur(v)}</span></div>`
+    ).join('')}
+  `;
+
+  // Categorie
+  const catGroups = {};
+  entries.forEach(e => {
+    const cat = (window.allCategories || []).find(c => c.id === e.category_id);
+    const key = cat ? `${cat.icon} ${cat.name}` : '—';
+    if (!catGroups[key]) catGroups[key] = { total: 0, type: e.type, color: cat?.color || '#6b7280' };
+    catGroups[key].total += Number(e.amount);
+  });
+
+  const maxVal = Math.max(...Object.values(catGroups).map(c => c.total), 1);
+  document.getElementById('report-categories').innerHTML = Object.entries(catGroups)
+    .sort((a, b) => b[1].total - a[1].total)
+    .map(([name, data]) => `
+      <div class="cat-row">
+        <span class="cat-name">${name}</span>
+        <div class="cat-bar-wrap"><div class="cat-bar" style="width:${(data.total/maxVal*100)}%;background:${data.color}"></div></div>
+        <span class="cat-total">${formatEur(data.total)}</span>
+      </div>`
+    ).join('') || '<div class="empty-state">Nessun dato</div>';
+}
+
+// ============================================
+// SEDI
+// ============================================
+function showAddLocation() { document.getElementById('add-location-form').classList.remove('hidden'); }
+function hideAddLocation() { document.getElementById('add-location-form').classList.add('hidden'); }
+
+async function saveLocation() {
+  const name = document.getElementById('new-loc-name').value.trim();
+  const address = document.getElementById('new-loc-address').value.trim();
+  if (!name) { showToast('Inserisci il nome della sede', 'error'); return; }
+
+  const { error } = await db.from('locations').insert({
+    business_id: currentBusiness.id,
+    name, address: address || null
+  });
+
+  if (error) { showToast('Errore: ' + error.message, 'error'); return; }
+
+  showToast('Sede aggiunta ✓', 'success');
+  hideAddLocation();
+  document.getElementById('new-loc-name').value = '';
+  document.getElementById('new-loc-address').value = '';
+  await loadLocations();
+}
+
+function renderLocationsList() {
+  const el = document.getElementById('locations-list');
+  if (!currentLocations.length) {
+    el.innerHTML = '<div class="empty-state">Nessuna sede aggiuntiva configurata</div>';
+    return;
+  }
+  el.innerHTML = currentLocations.map(l => `
+    <div class="location-card">
+      <div class="loc-name">◉ ${l.name}</div>
+      ${l.address ? `<div class="loc-addr">${l.address}</div>` : ''}
+    </div>`).join('');
+}
+
+// ============================================
+// TEAM MANAGEMENT
+// ============================================
+function showInviteForm() { document.getElementById('invite-form').classList.remove('hidden'); }
+function hideInviteForm() { document.getElementById('invite-form').classList.add('hidden'); }
+
+async function loadTeam() {
+  if (!currentBusiness) return;
+
+  // Carica membri attivi
+  const { data: roles } = await db
+    .from('user_roles')
+    .select('role, profiles(id, full_name, email)')
+    .eq('business_id', currentBusiness.id);
+
+  const membersEl = document.getElementById('team-members');
+  if (!roles?.length) {
+    membersEl.innerHTML = '<div class="empty-state">Nessun membro</div>';
   } else {
-    descEl = document.createElement('input');
-    descEl.type = 'text'; descEl.placeholder = 'Fornitore...'; descEl.className = 'ni-desc';
+    membersEl.innerHTML = roles.map(r => {
+      const p = r.profiles;
+      const initial = (p?.full_name || p?.email || '?')[0].toUpperCase();
+      const isCashier = r.role === 'cashier';
+      return `
+        <div class="member-item">
+          <div class="member-avatar">${initial}</div>
+          <div class="member-info">
+            <div class="member-name">${p?.full_name || '—'}</div>
+            <div class="member-email">${p?.email || '—'}</div>
+          </div>
+          <span class="role-badge ${r.role}">${roleLabel(r.role)}</span>
+          ${isCashier && currentRole === 'owner' ? `
+            <button class="btn-secondary sm" onclick="apriModalPermessi('${p?.id}','${p?.full_name || p?.email}','${r.role}')">
+              🔑 Permessi
+            </button>` : ''}
+        </div>`;
+    }).join('');
   }
-  righeDescFornitori.push(descEl);
 
-  const tdD = document.createElement('td'); tdD.className = 'td-desc';
-  const wrap = document.createElement('div'); wrap.style.cssText = 'display:flex;align-items:center;gap:2px';
-  wrap.appendChild(descEl);
+  // Carica inviti pendenti
+  const { data: invites } = await db
+    .from('invites')
+    .select('*')
+    .eq('business_id', currentBusiness.id)
+    .eq('used', false)
+    .gt('expires_at', new Date().toISOString());
+
+  const invitesEl = document.getElementById('team-invites');
+  if (!invites?.length) {
+    invitesEl.innerHTML = '<div class="empty-state">Nessun invito pendente</div>';
+  } else {
+    invitesEl.innerHTML = invites.map(inv => `
+      <div class="invite-item">
+        <span style="font-size:18px">✉</span>
+        <div class="invite-email">${inv.email}</div>
+        <span class="role-badge ${inv.role}">${roleLabel(inv.role)}</span>
+        <span class="invite-expires">scade ${formatDate(inv.expires_at)}</span>
+        <button class="invite-del" onclick="copyInviteLink('${inv.token}')" title="Copia link invito">🔗</button>
+        <button class="invite-del" onclick="deleteInvite('${inv.id}')" title="Elimina">✕</button>
+      </div>`).join('');
+  }
+}
+
+function roleLabel(role) {
+  return { owner: 'Owner', admin: 'Admin', cashier: 'Cassiere' }[role] || role;
+}
+
+async function sendInvite() {
+  if (!currentBusiness) return;
+  const email = document.getElementById('invite-email').value.trim();
+  const role = document.getElementById('invite-role').value;
+  const msgEl = document.getElementById('invite-message');
+
+  if (!email) { msgEl.textContent = 'Inserisci una email'; msgEl.className = 'auth-message error'; return; }
+
+  msgEl.textContent = 'Invio in corso...'; msgEl.className = 'auth-message';
+
+  // Crea invito nel DB
+  const { data: invite, error } = await db
+    .from('invites')
+    .insert({
+      business_id: currentBusiness.id,
+      email,
+      role,
+      created_by: currentUser.id
+    })
+    .select().single();
+
+  if (error) { msgEl.textContent = 'Errore: ' + error.message; msgEl.className = 'auth-message error'; return; }
+
+  // Genera il link di invito
+  const link = `${window.location.origin}?invite=${invite.token}`;
+
+  // Invia email tramite API
+  try {
+    const resp = await fetch('/api/send-invite', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email,
+        role,
+        inviteLink: link,
+        businessName: currentBusiness.name
+      })
+    });
+
+    const result = await resp.json();
+
+    if (resp.ok) {
+      msgEl.textContent = '✓ Email inviata a ' + email;
+      msgEl.className = 'auth-message success';
+    } else {
+      // Fallback: copia link negli appunti
+      await navigator.clipboard.writeText(link).catch(() => {});
+      msgEl.textContent = '⚠ Email non inviata. Link copiato negli appunti.';
+      msgEl.className = 'auth-message error';
+    }
+  } catch {
+    // Fallback: copia link negli appunti
+    await navigator.clipboard.writeText(link).catch(() => {});
+    msgEl.textContent = '⚠ Email non inviata. Link copiato negli appunti.';
+    msgEl.className = 'auth-message error';
+  }
+
+  document.getElementById('invite-email').value = '';
+  await loadTeam();
+}
+
+async function copyInviteLink(token) {
+  const link = `${window.location.origin}?invite=${token}`;
+  try {
+    await navigator.clipboard.writeText(link);
+    showToast('Link invito copiato ✓', 'success');
+  } catch {
+    showToast(link, '');
+  }
+}
+
+async function deleteInvite(id) {
+  if (!confirm('Eliminare questo invito?')) return;
+  await db.from('invites').delete().eq('id', id);
+  showToast('Invito eliminato', 'success');
+  await loadTeam();
+}
+
+// Gestione invito in arrivo (quando utente clicca il link)
+async function checkInviteToken() {
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get('invite');
+  if (!token) return false;
+
+  const { data: invite } = await db
+    .from('invites')
+    .select('*')
+    .eq('token', token)
+    .eq('used', false)
+    .gt('expires_at', new Date().toISOString())
+    .single();
+
+  if (!invite) {
+    showToast('Invito non valido o scaduto', 'error');
+    return false;
+  }
+
+  // Pre-compila email nel form registrazione
+  document.getElementById('reg-email').value = invite.email;
+  switchTab('register');
+
+  // Salva token per dopo la registrazione
+  window._pendingInviteToken = token;
+  window._pendingInvite = invite;
+
+  showToast('Sei stato invitato come ' + roleLabel(invite.role), 'success');
+  return true;
+}
+
+// Collega utente appena registrato all'azienda tramite invito
+async function applyInvite(userId) {
+  if (!window._pendingInvite) return;
+  const inv = window._pendingInvite;
+
+  await db.from('user_roles').insert({
+    user_id: userId,
+    business_id: inv.business_id,
+    role: inv.role
+  }).onConflict('user_id, business_id').ignore();
+
+  await db.from('invites').update({ used: true }).eq('id', inv.id);
+
+  window._pendingInvite = null;
+  window._pendingInviteToken = null;
+}
+
+// ============================================
+// GRAFICI
+// ============================================
+let chartWeekly = null;
+let chartCategories = null;
+
+async function loadCharts() {
+  if (!currentBusiness) return;
+
+  // Ultimi 7 giorni
+  const days = [];
+  const labels = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    days.push(d.toISOString().split('T')[0]);
+    labels.push(d.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric' }));
+  }
+
+  const from = days[0];
+  const to = days[days.length - 1];
+
+  let query = db.from('cash_entries').select('*')
+    .eq('business_id', currentBusiness.id)
+    .gte('entry_date', from)
+    .lte('entry_date', to);
+
+  if (selectedLocation) query = query.eq('location_id', selectedLocation);
+
+  const { data } = await query;
+  const entries = data || [];
+
+  // Dati per grafico settimanale
+  const entratePerDay = days.map(d =>
+    entries.filter(e => e.entry_date === d && e.type === 'entrata')
+           .reduce((s, e) => s + Number(e.amount), 0)
+  );
+  const uscitePerDay = days.map(d =>
+    entries.filter(e => e.entry_date === d && e.type === 'uscita')
+           .reduce((s, e) => s + Number(e.amount), 0)
+  );
+
+  // Grafico settimanale
+  const ctxW = document.getElementById('chart-weekly');
+  if (ctxW) {
+    if (chartWeekly) chartWeekly.destroy();
+    chartWeekly = new Chart(ctxW, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: 'Entrate',
+            data: entratePerDay,
+            backgroundColor: 'rgba(16, 185, 129, 0.7)',
+            borderColor: 'rgba(16, 185, 129, 1)',
+            borderWidth: 1,
+            borderRadius: 6,
+          },
+          {
+            label: 'Uscite',
+            data: uscitePerDay,
+            backgroundColor: 'rgba(239, 68, 68, 0.7)',
+            borderColor: 'rgba(239, 68, 68, 1)',
+            borderWidth: 1,
+            borderRadius: 6,
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: {
+            labels: { color: '#9ca3af', font: { family: 'DM Mono', size: 11 } }
+          },
+          tooltip: {
+            callbacks: {
+              label: ctx => ' € ' + ctx.parsed.y.toLocaleString('it-IT', { minimumFractionDigits: 2 })
+            }
+          }
+        },
+        scales: {
+          x: {
+            ticks: { color: '#6b7280', font: { family: 'DM Mono', size: 11 } },
+            grid: { color: 'rgba(255,255,255,0.04)' }
+          },
+          y: {
+            ticks: {
+              color: '#6b7280',
+              font: { family: 'DM Mono', size: 11 },
+              callback: v => '€ ' + v.toLocaleString('it-IT')
+            },
+            grid: { color: 'rgba(255,255,255,0.04)' }
+          }
+        }
+      }
+    });
+  }
+
+  // Dati per grafico categorie (mese corrente)
+  const firstDay = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
+  const { data: monthData } = await db.from('cash_entries').select('*')
+    .eq('business_id', currentBusiness.id)
+    .gte('entry_date', firstDay);
+
+  const catGroups = {};
+  (monthData || []).forEach(e => {
+    const cat = (window.allCategories || []).find(c => c.id === e.category_id);
+    const key = cat ? cat.name : 'Altro';
+    const color = cat ? cat.color : '#6b7280';
+    if (!catGroups[key]) catGroups[key] = { total: 0, color };
+    catGroups[key].total += Number(e.amount);
+  });
+
+  const catLabels = Object.keys(catGroups);
+  const catValues = catLabels.map(k => catGroups[k].total);
+  const catColors = catLabels.map(k => catGroups[k].color);
+
+  const ctxC = document.getElementById('chart-categories');
+  if (ctxC) {
+    if (chartCategories) chartCategories.destroy();
+    if (catLabels.length === 0) {
+      ctxC.parentElement.querySelector('canvas').style.display = 'none';
+      return;
+    }
+    chartCategories = new Chart(ctxC, {
+      type: 'doughnut',
+      data: {
+        labels: catLabels,
+        datasets: [{
+          data: catValues,
+          backgroundColor: catColors.map(c => c + 'cc'),
+          borderColor: catColors,
+          borderWidth: 1,
+          hoverOffset: 8
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: {
+            position: 'right',
+            labels: {
+              color: '#9ca3af',
+              font: { family: 'DM Mono', size: 11 },
+              padding: 12,
+              boxWidth: 12
+            }
+          },
+          tooltip: {
+            callbacks: {
+              label: ctx => ' € ' + ctx.parsed.toLocaleString('it-IT', { minimumFractionDigits: 2 })
+            }
+          }
+        },
+        cutout: '65%'
+      }
+    });
+  }
+}
+
+// ============================================
+// EXPORT PDF
+// ============================================
+async function exportPDF() {
+  if (!currentBusiness) return;
+
+  const month = parseInt(document.getElementById('report-month').value);
+  const year = parseInt(document.getElementById('report-year').value);
+  const monthNames = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
+                      'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+  const from = `${year}-${String(month).padStart(2,'0')}-01`;
+  const lastDay = new Date(year, month, 0).getDate();
+  const to = `${year}-${String(month).padStart(2,'0')}-${lastDay}`;
+
+  showToast('Generazione PDF...', '');
+
+  const { data } = await db.from('cash_entries').select('*')
+    .eq('business_id', currentBusiness.id)
+    .gte('entry_date', from).lte('entry_date', to)
+    .order('entry_date', { ascending: true });
+
+  const entries = data || [];
+  const totIn = entries.filter(e => e.type === 'entrata').reduce((s, e) => s + Number(e.amount), 0);
+  const totOut = entries.filter(e => e.type === 'uscita').reduce((s, e) => s + Number(e.amount), 0);
+  const saldo = totIn - totOut;
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+  const W = 210;
+  const margin = 16;
+  let y = 0;
+
+  // ---- HEADER ----
+  doc.setFillColor(10, 15, 30);
+  doc.rect(0, 0, W, 40, 'F');
+
+  // Logo K
+  doc.setFillColor(37, 99, 235);
+  doc.roundedRect(margin, 10, 18, 18, 3, 3, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.text('K', margin + 9, 22, { align: 'center' });
+
+  // Titolo
+  doc.setFontSize(20);
+  doc.setFont('helvetica', 'bold');
+  doc.text('KONTRO', margin + 22, 22);
+
+  // Data generazione
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(156, 163, 175);
+  doc.text('Generato il ' + new Date().toLocaleDateString('it-IT'), W - margin, 22, { align: 'right' });
+
+  y = 48;
+
+  // ---- TITOLO REPORT ----
+  doc.setTextColor(30, 40, 70);
+  doc.setFontSize(16);
+  doc.setFont('helvetica', 'bold');
+  doc.text(`Report ${monthNames[month - 1]} ${year}`, margin, y);
+
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(107, 114, 128);
+  doc.text(currentBusiness.name, margin, y + 6);
+
+  y += 18;
+
+  // ---- KPI BOX ----
+  const kpiW = (W - margin * 2 - 8) / 3;
+
+  // Entrate
+  doc.setFillColor(16, 185, 129, 0.1);
+  doc.setFillColor(236, 253, 245);
+  doc.roundedRect(margin, y, kpiW, 22, 3, 3, 'F');
+  doc.setTextColor(16, 185, 129);
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.text('ENTRATE', margin + 4, y + 7);
+  doc.setFontSize(13);
+  doc.text(formatEur(totIn), margin + 4, y + 16);
+
+  // Uscite
+  const x2 = margin + kpiW + 4;
+  doc.setFillColor(254, 242, 242);
+  doc.roundedRect(x2, y, kpiW, 22, 3, 3, 'F');
+  doc.setTextColor(239, 68, 68);
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.text('USCITE', x2 + 4, y + 7);
+  doc.setFontSize(13);
+  doc.text(formatEur(totOut), x2 + 4, y + 16);
+
+  // Saldo
+  const x3 = margin + (kpiW + 4) * 2;
+  doc.setFillColor(saldo >= 0 ? 239 : 254, saldo >= 0 ? 246 : 242, saldo >= 0 ? 255 : 242);
+  doc.roundedRect(x3, y, kpiW, 22, 3, 3, 'F');
+  doc.setTextColor(saldo >= 0 ? 37 : 239, saldo >= 0 ? 99 : 68, saldo >= 0 ? 235 : 68);
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.text('SALDO NETTO', x3 + 4, y + 7);
+  doc.setFontSize(13);
+  doc.text(formatEur(saldo), x3 + 4, y + 16);
+
+  y += 30;
+
+  // ---- TABELLA MOVIMENTI ----
+  doc.setTextColor(10, 15, 30);
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Dettaglio movimenti', margin, y);
+  y += 6;
+
+  // Header tabella
+  doc.setFillColor(10, 15, 30);
+  doc.rect(margin, y, W - margin * 2, 7, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.text('DATA', margin + 2, y + 5);
+  doc.text('DESCRIZIONE', margin + 22, y + 5);
+  doc.text('CATEGORIA', margin + 90, y + 5);
+  doc.text('METODO', margin + 130, y + 5);
+  doc.text('IMPORTO', W - margin - 2, y + 5, { align: 'right' });
+  y += 9;
+
+  // Righe
+  doc.setFont('helvetica', 'normal');
+  entries.forEach((e, i) => {
+    if (y > 270) {
+      doc.addPage();
+      y = 20;
+    }
+
+    if (i % 2 === 0) {
+      doc.setFillColor(248, 250, 252);
+      doc.rect(margin, y - 3, W - margin * 2, 7, 'F');
+    }
+
+    const cat = (window.allCategories || []).find(c => c.id === e.category_id);
+    const isEntrata = e.type === 'entrata';
+
+    doc.setTextColor(107, 114, 128);
+    doc.setFontSize(8);
+    doc.text(formatDate(e.entry_date), margin + 2, y + 2);
+
+    doc.setTextColor(10, 15, 30);
+    const desc = (e.description || (isEntrata ? 'Entrata' : 'Uscita')).substring(0, 35);
+    doc.text(desc, margin + 22, y + 2);
+
+    doc.setTextColor(107, 114, 128);
+    doc.text((cat ? cat.name : '—').substring(0, 18), margin + 90, y + 2);
+    doc.text((e.payment_method || '—'), margin + 130, y + 2);
+
+    isEntrata ? doc.setTextColor(16, 185, 129) : doc.setTextColor(239, 68, 68);
+    doc.setFont('helvetica', 'bold');
+    doc.text((isEntrata ? '+' : '-') + formatEur(e.amount), W - margin - 2, y + 2, { align: 'right' });
+    doc.setFont('helvetica', 'normal');
+
+    y += 7;
+  });
+
+  if (entries.length === 0) {
+    doc.setTextColor(156, 163, 175);
+    doc.setFontSize(9);
+    doc.text('Nessun movimento nel periodo selezionato', margin + 2, y + 4);
+    y += 10;
+  }
+
+  // ---- TOTALE FINALE ----
+  y += 4;
+  doc.setDrawColor(10, 15, 30);
+  doc.setLineWidth(0.3);
+  doc.line(margin, y, W - margin, y);
+  y += 6;
+
+  doc.setFillColor(10, 15, 30);
+  doc.rect(margin, y, W - margin * 2, 8, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  doc.text('TOTALE', margin + 2, y + 5.5);
+  doc.setTextColor(saldo >= 0 ? 52 : 248, saldo >= 0 ? 211 : 113, saldo >= 0 ? 153 : 113);
+  doc.text(formatEur(saldo), W - margin - 2, y + 5.5, { align: 'right' });
+
+  // ---- FOOTER ----
+  const pageCount = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    doc.setFontSize(7);
+    doc.setTextColor(156, 163, 175);
+    doc.text('KONTRO — Prima nota digitale · www.kontro.cloud', margin, 290);
+    doc.text(`Pagina ${i} di ${pageCount}`, W - margin, 290, { align: 'right' });
+  }
+
+  // Salva
+  const filename = `KONTRO_Report_${monthNames[month-1]}_${year}_${currentBusiness.name.replace(/\s/g,'_')}.pdf`;
+  doc.save(filename);
+  showToast('PDF scaricato ✓', 'success');
+}
+
+// ============================================
+// PRIMA NOTA
+// ============================================
+let pnFornitoriRows = [];
+let pnPrelieviRows = [];
+
+// [rimossa versione obsoleta initPrimaNota v1]
+
+// ── RIGHE DINAMICHE ───────────────────────────────────────────────
+function buildFornitoriRows(n) {
+  pnFornitoriRows = [];
+  const tbody = document.getElementById('tbody-fornitori');
+  tbody.innerHTML = '';
+  for (let i = 0; i < n; i++) addFornitoreRow(false);
+}
+
+function buildPrelieviRows(n) {
+  pnPrelieviRows = [];
+  const tbody = document.getElementById('tbody-prelievi');
+  tbody.innerHTML = '';
+  for (let i = 0; i < n; i++) addPrelievRow(false);
+}
+
+function addFornitoreRow(recalc = true) {
+  const tbody = document.getElementById('tbody-fornitori');
+  const idx = pnFornitoriRows.length;
+  const tr = document.createElement('tr');
+
+  const desc = document.createElement('input');
+  desc.type = 'text'; desc.placeholder = 'Fornitore...'; desc.className = 'pn-desc-input';
+
+  const im = mkPNInput(); const ip = mkPNInput(); const is = mkPNInput();
+  pnFornitoriRows.push({ desc, im, ip, is });
+
+  const tdDesc = document.createElement('td'); tdDesc.className = 'td-desc';
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex;align-items:center;gap:4px';
+  wrap.appendChild(desc);
   if (idx >= 5) {
-    const rm = document.createElement('button'); rm.textContent = '×'; rm.className = 'btn-remove-riga';
+    const rm = document.createElement('button');
+    rm.textContent = '×'; rm.className = 'pn-remove-btn';
     rm.onclick = () => {
-      const i = righeFornitoriM.indexOf(im);
-      if (i >= 0) { righeFornitoriM.splice(i,1); righeFornitoriT.splice(i,1); righeDescFornitori.splice(i,1); }
-      tr.remove(); calc();
+      const i = pnFornitoriRows.findIndex(r => r.im === im);
+      if (i >= 0) pnFornitoriRows.splice(i, 1);
+      tr.remove(); calcPN();
     };
     wrap.appendChild(rm);
   }
-  tdD.appendChild(wrap);
-  tr.appendChild(tdD);
-  tr.appendChild(mkTd('td-m', im));
-  tr.appendChild(mkTd('td-t', it));
+  tdDesc.appendChild(wrap);
+
+  const totEl = document.createElement('td');
+  totEl.className = 'td-tot'; totEl.textContent = '€ 0,00';
+
+  tr.appendChild(tdDesc);
+  tr.appendChild(mkPNTd(im)); tr.appendChild(mkPNTd(ip)); tr.appendChild(mkPNTd(is));
+  tr.appendChild(totEl);
   tbody.appendChild(tr);
+
+  [im, ip, is].forEach(el => el.oninput = () => {
+    const tot = (parseFloat(im.value)||0) + (parseFloat(ip.value)||0) + (parseFloat(is.value)||0);
+    totEl.textContent = fmtPN(tot);
+    calcPN();
+  });
+
+  if (recalc) calcPN();
 }
 
-// ── SEZIONE PRELIEVI ──────────────────────────────────────────────────────────
-function buildSezionePrelievi(nRighe) {
+function addPrelievRow(recalc = true) {
   const tbody = document.getElementById('tbody-prelievi');
-  if (!tbody) return;
-  tbody.innerHTML = '';
-  righePreleviM = []; righePreleviT = []; righeDescPrelievi = [];
-  for (let i = 0; i < nRighe; i++) aggiungiRigaPrelievoDom(tbody, i);
-}
-
-function aggiungiRigaPrelievo() {
-  const tbody = document.getElementById('tbody-prelievi');
-  const idx = righePreleviM.length;
-  aggiungiRigaPrelievoDom(tbody, idx);
-}
-
-function aggiungiRigaPrelievoDom(tbody, idx) {
+  const idx = pnPrelieviRows.length;
   const tr = document.createElement('tr');
-  const im = mkNumInput(); im.oninput = calc;
-  const it = mkNumInput(); it.oninput = calc;
-  righePreleviM.push(im); righePreleviT.push(it);
+
   const desc = document.createElement('input');
-  desc.type = 'text'; desc.placeholder = 'Causale...'; desc.className = 'ni-desc';
-  righeDescPrelievi.push(desc);
-  const tdD = document.createElement('td'); tdD.className = 'td-desc';
-  const wrap = document.createElement('div'); wrap.style.cssText = 'display:flex;align-items:center;gap:2px';
+  desc.type = 'text'; desc.placeholder = 'Causale...'; desc.className = 'pn-desc-input';
+
+  const im = mkPNInput(); const ip = mkPNInput(); const is = mkPNInput();
+  pnPrelieviRows.push({ desc, im, ip, is });
+
+  const tdDesc = document.createElement('td'); tdDesc.className = 'td-desc';
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex;align-items:center;gap:4px';
   wrap.appendChild(desc);
   if (idx >= 3) {
-    const rm = document.createElement('button'); rm.textContent = '×'; rm.className = 'btn-remove-riga';
+    const rm = document.createElement('button');
+    rm.textContent = '×'; rm.className = 'pn-remove-btn';
     rm.onclick = () => {
-      const i = righePreleviM.indexOf(im);
-      if (i >= 0) { righePreleviM.splice(i,1); righePreleviT.splice(i,1); righeDescPrelievi.splice(i,1); }
-      tr.remove(); calc();
+      const i = pnPrelieviRows.findIndex(r => r.im === im);
+      if (i >= 0) pnPrelieviRows.splice(i, 1);
+      tr.remove(); calcPN();
     };
     wrap.appendChild(rm);
   }
-  tdD.appendChild(wrap); tr.appendChild(tdD); tr.appendChild(mkTd('td-m', im)); tr.appendChild(mkTd('td-t', it));
+  tdDesc.appendChild(wrap);
+
+  const totEl = document.createElement('td');
+  totEl.className = 'td-tot'; totEl.textContent = '€ 0,00';
+
+  tr.appendChild(tdDesc);
+  tr.appendChild(mkPNTd(im)); tr.appendChild(mkPNTd(ip)); tr.appendChild(mkPNTd(is));
+  tr.appendChild(totEl);
   tbody.appendChild(tr);
-}
 
-// ── AGGIORNA SELECT BANCA ─────────────────────────────────────────────────────
-function updateBancaSelects() {
-  document.querySelectorAll('.sel-banca-pn').forEach(sel => {
-    const val = sel.value;
-    sel.innerHTML = bancaOptsHtml();
-    if (val) sel.value = val;
-  });
-}
-
-// ── CALCOLI ───────────────────────────────────────────────────────────────────
-function getVal(el) { return parseFloat(el?.value) || 0; }
-function effV(m, t) { return t.value.trim() === '' ? getVal(m) : getVal(t); }
-function getFixed(id) { return getVal(document.getElementById(id)); }
-function effFixed(idM, idT) {
-  const t = document.getElementById(idT);
-  const m = document.getElementById(idM);
-  return t && t.value.trim() !== '' ? getVal(t) : getVal(m);
-}
-
-function calc() {
-  const fc = getFixed('pn-fc');
-
-  let umSum = 0, utSum = 0;
-  righeFornitoriM.forEach((im, i) => { umSum += getVal(im); utSum += effV(im, righeFornitoriT[i]); });
-  righePreleviM.forEach((im, i)   => { umSum += getVal(im); utSum += effV(im, righePreleviT[i]); });
-  ['bonifici','pos','carte'].forEach(k => {
-    umSum += getFixed(k+'-m');
-    utSum += effFixed(k+'-m', k+'-t');
-  });
-  umSum += getFixed('fc-usc-m');
-  utSum += effFixed('fc-usc-m', 'fc-usc-t');
-
-  let emSum = fc, etSum = fc;
-  ['money','sisal','incasso','fatture','giornali'].forEach(k => {
-    emSum += getFixed(k+'-m');
-    etSum += effFixed(k+'-m', k+'-t');
+  [im, ip, is].forEach(el => el.oninput = () => {
+    const tot = (parseFloat(im.value)||0) + (parseFloat(ip.value)||0) + (parseFloat(is.value)||0);
+    totEl.textContent = fmtPN(tot);
+    calcPN();
   });
 
-  ['bonifici','pos','carte','fc-usc','money','sisal','incasso','fatture','giornali'].forEach(k => {
-    const idM = k+'-m', idT = k+'-t';
-    const elM = document.getElementById(idM), elT = document.getElementById(idT);
-    if (!elM || !elT) return;
-    if (elT.value.trim() === '' && elM.value.trim() !== '') {
-      elT.classList.add('ni-auto');
-      elT.parentElement.className = 'td-t-auto';
-    } else {
-      elT.classList.remove('ni-auto');
-      if (elT.parentElement.className === 'td-t-auto') elT.parentElement.className = 'td-t';
+  if (recalc) calcPN();
+}
+
+function mkPNInput() {
+  const i = document.createElement('input');
+  i.type = 'number'; i.step = '0.01'; i.placeholder = '—'; i.className = 'pn-input';
+  return i;
+}
+
+function mkPNTd(child) {
+  const td = document.createElement('td');
+  if (child) td.appendChild(child);
+  return td;
+}
+
+function fmtPN(n) {
+  return '€ ' + Math.abs(n||0).toFixed(2).replace('.', ',');
+}
+
+function getPN(id) { return parseFloat(document.getElementById(id)?.value) || 0; }
+
+function sumTurni(id) {
+  return getPN(id+'-m') + getPN(id+'-p') + getPN(id+'-s');
+}
+
+function setPN(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = fmtPN(val);
+}
+
+// ── CALCOLO ───────────────────────────────────────────────────────
+function calcPN() {
+  const fc = getPN('pn-fc');
+  const voci = ['incasso','money','grattavinci','sisal','fatture','giornali'];
+  const uscVoci = ['pos','carte','bonifici'];
+
+  // Totali per voce
+  voci.forEach(k => {
+    const tot = sumTurni(k);
+    setPN('tot-'+k, tot);
+  });
+  uscVoci.forEach(k => {
+    const tot = sumTurni(k);
+    setPN('tot-'+k, tot);
+  });
+
+  // Totali fornitori per turno
+  let fM=0, fP=0, fS=0;
+  pnFornitoriRows.forEach(r => {
+    fM += parseFloat(r.im.value)||0;
+    fP += parseFloat(r.ip.value)||0;
+    fS += parseFloat(r.is.value)||0;
+  });
+
+  // Totali prelievi per turno
+  let pM=0, pP=0, pS=0;
+  pnPrelieviRows.forEach(r => {
+    pM += parseFloat(r.im.value)||0;
+    pP += parseFloat(r.ip.value)||0;
+    pS += parseFloat(r.is.value)||0;
+  });
+
+  // Fondo chiusura
+  const fcUscM = getPN('fc-usc-m'), fcUscP = getPN('fc-usc-p'), fcUscS = getPN('fc-usc-s');
+  setPN('tot-fc-usc', fcUscM + fcUscP + fcUscS);
+
+  // Totali entrate per turno (fc solo in totale, non per turno)
+  const entM = voci.reduce((s,k) => s + getPN(k+'-m'), 0);
+  const entP = voci.reduce((s,k) => s + getPN(k+'-p'), 0);
+  const entS = voci.reduce((s,k) => s + getPN(k+'-s'), 0);
+  const entTot = fc + entM + entP + entS;
+
+  setPN('tot-ent-m', entM); setPN('tot-ent-p', entP);
+  setPN('tot-ent-s', entS); setPN('tot-ent', entTot);
+
+  // Totali uscite per turno
+  const uscM = uscVoci.reduce((s,k) => s + getPN(k+'-m'), 0) + fM + pM + fcUscM;
+  const uscP = uscVoci.reduce((s,k) => s + getPN(k+'-p'), 0) + fP + pP + fcUscP;
+  const uscS = uscVoci.reduce((s,k) => s + getPN(k+'-s'), 0) + fS + pS + fcUscS;
+  const uscTot = uscM + uscP + uscS;
+
+  setPN('tot-usc-m', uscM); setPN('tot-usc-p', uscP);
+  setPN('tot-usc-s', uscS); setPN('tot-usc', uscTot);
+
+  // Differenze per turno
+  const diffM = entM - uscM;
+  const diffP = entP - uscP;
+  const diffS = entS - uscS;
+  const diffTot = entTot - uscTot;
+
+  ['m','p','s'].forEach((t, i) => {
+    const d = [diffM, diffP, diffS][i];
+    const el = document.getElementById('diff-'+t);
+    if (el) {
+      el.textContent = (d >= 0 ? '+ ' : '- ') + fmtPN(d);
+      el.className = 'td-tot' + (d > 0 ? ' alarm' : '');
     }
   });
-
-  righeFornitoriM.forEach((im, i) => {
-    const it = righeFornitoriT[i];
-    if (it.value.trim() === '' && im.value.trim() !== '') { it.classList.add('ni-auto'); it.parentElement.className = 'td-t-auto'; }
-    else { it.classList.remove('ni-auto'); if (it.parentElement.className === 'td-t-auto') it.parentElement.className = 'td-t'; }
-  });
-  righePreleviM.forEach((im, i) => {
-    const it = righePreleviT[i];
-    if (it.value.trim() === '' && im.value.trim() !== '') { it.classList.add('ni-auto'); it.parentElement.className = 'td-t-auto'; }
-    else { it.classList.remove('ni-auto'); if (it.parentElement.className === 'td-t-auto') it.parentElement.className = 'td-t'; }
-  });
-
-  setText('tot-uscite-m', fmtE(umSum));
-  setText('tot-uscite-t', fmtE(utSum));
-  setText('tot-entrate-m', fmtE(emSum));
-  setText('tot-entrate-t', fmtE(etSum));
-
-  const dm = emSum - umSum, dt = etSum - utSum;
-  setDiff('diff-m', dm); setDiff('diff-t', dt);
-
-  setText('r-te', fmtE(etSum));
-  setText('r-tu', fmtE(utSum));
-  setDiffEl('r-td', dt);
-  document.getElementById('sb-diff').className = 'stat-box' + (dt > 0 ? ' alarm' : '');
-
-  const allarme = document.getElementById('allarme');
-  if (dt > 0) { allarme.style.display = 'flex'; setText('allarme-text', `Differenza positiva (${fmtSigned(dt)}) — verificare la cassa`); }
-  else allarme.style.display = 'none';
-
-  const incassoMCalc = getFixed("incasso-m") + Math.abs(dm);
-  const ig = effFixed("incasso-m","incasso-t") + Math.abs(dt);
-  const incassoPCalc = ig - incassoMCalc;
-
-  setText('r-inc-m', fmtE(incassoMCalc));
-  setText('r-inc-p', fmtE(Math.max(0, incassoPCalc)));
-  setText('r-inc', fmtE(ig));
-
-  const deltaEl = document.getElementById('r-delta');
-  const sbDelta = document.getElementById('sb-delta');
-  if (deltaEl) {
-    if (incassoMCalc === 0) {
-      deltaEl.textContent = '—';
-      if (sbDelta) sbDelta.className = 'stat-box';
-    } else {
-      const diff = incassoPCalc - incassoMCalc;
-      const pct = Math.round((diff / incassoMCalc) * 100);
-      const segno = diff >= 0 ? '+' : '';
-      deltaEl.textContent = segno + fmtE(Math.abs(diff)) + ' (' + segno + pct + '%)';
-      deltaEl.className = 'stat-val ' + (diff >= 0 ? 'val-ok' : 'val-alarm');
-      if (sbDelta) sbDelta.className = 'stat-box' + (diff >= 0 ? '' : ' alarm');
-    }
+  const dtEl = document.getElementById('diff-tot');
+  if (dtEl) {
+    dtEl.textContent = (diffTot >= 0 ? '+ ' : '- ') + fmtPN(diffTot);
+    dtEl.className = 'td-tot' + (diffTot > 0 ? ' alarm' : '');
   }
-  const igEl = document.getElementById('inc-g');
-  igEl.textContent = fmtE(ig);
-  igEl.className = 'incasso-value' + (dt > 0 ? ' alarm' : '');
-  const incT = effFixed("incasso-m","incasso-t");
-  setText('inc-formula', dt < 0 ? `${fmtE(incT)} + ${fmtE(Math.abs(dt))} diff.` : dt > 0 ? 'Verifica differenza positiva' : fmtE(ig));
+
+  // Incasso per turno = incasso dichiarato + |differenza turno|
+  const incM = getPN('incasso-m') + Math.abs(diffM);
+  const incP = getPN('incasso-p') + Math.abs(diffP);
+  const incS = getPN('incasso-s') + Math.abs(diffS);
+  const incTot = incM + incP + incS;
+
+  setPN('r-inc-m', incM);
+  setPN('r-inc-p', incP);
+  setPN('r-inc-s', incS);
+  setPN('r-inc-tot', incTot);
+
+  // Allarme
+  const allarme = document.getElementById('pn-allarme');
+  if (allarme) allarme.classList.toggle('hidden', diffTot <= 0);
 }
 
-function setText(id, v) { const el=document.getElementById(id); if(el) el.textContent=v; }
-function setDiff(id, v) {
-  const el = document.getElementById(id); if(!el) return;
-  el.textContent = fmtSigned(v);
-  el.className = 'tot-val ' + (v <= 0 ? 'val-ok' : 'val-alarm');
-}
-function setDiffEl(id, v) {
-  const el = document.getElementById(id); if(!el) return;
-  el.textContent = fmtSigned(v);
-  el.className = 'stat-val ' + (v <= 0 ? 'val-ok' : 'val-alarm');
-}
-function fmtE(n) { return '€\u00a0' + Math.abs(n).toFixed(2).replace('.', ','); }
-function fmtSigned(n) { return (n < 0 ? '- ' : '+ ') + fmtE(n); }
-function mkNumInput() { const i=document.createElement('input'); i.type='number'; i.placeholder='—'; i.step='0.01'; i.className='ni'; return i; }
-function mkTd(cls, child) { const td=document.createElement('td'); td.className=cls; if(child) td.appendChild(child); return td; }
-
-// ── SALVA ─────────────────────────────────────────────────────────────────────
-function giornoDopo(ds) { const d=new Date(ds); d.setDate(d.getDate()+1); return d.toISOString().split('T')[0]; }
-function getBancaKey(key) { const el=document.getElementById(key); return el?.value||null; }
-
-async function salvaNota() {
+// ── CARICA/SALVA ──────────────────────────────────────────────────
+async function loadNotaGiorno() {
+  if (!currentBusiness) return;
   const data = document.getElementById('pn-data').value;
-  if (!data) { showSaveMsg('Inserisci la data', 'err'); return; }
-
-  const fc = getFixed('pn-fc');
-  let umSum=0, emSum=fc, utSum=0, etSum=fc;
-  righeFornitoriM.forEach((im,i)=>{ umSum+=getVal(im); utSum+=effV(im,righeFornitoriT[i]); });
-  righePreleviM.forEach((im,i)=>{ umSum+=getVal(im); utSum+=effV(im,righePreleviT[i]); });
-  ['bonifici','pos','carte'].forEach(k=>{ umSum+=getFixed(k+'-m'); utSum+=effFixed(k+'-m',k+'-t'); });
-  umSum+=getFixed('fc-usc-m'); utSum+=effFixed('fc-usc-m','fc-usc-t');
-  ['money','sisal','incasso','fatture','giornali'].forEach(k=>{ emSum+=getFixed(k+'-m'); etSum+=effFixed(k+'-m',k+'-t'); });
-
-  const dt = etSum - utSum;
-  const ig = effFixed('incasso-m','incasso-t') + Math.abs(dt);
-  const fondoChiusura = effFixed('fc-usc-m','fc-usc-t');
-
-  const rows = [];
-  righeFornitoriM.forEach((im, i) => {
-    const vm = getVal(im), vt = effV(im, righeFornitoriT[i]);
-    const descEl = righeDescFornitori[i];
-    let desc = '', fornitoreId = null;
-    if (descEl.tagName === 'SELECT') {
-      fornitoreId = descEl.value || null;
-      desc = descEl.value ? descEl.options[descEl.selectedIndex]?.text : '';
-    } else { desc = descEl.value.trim(); }
-    if (vm || vt || desc) rows.push({
-      categoria:'fornitore', descrizione:desc, importo_m:vm, importo_t:vt||vm, ordine:i,
-      fornitore_id: fornitoreId, prima_nota_data: data, prima_nota_locale: currentLocale
-    });
-  });
-  righePreleviM.forEach((im, i) => {
-    const vm = getVal(im), vt = effV(im, righePreleviT[i]);
-    const desc = righeDescPrelievi[i]?.value.trim()||'';
-    if (vm || vt || desc) rows.push({ categoria:'prelievo', descrizione:desc, importo_m:vm, importo_t:vt||vm, ordine:i });
-  });
-
-  const payload = {
-    data, locale: currentLocale, fondo_cassa: fc,
-    money_m:      getFixed('money-m'),    money:      effFixed('money-m','money-t'),
-    sisal_m:      getFixed('sisal-m'),    sisal:      effFixed('sisal-m','sisal-t'),
-    incasso_m:    getFixed('incasso-m'),  incasso:    effFixed('incasso-m','incasso-t'),
-    fatture_m:    getFixed('fatture-m'),  fatture:    effFixed('fatture-m','fatture-t'),
-    giornali_m:   getFixed('giornali-m'), giornali:   effFixed('giornali-m','giornali-t'),
-    bonifici_banca_m: getFixed('bonifici-m'), bonifici_banca: effFixed('bonifici-m','bonifici-t'),
-    bonifici_banca_id: getBancaKey('sel-banca-bonifici'),
-    pos_m:    getFixed('pos-m'),   pos:    effFixed('pos-m','pos-t'),   pos_banca_id:   getBancaKey('sel-banca-pos'),
-    carte_m:  getFixed('carte-m'), carte:  effFixed('carte-m','carte-t'), carte_banca_id: getBancaKey('sel-banca-carte'),
-    fondo_cassa_usc_m: getFixed('fc-usc-m'), fondo_cassa_usc: fondoChiusura,
-    totale_entrate_m: emSum-fc, totale_uscite_m: umSum, differenza_m: emSum-umSum,
-    totale_entrate: etSum-fc, totale_uscite: utSum, differenza: dt,
-    incasso_giornaliero: ig,
-    compilatore_m: document.getElementById('cm').value,
-    compilatore_p: document.getElementById('cp').value,
-    compilatore_s: document.getElementById('cs').value,
-  };
-
-  const { data: saved, error } = await sb.from('pn_prima_nota').upsert(payload, { onConflict:'data,locale' }).select().single();
-  if (error) { showSaveMsg('Errore: '+error.message,'err'); return; }
-
-  if (saved?.id) {
-    await sb.from('pn_righe_uscite').delete().eq('prima_nota_id', saved.id);
-    if (rows.length) await sb.from('pn_righe_uscite').insert(rows.map(r=>({...r, prima_nota_id:saved.id})));
-  }
-
-  if (fondoChiusura > 0) {
-    const dom = giornoDopo(data);
-    const { data: nd } = await sb.from('pn_prima_nota').select('id,fondo_cassa').eq('data',dom).eq('locale',currentLocale).single();
-    if (!nd) await sb.from('pn_prima_nota').insert({ data:dom, locale:currentLocale, fondo_cassa:fondoChiusura });
-    else if (!nd.fondo_cassa || nd.fondo_cassa===0) await sb.from('pn_prima_nota').update({fondo_cassa:fondoChiusura}).eq('id',nd.id);
-  }
-
-  showSaveMsg('Prima nota salvata' + (fondoChiusura>0?' — fondo cassa domani pre-compilato':''), 'ok');
-}
-
-// ── CARICA NOTA ───────────────────────────────────────────────────────────────
-async function loadNotaDelGiorno() {
-  const data = document.getElementById('pn-data').value;
+  const locId = document.getElementById('pn-location').value || null;
   if (!data) return;
-  const { data: nota } = await sb.from('pn_prima_nota').select('*').eq('data',data).eq('locale',currentLocale).single();
 
-  resettaValoriFixed();
-  // ✅ FIX 2: refresh cache prima di ricostruire il form
-  // così i fornitori aggiunti di recente appaiono subito nel SELECT
-  await caricaFornitoriCache();
-  buildSezioneFornitori(5);
-  buildSezionePrelievi(3);
+  let query = db.from('daily_notes').select('*, daily_note_rows(*)')
+    .eq('business_id', currentBusiness.id)
+    .eq('data', data);
 
+  if (locId) query = query.eq('location_id', locId);
+  // Non filtriamo per null esplicitamente — prendiamo il record e controlliamo
+  const { data: noteList } = await query.order('created_at', { ascending: false }).limit(10);
+  const nota = (noteList || []).find(n => locId ? n.location_id === locId : !n.location_id) || null;
+
+  resetPN(false);
   if (!nota) return;
 
-  document.getElementById('pn-fc').value  = nota.fondo_cassa||'';
-  document.getElementById('cm').value     = nota.compilatore_m||'';
-  document.getElementById('cp').value     = nota.compilatore_p||'';
-  document.getElementById('cs').value     = nota.compilatore_s||'';
+  // Popola campi fissi
+  document.getElementById('pn-fc').value = nota.fondo_cassa || '';
+  const campi = ['incasso','money','sisal','fatture','giornali','pos','carte','bonifici','fc-usc'];
+  campi.forEach(k => {
+    const key = k.replace('-','_');
+    ['m','p','s'].forEach(t => {
+      const el = document.getElementById(k+'-'+t);
+      if (el) el.value = nota[key+'_'+t] || '';
+    });
+  });
 
-  const sv = (idM, idT, mVal, tVal) => {
-    const em=document.getElementById(idM), et=document.getElementById(idT);
-    if(em&&mVal) em.value=mVal;
-    if(et&&tVal&&tVal!==mVal) et.value=tVal;
-  };
-  sv('money-m','money-t',       nota.money_m,      nota.money);
-  sv('sisal-m','sisal-t',       nota.sisal_m,      nota.sisal);
-  sv('incasso-m','incasso-t',   nota.incasso_m,    nota.incasso);
-  sv('fatture-m','fatture-t',   nota.fatture_m,    nota.fatture);
-  sv('giornali-m','giornali-t', nota.giornali_m,   nota.giornali);
-  sv('bonifici-m','bonifici-t', nota.bonifici_banca_m, nota.bonifici_banca);
-  sv('pos-m','pos-t',           nota.pos_m,        nota.pos);
-  sv('carte-m','carte-t',       nota.carte_m,      nota.carte);
-  sv('fc-usc-m','fc-usc-t',     nota.fondo_cassa_usc_m, nota.fondo_cassa_usc);
+  document.getElementById('cm').value = nota.compilatore_m || '';
+  document.getElementById('cp').value = nota.compilatore_p || '';
+  document.getElementById('cs').value = nota.compilatore_s || '';
+  document.getElementById('pn-note').value = nota.note || '';
 
-  const sbk = (id, val) => { const el=document.getElementById(id); if(el&&val) el.value=val; };
-  sbk('sel-banca-bonifici', nota.bonifici_banca_id);
-  sbk('sel-banca-pos',      nota.pos_banca_id);
-  sbk('sel-banca-carte',    nota.carte_banca_id);
+  // Popola righe dinamiche
+  if (nota.daily_note_rows?.length) {
+    const fornitori = nota.daily_note_rows.filter(r => r.categoria === 'fornitore');
+    const prelievi = nota.daily_note_rows.filter(r => r.categoria === 'prelievo');
 
-  const { data: righe } = await sb.from('pn_righe_uscite').select('*').eq('prima_nota_id',nota.id).order('ordine');
-  if (righe && righe.length) {
-    const fornRighe = righe.filter(r=>r.categoria==='fornitore');
-    const prelRighe = righe.filter(r=>r.categoria==='prelievo');
-
-    const tbody_f = document.getElementById('tbody-fornitori');
-    while (righeFornitoriM.length < fornRighe.length) aggiungiRigaFornitoreDOM(tbody_f, righeFornitoriM.length);
-    const tbody_p = document.getElementById('tbody-prelievi');
-    while (righePreleviM.length < prelRighe.length) aggiungiRigaPrelievoDom(tbody_p, righePreleviM.length);
-
-    fornRighe.forEach((r,i) => {
-      if (!righeFornitoriM[i]) return;
-      righeFornitoriM[i].value = r.importo_m||'';
-      if (r.importo_t !== r.importo_m) righeFornitoriT[i].value = r.importo_t||'';
-      const descEl = righeDescFornitori[i];
-      if (!descEl) return;
-      if (descEl.tagName === 'SELECT') {
-        // ✅ FIX 3: usa fornitore_id direttamente — più affidabile del text-match
-        if (r.fornitore_id) {
-          descEl.value = r.fornitore_id;
-          // Se l'opzione non è stata trovata (fornitore disattivato o cache vecchia)
-          // aggiungi un'opzione temporanea con il testo originale
-          if (!descEl.value || descEl.value !== r.fornitore_id) {
-            const o = document.createElement('option');
-            o.value = r.fornitore_id;
-            o.textContent = r.descrizione || '(fornitore)';
-            descEl.insertBefore(o, descEl.firstChild);
-            descEl.value = r.fornitore_id;
-          }
-        } else if (r.descrizione) {
-          // Fallback: cerca per testo (vecchie note senza fornitore_id)
-          const opt = Array.from(descEl.options).find(o => o.text === r.descrizione);
-          if (opt) descEl.value = opt.value;
-        }
-      } else { descEl.value = r.descrizione||''; }
+    buildFornitoriRows(Math.max(5, fornitori.length));
+    fornitori.forEach((r, i) => {
+      if (pnFornitoriRows[i]) {
+        pnFornitoriRows[i].desc.value = r.descrizione || '';
+        pnFornitoriRows[i].im.value = r.importo_m || '';
+        pnFornitoriRows[i].ip.value = r.importo_p || '';
+        pnFornitoriRows[i].is.value = r.importo_s || '';
+      }
     });
 
-    prelRighe.forEach((r,i) => {
-      if (!righePreleviM[i]) return;
-      righePreleviM[i].value = r.importo_m||'';
-      if (r.importo_t !== r.importo_m) righePreleviT[i].value = r.importo_t||'';
-      if (righeDescPrelievi[i]) righeDescPrelievi[i].value = r.descrizione||'';
+    buildPrelieviRows(Math.max(3, prelievi.length));
+    prelievi.forEach((r, i) => {
+      if (pnPrelieviRows[i]) {
+        pnPrelieviRows[i].desc.value = r.descrizione || '';
+        pnPrelieviRows[i].im.value = r.importo_m || '';
+        pnPrelieviRows[i].ip.value = r.importo_p || '';
+        pnPrelieviRows[i].is.value = r.importo_s || '';
+      }
     });
   }
 
-  calc();
-  showSaveMsg('Nota del '+formatDate(data)+' caricata — puoi modificarla e risalvare', 'ok');
+  calcPN();
 }
 
-async function onDataChange() {
-  resettaValoriFixed();
-  buildSezioneFornitori(5);
-  buildSezionePrelievi(3);
-  await loadNotaDelGiorno();
+
+function resetPN(rebuild = true) {
+  const campi = ['pn-fc','incasso-m','incasso-p','incasso-s','money-m','money-p','money-s',
+    'grattavinci-m','grattavinci-p','grattavinci-s','sisal-m','sisal-p','sisal-s','fatture-m','fatture-p','fatture-s','giornali-m','giornali-p','giornali-s','conto-bet-m','conto-bet-p','conto-bet-s',
+    'pos-m','pos-p','pos-s','carte-m','carte-p','carte-s','bonifici-m','bonifici-p','bonifici-s',
+    'fc-usc-m','fc-usc-p','fc-usc-s','cm','cp','cs','pn-note'];
+  campi.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  if (rebuild) { buildFornitoriRows(5); buildPrelieviRows(3); }
+  calcPN();
 }
 
-function resettaValoriFixed() {
-  ['pn-fc','cm','cp','cs'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
-  ['money','sisal','incasso','fatture','giornali','bonifici','pos','carte','fc-usc'].forEach(k => {
-    const em=document.getElementById(k+'-m'), et=document.getElementById(k+'-t');
-    if(em) em.value=''; if(et) et.value='';
+function showPNMsg(msg, type) {
+  const el = document.getElementById('pn-msg');
+  el.textContent = msg;
+  el.className = 'auth-message ' + type;
+  setTimeout(() => el.textContent = '', 4000);
+}
+
+// ============================================
+// PRIMA NOTA v2 — Struttura statica
+// ============================================
+let pnFornitoriCount = 5;
+let pnPrelieviCount = 3;
+
+function initPrimaNota() {
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('pn-data').value = today;
+  const sel = document.getElementById('pn-location');
+  if (sel) {
+    sel.innerHTML = '<option value="">Sede principale</option>' +
+      currentLocations.map(l => `<option value="${l.id}">${l.name}</option>`).join('');
+  }
+  // Popola i select fornitori nelle righe statiche
+  _buildPNFornitoriSelects();
+  calcPN2();
+  loadNotaGiorno2();
+}
+
+function _buildPNFornitoriSelects() {
+  if (!fornitoriCache || fornitoriCache.length === 0) return;
+  const optsHtml = '<option value="">— Fornitore —</option>' +
+    fornitoriCache.map(f => `<option value="${f.id}">${f.ragione_sociale}</option>`).join('');
+  for (let i = 0; i < 20; i++) {
+    const el = document.getElementById('fdesc-' + i);
+    if (!el) break;
+    if (el.tagName === 'SELECT') {
+      const val = el.value;
+      el.innerHTML = optsHtml;
+      if (val) el.value = val;
+    } else if (el.tagName === 'INPUT') {
+      const sel = document.createElement('select');
+      sel.id = 'fdesc-' + i;
+      sel.className = 'pn-desc-input';
+      sel.innerHTML = optsHtml;
+      el.parentNode.replaceChild(sel, el);
+    }
+  }
+}
+
+function getV(id) { return parseFloat(document.getElementById(id)?.value) || 0; }
+
+function calcPN2() {
+  const fc = getV('pn-fc');
+  const voci = ['incasso','money','grattavinci','sisal','fatture','giornali'];
+  const uscVoci = ['pos','carte','bonifici'];
+
+  // Totali voci entrata
+  voci.forEach(k => {
+    const tot = getV(k+'-m') + getV(k+'-p') + getV(k+'-s');
+    const el = document.getElementById('tot-'+k);
+    if (el) el.textContent = fmtPN(tot);
   });
-  ['sel-banca-bonifici','sel-banca-pos','sel-banca-carte'].forEach(id => { const el=document.getElementById(id); if(el) el.selectedIndex=0; });
+
+  // Totali voci uscita fisse
+  uscVoci.forEach(k => {
+    const tot = getV(k+'-m') + getV(k+'-p') + getV(k+'-s');
+    const el = document.getElementById('tot-'+k);
+    if (el) el.textContent = fmtPN(tot);
+  });
+
+  // Totali fornitori per turno + aggiorna tot per riga
+  let fM=0, fP=0, fS=0;
+  for (let i = 0; i < pnFornitoriCount; i++) {
+    const m = getV('fm-'+i), p = getV('fp-'+i), s = getV('fs-'+i);
+    fM += m; fP += p; fS += s;
+    const totEl = document.getElementById('ftot-'+i);
+    if (totEl) totEl.textContent = fmtPN(m+p+s);
+  }
+
+  // Totali prelievi per turno + aggiorna tot per riga
+  let pM=0, pP=0, pS=0;
+  for (let i = 0; i < pnPrelieviCount; i++) {
+    const m = getV('pm-'+i), p = getV('pp-'+i), s = getV('ps-'+i);
+    pM += m; pP += p; pS += s;
+    const totEl = document.getElementById('ptot-'+i);
+    if (totEl) totEl.textContent = fmtPN(m+p+s);
+  }
+
+  // Fondo chiusura
+  const fcUscM = getV('fc-usc-m'), fcUscP = getV('fc-usc-p'), fcUscS = getV('fc-usc-s');
+  const fcUscEl = document.getElementById('tot-fc-usc');
+  if (fcUscEl) fcUscEl.textContent = fmtPN(fcUscM+fcUscP+fcUscS);
+
+  // Totali entrate per turno
+  const entM = voci.reduce((s,k) => s + getV(k+'-m'), 0);
+  const entP = voci.reduce((s,k) => s + getV(k+'-p'), 0);
+  const entS = voci.reduce((s,k) => s + getV(k+'-s'), 0);
+  const entTot = fc + entM + entP + entS;
+
+  const setT = (id, v) => { const el = document.getElementById(id); if(el) el.textContent = fmtPN(v); };
+  setT('tot-ent-m', entM); setT('tot-ent-p', entP);
+  setT('tot-ent-s', entS); setT('tot-ent', entTot);
+
+  // Totali uscite per turno
+  const uscM = uscVoci.reduce((s,k)=>s+getV(k+'-m'),0) + fM + pM + fcUscM;
+  const uscP = uscVoci.reduce((s,k)=>s+getV(k+'-p'),0) + fP + pP + fcUscP;
+  const uscS = uscVoci.reduce((s,k)=>s+getV(k+'-s'),0) + fS + pS + fcUscS;
+  const uscTot = uscM + uscP + uscS;
+
+  setT('tot-usc-m', uscM); setT('tot-usc-p', uscP);
+  setT('tot-usc-s', uscS); setT('tot-usc', uscTot);
+
+  // Differenze
+  const dM = entM-uscM, dP = entP-uscP, dS = entS-uscS, dTot = entTot-uscTot;
+  [['diff-m',dM],['diff-p',dP],['diff-s',dS],['diff-tot',dTot]].forEach(([id,d]) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.textContent = (d>=0?'+ ':'- ') + fmtPN(d);
+      el.className = 'td-tot' + (d>0?' alarm':'');
+    }
+  });
+
+  // Incasso per turno
+  const incM = getV('incasso-m') + Math.abs(dM);
+  const incP = getV('incasso-p') + Math.abs(dP);
+  const incS = getV('incasso-s') + Math.abs(dS);
+  setT('r-inc-m', incM); setT('r-inc-p', incP);
+  setT('r-inc-s', incS); setT('r-inc-tot', incM+incP+incS);
+
+  const allarme = document.getElementById('pn-allarme');
+  if (allarme) allarme.classList.toggle('hidden', dTot <= 0);
 }
 
-function resettaForm() {
-  resettaValoriFixed();
-  buildSezioneFornitori(5);
-  buildSezionePrelievi(3);
-  calc();
+// Override calcPN con la v2
+function calcPN() { calcPN2(); }
+
+function addFornitoreRow() {
+  const idx = pnFornitoriCount;
+  const tbody = document.getElementById('pn-tbody');
+  const chiusura = document.querySelector('.pn-section-row.chiusura');
+  const tr = document.createElement('tr');
+  tr.className = 'pn-dyn-row' + (idx%2===0?' pn-row-even':'');
+  tr.id = 'fornitori-r'+idx;
+  tr.innerHTML = `
+    <td class="td-desc" style="display:flex;align-items:center;gap:4px">
+      <input type="text" placeholder="Fornitore..." class="pn-desc-input" id="fdesc-${idx}"/>
+      <button class="pn-remove-btn" onclick="removeRow(this,'f',${idx})">×</button>
+    </td>
+    <td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fm-${idx}" oninput="calcPN()"/></td>
+    <td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fp-${idx}" oninput="calcPN()"/></td>
+    <td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fs-${idx}" oninput="calcPN()"/></td>
+    <td class="td-tot" id="ftot-${idx}">€ 0,00</td>`;
+  tbody.insertBefore(tr, chiusura);
+  pnFornitoriCount++;
 }
 
-function showSaveMsg(msg, type) {
-  const el = document.getElementById('save-msg');
-  el.textContent=msg; el.className='save-msg '+type; el.style.display='block';
-  setTimeout(()=>{ el.style.display='none'; }, 4000);
+function addPrelievRow() {
+  const idx = pnPrelieviCount;
+  const tbody = document.getElementById('pn-tbody');
+  const chiusura = document.querySelector('.pn-section-row.chiusura');
+  const tr = document.createElement('tr');
+  tr.className = 'pn-dyn-row' + (idx%2===0?' pn-row-even':'');
+  tr.id = 'prelievi-r'+idx;
+  tr.innerHTML = `
+    <td class="td-desc" style="display:flex;align-items:center;gap:4px">
+      <input type="text" placeholder="Causale..." class="pn-desc-input" id="pdesc-${idx}"/>
+      <button class="pn-remove-btn" onclick="removeRow(this,'p',${idx})">×</button>
+    </td>
+    <td><input type="number" step="0.01" placeholder="—" class="pn-input" id="pm-${idx}" oninput="calcPN()"/></td>
+    <td><input type="number" step="0.01" placeholder="—" class="pn-input" id="pp-${idx}" oninput="calcPN()"/></td>
+    <td><input type="number" step="0.01" placeholder="—" class="pn-input" id="ps-${idx}" oninput="calcPN()"/></td>
+    <td class="td-tot" id="ptot-${idx}">€ 0,00</td>`;
+  tbody.insertBefore(tr, chiusura);
+  pnPrelieviCount++;
 }
-function setTodayDate() { document.getElementById('pn-data').value=new Date().toISOString().split('T')[0]; }
 
-// ── STORICO ───────────────────────────────────────────────────────────────────
+function removeRow(btn, tipo, idx) {
+  btn.closest('tr').remove();
+  calcPN();
+}
+
+function resetPN() {
+  const campi = ['pn-fc','incasso-m','incasso-p','incasso-s','money-m','money-p','money-s',
+    'grattavinci-m','grattavinci-p','grattavinci-s','sisal-m','sisal-p','sisal-s','fatture-m','fatture-p','fatture-s','giornali-m','giornali-p','giornali-s','conto-bet-m','conto-bet-p','conto-bet-s',
+    'pos-m','pos-p','pos-s','carte-m','carte-p','carte-s','bonifici-m','bonifici-p','bonifici-s',
+    'fc-usc-m','fc-usc-p','fc-usc-s','cm','cp','cs','pn-note'];
+  campi.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  // Pulisci righe statiche fornitori
+  for (let i=0; i<5; i++) { ['fdesc','fm','fp','fs'].forEach(p => { const el=document.getElementById(p+'-'+i); if(el) el.value=''; }); }
+  for (let i=0; i<3; i++) { ['pdesc','pm','pp','ps'].forEach(p => { const el=document.getElementById(p+'-'+i); if(el) el.value=''; }); }
+  calcPN();
+}
+
+async function loadNotaGiorno2() {
+  if (!currentBusiness) return;
+  const data = document.getElementById('pn-data')?.value;
+  const locId = document.getElementById('pn-location')?.value || null;
+  if (!data) return;
+
+  let query = db.from('daily_notes').select('*, daily_note_rows(*)')
+    .eq('business_id', currentBusiness.id).eq('data', data);
+  if (locId) query = query.eq('location_id', locId);
+  const { data: noteList2 } = await query.order('created_at', { ascending: false }).limit(10);
+  const nota = (noteList2 || []).find(n => locId ? n.location_id === locId : !n.location_id) || null;
+
+  resetPN();
+  if (!nota) return;
+
+  document.getElementById('pn-fc').value = nota.fondo_cassa || '';
+  const campiMap = [
+    ['incasso','incasso'],['money','money'],['grattavinci','grattavinci'],['sisal','sisal'],['conto-bet','conto_bet'],
+    ['fatture','fatture'],['giornali','giornali'],
+    ['pos','pos'],['carte','carte'],['bonifici','bonifici'],['fc-usc','fondo_chiusura']
+  ];
+  campiMap.forEach(([html, db]) => {
+    ['m','p','s'].forEach(t => {
+      const el = document.getElementById(html+'-'+t);
+      if (el) el.value = nota[db+'_'+t] || '';
+    });
+  });
+  document.getElementById('cm').value = nota.compilatore_m || '';
+  document.getElementById('cp').value = nota.compilatore_p || '';
+  document.getElementById('cs').value = nota.compilatore_s || '';
+  document.getElementById('pn-note').value = nota.note || '';
+
+  const fornitori = (nota.daily_note_rows||[]).filter(r=>r.categoria==='fornitore');
+  const prelievi  = (nota.daily_note_rows||[]).filter(r=>r.categoria==='prelievo');
+
+  fornitori.forEach((r,i) => {
+    if (i>=5) addFornitoreRow();
+    const el = (id) => document.getElementById(id+'-'+i);
+    if (el('fdesc')) el('fdesc').value = r.descrizione||'';
+    if (el('fm'))    el('fm').value    = r.importo_m||'';
+    if (el('fp'))    el('fp').value    = r.importo_p||'';
+    if (el('fs'))    el('fs').value    = r.importo_s||'';
+  });
+
+  prelievi.forEach((r,i) => {
+    if (i>=3) addPrelievRow();
+    const el = (id) => document.getElementById(id+'-'+i);
+    if (el('pdesc')) el('pdesc').value = r.descrizione||'';
+    if (el('pm'))    el('pm').value    = r.importo_m||'';
+    if (el('pp'))    el('pp').value    = r.importo_p||'';
+    if (el('ps'))    el('ps').value    = r.importo_s||'';
+  });
+
+  calcPN();
+}
+
+// Override loadNotaGiorno
+function loadNotaGiorno() { loadNotaGiorno2(); }
+
+
+// ============================================
+// STORICO PRIMA NOTA
+// ============================================
+async function initStorico() {
+  // Imposta date default (mese corrente)
+  const today = new Date().toISOString().split('T')[0];
+  const firstDay = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
+  const fromEl = document.getElementById('storico-from');
+  const toEl = document.getElementById('storico-to');
+  if (fromEl && !fromEl.value) fromEl.value = firstDay;
+  if (toEl && !toEl.value) toEl.value = today;
+
+  // Popola select sede
+  const sel = document.getElementById('storico-location');
+  if (sel) {
+    sel.innerHTML = '<option value="">Tutte le sedi</option>' +
+      currentLocations.map(l => `<option value="${l.id}">${l.name}</option>`).join('');
+  }
+
+  await loadStorico();
+}
+
 async function loadStorico() {
-  const locale  = document.getElementById('filter-locale').value;
-  const periodo = document.getElementById('filter-periodo').value;
-  let q = sb.from('pn_prima_nota').select('*').order('data',{ascending:false});
-  if (locale) q=q.eq('locale',locale);
-  q = applyPeriodo(q, periodo);
-  const { data } = await q; if (!data) return;
-  const totInc  = data.reduce((a,r)=>a+(r.incasso_giornaliero||0),0);
-  const totDiff = data.reduce((a,r)=>a+(r.differenza||0),0);
-  document.getElementById('storico-summary').innerHTML=`
-    <div class="sum-card"><div class="sum-label">Giornate</div><div class="sum-val">${data.length}</div></div>
-    <div class="sum-card"><div class="sum-label">Tot. incassi</div><div class="sum-val green">${fmtE(totInc)}</div></div>
-    <div class="sum-card"><div class="sum-label">Diff. totale</div><div class="sum-val ${totDiff<=0?'green':''}">${fmtSigned(totDiff)}</div></div>`;
-  if (!data.length) { document.getElementById('storico-list').innerHTML='<div class="empty-state">Nessuna prima nota nel periodo</div>'; return; }
-  document.getElementById('storico-list').innerHTML=data.map(r=>`
-    <div class="storico-item">
-      <div class="si-left" onclick="apriEModifica('${r.data}','${r.locale}')" style="flex:1;cursor:pointer">
-        <div class="si-date">${formatDate(r.data)}</div>
-        <div class="si-meta">
-          <span class="badge-locale ${r.locale==='loveme_bar'?'badge-bar':'badge-corso'}">${LOCALE_LABEL[r.locale]}</span>
-          ${r.compilatore_s?' · '+r.compilatore_s:''}
-        </div>
-      </div>
-      <div class="si-right" style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
-        <div class="si-incasso">${fmtE(r.incasso_giornaliero)}</div>
-        <div class="si-diff">Diff: ${fmtSigned(r.differenza)}</div>
-        <div style="display:flex;gap:6px;margin-top:2px">
-          <button class="btn-mini" onclick="apriEModifica('${r.data}','${r.locale}')">Modifica</button>
-          <button class="btn-mini danger" onclick="eliminaPrimaNota('${r.id}','${r.data}')">Elimina</button>
-        </div>
+  if (!currentBusiness) return;
+
+  const from = document.getElementById('storico-from').value;
+  const to = document.getElementById('storico-to').value;
+  const locId = document.getElementById('storico-location').value;
+
+  let query = db.from('daily_notes')
+    .select('*')
+    .eq('business_id', currentBusiness.id)
+    .order('data', { ascending: false });
+
+  if (from) query = query.gte('data', from);
+  if (to) query = query.lte('data', to);
+  if (locId) query = query.eq('location_id', locId);
+
+  const { data: notes } = await query;
+  const list = notes || [];
+
+  // KPI totali
+  const totEnt = list.reduce((s, n) => s + Number(n.totale_entrate || 0), 0);
+  const totUsc = list.reduce((s, n) => s + Number(n.totale_uscite || 0), 0);
+  const totInc = list.reduce((s, n) => s + Number(n.incasso_giornaliero || 0), 0);
+
+  document.getElementById('st-giorni').textContent = list.length;
+  document.getElementById('st-entrate').textContent = formatEur(totEnt);
+  document.getElementById('st-uscite').textContent = formatEur(totUsc);
+  document.getElementById('st-incasso').textContent = formatEur(totInc);
+
+  const container = document.getElementById('storico-list');
+  if (!list.length) {
+    container.innerHTML = '<div class="empty-state">Nessun giorno registrato nel periodo</div>';
+    return;
+  }
+
+  container.innerHTML = `
+    <div class="storico-header">
+      <span>Data</span>
+      <span>Compilatori</span>
+      <span style="text-align:right">Entrate</span>
+      <span style="text-align:right">Uscite</span>
+      <span style="text-align:right">Differenza</span>
+      <span style="text-align:right">Incasso</span>
+      <span></span>
+    </div>
+    ${list.map(n => {
+      const loc = currentLocations.find(l => l.id === n.location_id);
+      const compilatori = [n.compilatore_m, n.compilatore_p, n.compilatore_s].filter(Boolean).join(' · ') || '—';
+      const diff = Number(n.differenza || 0);
+      const inc = Number(n.incasso_giornaliero || 0);
+      const dataFormatted = new Date(n.data + 'T12:00:00').toLocaleDateString('it-IT', {
+        weekday: 'short', day: '2-digit', month: 'short', year: 'numeric'
+      });
+
+      return `
+        <div class="storico-item" onclick="apriGiorno('${n.data}', '${n.location_id || ''}')">
+          <div>
+            <div class="st-data">${dataFormatted}</div>
+            ${loc ? `<div class="st-sede">${loc.name}</div>` : ''}
+          </div>
+          <div class="st-sede">${compilatori}</div>
+          <div class="st-val green">${formatEur(n.totale_entrate || 0)}</div>
+          <div class="st-val red">${formatEur(n.totale_uscite || 0)}</div>
+          <div class="st-val ${diff <= 0 ? 'blue' : 'red'}">${diff <= 0 ? '' : '⚠ '}${formatEur(diff)}</div>
+          <div class="st-val gold">${formatEur(inc)}</div>
+          <div class="st-arrow">→</div>
+        </div>`;
+    }).join('')}`;
+}
+
+async function apriGiorno(data, locationId) {
+  // Vai alla Prima Nota con quella data
+  showView('primanota');
+
+  // Imposta data e sede
+  const dataEl = document.getElementById('pn-data');
+  const locEl = document.getElementById('pn-location');
+
+  if (dataEl) dataEl.value = data;
+  if (locEl && locationId) locEl.value = locationId;
+
+  // Carica i dati
+  await loadNotaGiorno2();
+
+  // Scroll in cima
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  showToast('Giorno del ' + new Date(data + 'T12:00:00').toLocaleDateString('it-IT') + ' caricato', 'success');
+}
+
+// ============================================
+// BANCA & FINANZA
+// ============================================
+let bancheCache = [];
+let currentAssegniFilter = 'aperti';
+
+function switchBancaTab(tab) {
+  document.querySelectorAll('.banca-tab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.banca-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('btab-' + tab).classList.add('active');
+  document.getElementById('bpanel-' + tab).classList.add('active');
+  if (tab === 'estratto') initEstrattoBanca();
+}
+
+async function initBanca() {
+  await loadBancheCache();
+  populateBancaSelects();
+  setTodayFields();
+  await Promise.all([
+    loadOverview(),
+    loadBancheList(),
+    loadVersamenti(),
+    loadAssegni(),
+    loadRid()
+  ]);
+}
+
+function setTodayFields() {
+  const today = new Date().toISOString().split('T')[0];
+  ['nv-data','na-emissione','na-scadenza','nr-prossimo'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el && !el.value) el.value = today;
+  });
+}
+
+async function loadBancheCache() {
+  if (!currentBusiness) return;
+  const { data } = await db.from('banche').select('*')
+    .eq('business_id', currentBusiness.id).eq('attivo', true).order('nome');
+  bancheCache = data || [];
+}
+
+function populateBancaSelects() {
+  const opts = '<option value="">Seleziona banca</option>' +
+    bancheCache.map(b => `<option value="${b.id}">${b.nome} — ${b.istituto || ''}</option>`).join('');
+  ['nv-banca','na-banca','nr-banca'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = opts;
+  });
+}
+
+// ── OVERVIEW ─────────────────────────────────────────────────────
+async function loadOverview() {
+  if (!currentBusiness) return;
+  const today = new Date().toISOString().split('T')[0];
+  const in30 = new Date(); in30.setDate(in30.getDate() + 30);
+  const in30str = in30.toISOString().split('T')[0];
+
+  const [{ data: vers }, { data: movUsc }, { data: assAperte }, { data: ridAttivi }] = await Promise.all([
+    db.from('versamenti').select('importo_contante,importo_pos,banca_id').eq('business_id', currentBusiness.id),
+    db.from('movimenti_banca').select('importo,banca_id').eq('business_id', currentBusiness.id).eq('segno','dare'),
+    db.from('assegni').select('*').eq('business_id', currentBusiness.id).eq('incassato', false),
+    db.from('rid_bancari').select('*').eq('business_id', currentBusiness.id).eq('attivo', true)
+  ]);
+
+  // Saldo banche = saldo iniziale + versamenti - movimenti dare
+  let saldoBanche = bancheCache.reduce((s, b) => s + Number(b.saldo_iniziale || 0), 0);
+  saldoBanche += (vers || []).reduce((s, v) => s + Number(v.importo_contante||0) + Number(v.importo_pos||0), 0);
+  saldoBanche -= (movUsc || []).reduce((s, m) => s + Number(m.importo||0), 0);
+
+  const assTot = (assAperte || []).reduce((s, a) => s + Number(a.importo||0), 0);
+  const ridMensile = (ridAttivi || []).reduce((s, r) => {
+    const mult = { mensile:1, bimestrale:0.5, trimestrale:0.33, semestrale:0.17, annuale:0.08 }[r.frequenza] || 1;
+    return s + Number(r.importo||0) * mult;
+  }, 0);
+  const dispReale = saldoBanche - assTot;
+
+  document.getElementById('ov-saldo-banche').textContent = formatEur(saldoBanche);
+  document.getElementById('ov-saldo-sub').textContent = bancheCache.length + ' conti attivi';
+  document.getElementById('ov-assegni').textContent = formatEur(assTot);
+  document.getElementById('ov-assegni-sub').textContent = (assAperte||[]).length + ' assegni';
+  document.getElementById('ov-rid').textContent = formatEur(ridMensile);
+  document.getElementById('ov-rid-sub').textContent = (ridAttivi||[]).length + ' addebiti attivi';
+  document.getElementById('ov-disp').textContent = formatEur(dispReale);
+
+  // Alerts
+  const alerts = [];
+  const scaduti = (assAperte||[]).filter(a => a.data_scadenza < today);
+  const inScadenza = (assAperte||[]).filter(a => a.data_scadenza >= today && a.data_scadenza <= in30str);
+  if (scaduti.length) alerts.push({ type: 'danger', msg: `⚠️ ${scaduti.length} assegni scaduti per ${formatEur(scaduti.reduce((s,a)=>s+Number(a.importo),0))}` });
+  if (inScadenza.length) alerts.push({ type: 'warning', msg: `⏰ ${inScadenza.length} assegni in scadenza nei prossimi 30 giorni: ${formatEur(inScadenza.reduce((s,a)=>s+Number(a.importo),0))}` });
+  if (dispReale < 0) alerts.push({ type: 'danger', msg: `🚨 Disponibilità negativa: ${formatEur(dispReale)}` });
+
+  const ridProssimi = (ridAttivi||[]).filter(r => r.prossimo_addebito && r.prossimo_addebito <= in30str);
+  if (ridProssimi.length) alerts.push({ type: 'info', msg: `📅 ${ridProssimi.length} RID in addebito nei prossimi 30 giorni: ${formatEur(ridProssimi.reduce((s,r)=>s+Number(r.importo),0))}` });
+
+  document.getElementById('ov-alerts').innerHTML = alerts.map(a =>
+    `<div class="ov-alert ${a.type}">${a.msg}</div>`).join('');
+
+  // Previsione 30 giorni
+  buildPrevisione(dispReale, assAperte||[], ridAttivi||[]);
+}
+
+function buildPrevisione(dispReale, assegni, rid) {
+  const rows = [];
+  const today = new Date();
+
+  rows.push({ data: 'Oggi', desc: 'Disponibilità attuale', val: dispReale, cls: dispReale >= 0 ? 'green' : 'red', saldo: true });
+
+  let saldo = dispReale;
+  const eventi = [];
+
+  // Assegni in scadenza nei prossimi 30 gg
+  assegni.forEach(a => {
+    const d = new Date(a.data_scadenza);
+    if (d >= today) eventi.push({ data: d, desc: `Assegno: ${a.beneficiario || 'N/D'}`, importo: -Number(a.importo), tipo: 'assegno' });
+  });
+
+  // RID
+  rid.forEach(r => {
+    if (r.prossimo_addebito) {
+      const d = new Date(r.prossimo_addebito);
+      if (d >= today) eventi.push({ data: d, desc: `RID: ${r.nome}`, importo: -Number(r.importo), tipo: 'rid' });
+    }
+  });
+
+  eventi.sort((a, b) => a.data - b.data);
+  eventi.slice(0, 10).forEach(ev => {
+    saldo += ev.importo;
+    rows.push({
+      data: ev.data.toLocaleDateString('it-IT', { day: '2-digit', month: 'short' }),
+      desc: ev.desc,
+      val: ev.importo,
+      saldo,
+      cls: ev.importo < 0 ? 'red' : 'green'
+    });
+  });
+
+  document.getElementById('ov-previsione').innerHTML = rows.map(r => `
+    <div class="prev-row ${r.saldo ? 'saldo' : ''}">
+      <span class="prev-data">${r.data}</span>
+      <span class="prev-desc">${r.desc}</span>
+      <span class="prev-val ${r.cls}">${r.val >= 0 ? '+' : ''}${formatEur(r.val)}</span>
+      ${r.saldo !== undefined && !r.saldo ? `<span class="prev-val ${r.saldo >= 0 ? 'gold' : 'red'}" style="min-width:100px;text-align:right">${formatEur(r.saldo)}</span>` : '<span></span>'}
+    </div>`).join('') || '<div class="empty-state">Nessun evento nei prossimi 30 giorni</div>';
+}
+
+// ── BANCHE ───────────────────────────────────────────────────────
+function showAddBanca() { document.getElementById('add-banca-form').classList.remove('hidden'); }
+function hideAddBanca() { document.getElementById('add-banca-form').classList.add('hidden'); }
+
+async function saveBanca() {
+  if (!currentBusiness) return;
+  const nome = document.getElementById('nb-nome').value.trim();
+  if (!nome) { showToast('Inserisci il nome del conto', 'error'); return; }
+  const { error } = await db.from('banche').insert({
+    business_id: currentBusiness.id,
+    nome,
+    istituto: document.getElementById('nb-istituto').value.trim(),
+    iban: document.getElementById('nb-iban').value.trim(),
+    tipo: document.getElementById('nb-tipo').value,
+    saldo_iniziale: parseFloat(document.getElementById('nb-saldo').value) || 0
+  });
+  if (error) { showToast('Errore: ' + error.message, 'error'); return; }
+  showToast('Conto aggiunto ✓', 'success');
+  hideAddBanca();
+  await loadBancheCache();
+  populateBancaSelects();
+  loadBancheList();
+  loadOverview();
+}
+
+async function loadBancheList() {
+  if (!currentBusiness) return;
+  const { data } = await db.from('banche').select('*')
+    .eq('business_id', currentBusiness.id).order('nome');
+  const el = document.getElementById('banche-list');
+  if (!data?.length) { el.innerHTML = '<div class="empty-state">Nessun conto configurato</div>'; return; }
+  el.innerHTML = data.map(b => `
+    <div class="banca-card">
+      <div class="bc-nome">${b.nome}</div>
+      <div class="bc-istituto">${b.istituto || '—'}</div>
+      ${b.iban ? `<div class="bc-iban">${b.iban}</div>` : ''}
+      <div class="bc-saldo-label">Saldo iniziale</div>
+      <div class="bc-saldo">${formatEur(b.saldo_iniziale)}</div>
+      <div class="bc-actions">
+        <button class="btn-secondary sm" onclick="deleteBanca('${b.id}')">Elimina</button>
       </div>
     </div>`).join('');
 }
 
-async function eliminaPrimaNota(id, data) {
-  if (currentProfilo?.ruolo !== 'admin') { alert("Solo l'amministratore può eliminare le prime note."); return; }
-  if (!confirm(`Eliminare la prima nota del ${formatDate(data)}?\nL'operazione è irreversibile.`)) return;
-  await sb.from('pn_righe_uscite').delete().eq('prima_nota_id', id);
-  await sb.from('pn_prima_nota').delete().eq('id', id);
-  loadStorico();
+async function deleteBanca(id) {
+  
+  await db.from('banche').delete().eq('id', id);
+  await loadBancheCache();
+  populateBancaSelects();
+  loadBancheList();
+  loadOverview();
+  showToast('Conto eliminato', 'success');
 }
 
-async function apriEModifica(data, locale) {
-  currentLocale = locale;
-  document.getElementById('pn-data').value = data;
-  if (document.getElementById('ls-bar')) {
-    document.getElementById('ls-bar').classList.toggle('active', locale==='loveme_bar');
-    document.getElementById('ls-corso').classList.toggle('active', locale==='loveme_corso');
-  }
-  updateLocaleLabel();
-  showPage('compila');
-  await loadNotaDelGiorno();
-}
-
-function applyPeriodo(q, periodo) {
-  const now=new Date();
-  if (periodo==='settimana'){const d=new Date(now);d.setDate(d.getDate()-d.getDay()+1);return q.gte('data',d.toISOString().split('T')[0]);}
-  if (periodo==='mese') return q.gte('data',`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`);
-  if (periodo==='anno') return q.gte('data',`${now.getFullYear()}-01-01`);
-  return q;
-}
-function formatDate(d){if(!d)return'—';const[y,m,day]=d.split('-');return`${day}/${m}/${y}`;}
-
-// ── DASHBOARD ─────────────────────────────────────────────────────────────────
-function buildTrendSVG(keys, data, maxVal) {
-  if (!keys.length) return '<div class="empty-state" style="padding:2rem">Nessun dato</div>';
-  const W = 340, H = 200, padL = 8, padR = 8, padT = 44, padB = 36;
-  const chartW = W - padL - padR;
-  const chartH = H - padT - padB;
-  const barW   = Math.min(38, Math.floor(chartW / keys.length) - 8);
-  const gap    = (chartW - barW * keys.length) / (keys.length + 1);
-  const colors = ['#818CF8','#A78BFA','#34D399','#FCD34D','#FB923C','#F472B6','#38BDF8','#4ADE80'];
-  const baseY  = padT + chartH;
-
-  let bars = '';
-  keys.forEach((k, i) => {
-    const v    = data[k] || 0;
-    const pct  = maxVal > 0 ? v / maxVal : 0;
-    const bH   = Math.max(6, Math.round(pct * chartH));
-    const x    = padL + gap + i * (barW + gap);
-    const y    = baseY - bH;
-    const col  = colors[i % colors.length];
-    const vStr = v >= 1000 ? (v/1000).toFixed(1)+'k' : Math.round(v).toString();
-    bars += '<rect x="'+x+'" y="'+y+'" width="'+barW+'" height="'+bH+'" rx="6" fill="'+col+'"/>';
-    bars += '<text x="'+(x+barW/2)+'" y="'+(y-7)+'" text-anchor="middle" font-size="10" font-weight="700" fill="'+col+'">'+vStr+'</text>';
-    bars += '<text x="'+(x+barW/2)+'" y="'+(H-10)+'" text-anchor="middle" font-size="11" fill="#94A3B8" font-weight="600">'+k+'</text>';
+// ── VERSAMENTI ────────────────────────────────────────────────────
+async function saveVersamento() {
+  if (!currentBusiness) return;
+  const banca = document.getElementById('nv-banca').value;
+  const contante = parseFloat(document.getElementById('nv-contante').value) || 0;
+  const pos = parseFloat(document.getElementById('nv-pos').value) || 0;
+  if (!banca) { showToast('Seleziona una banca', 'error'); return; }
+  if (!contante && !pos) { showToast('Inserisci almeno un importo', 'error'); return; }
+  const { error } = await db.from('versamenti').insert({
+    business_id: currentBusiness.id,
+    banca_id: banca,
+    data_versamento: document.getElementById('nv-data').value,
+    importo_contante: contante,
+    importo_pos: pos,
+    note: document.getElementById('nv-note').value,
+    created_by: currentUser.id
   });
-
-  return '<svg viewBox="0 0 '+W+' '+H+'" width="100%" style="display:block" xmlns="http://www.w3.org/2000/svg">'
-    + '<rect width="'+W+'" height="'+H+'" fill="#0F172A" rx="12"/>'
-    + '<line x1="'+padL+'" y1="'+baseY+'" x2="'+(W-padR)+'" y2="'+baseY+'" stroke="#1E293B" stroke-width="1.5"/>'
-    + bars
-    + '</svg>';
+  if (error) { showToast('Errore: ' + error.message, 'error'); return; }
+  showToast('Versamento registrato ✓', 'success');
+  ['nv-contante','nv-pos','nv-note'].forEach(id => document.getElementById(id).value = '');
+  loadVersamenti(); loadOverview();
 }
 
-async function loadDashboard() {
-  const periodo=document.getElementById('dash-periodo').value;
-  const el=document.getElementById('dashboard-content');
-  el.innerHTML='<div class="empty-state">Caricamento...</div>';
-  let q=sb.from('pn_prima_nota').select('*').order('data',{ascending:true});
-  q=applyPeriodo(q,periodo);
-  const{data}=await q;
-  if(!data||!data.length){el.innerHTML='<div class="empty-state">Nessun dato nel periodo</div>';return;}
-  const bar=data.filter(r=>r.locale==='loveme_bar'),corso=data.filter(r=>r.locale==='loveme_corso');
-  const totInc=arr=>arr.reduce((a,x)=>a+(x.incasso_giornaliero||0),0);
-  const avgInc=arr=>arr.length?totInc(arr)/arr.length:0;
-  const q30=await sb.from('pn_prima_nota').select('incasso_giornaliero,locale').gte('data',daysAgo(30));
-  const d30=q30.data||[];
-  const avg30Bar=avg(d30.filter(r=>r.locale==='loveme_bar').map(r=>r.incasso_giornaliero));
-  const avg30Corso=avg(d30.filter(r=>r.locale==='loveme_corso').map(r=>r.incasso_giornaliero));
-  const byWeek={};
-  data.forEach(r=>{const wk=getWeekLabel(r.data);byWeek[wk]=(byWeek[wk]||0)+(r.incasso_giornaliero||0);});
-  const wkKeys=Object.keys(byWeek).slice(-6);
-  const wkMax=Math.max(...wkKeys.map(k=>byWeek[k]),1);
-  let prevTot7=0;
-  el.innerHTML=`
-    <div class="dash-section"><div class="dash-section-title">Riepilogo periodo</div>
-    <div class="dash-grid">
-      <div class="dash-card"><div class="dash-label">Love Me Bar</div><div class="dash-val green">${fmtE(totInc(bar))}</div><div class="dash-sub">Media/gg: ${fmtE(avgInc(bar))} · ${bar.length} gg</div></div>
-      <div class="dash-card"><div class="dash-label">Café del Corso</div><div class="dash-val green">${fmtE(totInc(corso))}</div><div class="dash-sub">Media/gg: ${fmtE(avgInc(corso))} · ${corso.length} gg</div></div>
-      <div class="dash-card full"><div class="dash-label">Totale entrambi</div><div class="dash-val green">${fmtE(totInc(data))}</div><div class="dash-sub">Diff. media: ${fmtSigned(avg(data.map(r=>r.differenza)))}</div></div>
-    </div></div>
-    <div class="dash-section"><div class="dash-section-title">Trend settimanale</div>
-    <div class="dash-card" style="padding:0;overflow:hidden">${buildTrendSVG(wkKeys,byWeek,wkMax)}</div></div>
-    <div class="dash-section"><div class="dash-section-title">Previsionale prossimi 7 giorni</div>
-    <div class="dash-card">${[...Array(7)].map((_,i)=>{
-      const d=new Date();d.setDate(d.getDate()+i+1);
-      const gg=['Dom','Lun','Mar','Mer','Gio','Ven','Sab'][d.getDay()];
-      const pb=avg30Bar*stagionalita(d.getDay()),pc=avg30Corso*stagionalita(d.getDay());
-      prevTot7+=(pb+pc);
-      return`<div class="previsionale-row"><div><div class="prev-label">${gg} ${d.getDate()}/${d.getMonth()+1}</div><div class="prev-note">Bar: ${fmtE(pb)} · Corso: ${fmtE(pc)}</div></div><div class="prev-val">${fmtE(pb+pc)}</div></div>`;
-    }).join('')}</div></div>`;
-  try {
-    const dH = await buildDisponibilitaSection(prevTot7);
-    const aH = await buildAllineamentoSection(periodo);
-    el.innerHTML += dH + aH;
-  } catch(e) { console.error('Dashboard extra:', e); }
+async function loadVersamenti() {
+  if (!currentBusiness) return;
+  const { data } = await db.from('versamenti').select('*')
+    .eq('business_id', currentBusiness.id)
+    .order('data_versamento', { ascending: false }).limit(20);
+  const el = document.getElementById('versamenti-list');
+  if (!data?.length) { el.innerHTML = '<div class="empty-state">Nessun versamento registrato</div>'; return; }
+  el.innerHTML = data.map(v => {
+    const banca = bancheCache.find(b => b.id === v.banca_id);
+    const tot = Number(v.importo_contante||0) + Number(v.importo_pos||0);
+    return `<div class="entry-item">
+      <div class="entry-dot entrata"></div>
+      <div class="entry-info">
+        <div class="entry-desc">Versamento${banca ? ' → ' + banca.nome : ''}</div>
+        <div class="entry-meta">${formatDate(v.data_versamento)} · Contante: ${formatEur(v.importo_contante)} · POS: ${formatEur(v.importo_pos)}</div>
+      </div>
+      <div class="entry-amount entrata">+${formatEur(tot)}</div>
+      <button class="entry-del" onclick="deleteVersamento('${v.id}')">✕</button>
+    </div>`;
+  }).join('');
 }
 
-async function buildDisponibilitaSection(prevTot7) {
-  const tra30 = new Date(); tra30.setDate(tra30.getDate()+30);
-  const tra30str = tra30.toISOString().split('T')[0];
-  const [
-    { data: noteMedia },
-    { data: righeFornitoriMedia },
-    { data: assScad30 },
-    { data: assScadSett }
-  ] = await Promise.all([
-    sb.from('pn_prima_nota').select('incasso_giornaliero').gte('data', daysAgo(30)).gt('incasso_giornaliero',0),
-    sb.from('pn_righe_uscite').select('importo_t,importo_m,pn_prima_nota!inner(data)')
-      .eq('categoria','fornitore').gte('pn_prima_nota.data', daysAgo(30)),
-    sb.from('pn_assegni').select('importo').eq('incassato',false).lte('data_scadenza',tra30str),
-    sb.from('pn_assegni').select('importo,data_scadenza').eq('incassato',false).gte('data_scadenza', new Date().toISOString().split('T')[0]).order('data_scadenza')
-  ]);
-  const n = Math.max((noteMedia||[]).length, 1);
-  const mediaIncasso   = (noteMedia||[]).reduce((a,r)=>a+(r.incasso_giornaliero||0),0) / n;
-  const totFornitori30 = (righeFornitoriMedia||[]).reduce((a,r)=>a+(r.importo_t||r.importo_m||0),0);
-  const mediaFornitori = totFornitori30 / n;
-  const margineMedio   = mediaIncasso - mediaFornitori;
-  const incassiPrev30  = mediaIncasso * 30;
-  const fornPrev30     = mediaFornitori * 30;
-  const assScad30Tot   = (assScad30||[]).reduce((a,r)=>a+(r.importo||0),0);
-  const fabbisogno     = incassiPrev30 - fornPrev30 - assScad30Tot;
-  const scadSett = {};
-  (assScadSett||[]).forEach(a => {
-    const d = new Date(a.data_scadenza);
-    const wk = 'S'+getWeekNumber(d);
-    scadSett[wk] = (scadSett[wk]||0) + a.importo;
+async function deleteVersamento(id) {
+  
+  await db.from('versamenti').delete().eq('id', id);
+  loadVersamenti(); loadOverview();
+  showToast('Versamento eliminato', 'success');
+}
+
+// ── ASSEGNI ───────────────────────────────────────────────────────
+async function saveAssegno() {
+  if (!currentBusiness) return;
+  const importo = parseFloat(document.getElementById('na-importo').value);
+  const scadenza = document.getElementById('na-scadenza').value;
+  const fornitoreId = document.getElementById('na-fornitore')?.value || null;
+  if (!importo || importo <= 0) { showToast('Inserisci un importo valido', 'error'); return; }
+  if (!scadenza) { showToast('Inserisci la data di scadenza', 'error'); return; }
+
+  // Auto-compila beneficiario dal fornitore selezionato
+  let beneficiario = '';
+  if (fornitoreId) { const f2 = fornitoriCache.find(x => x.id === fornitoreId); if (f2) beneficiario = f2.ragione_sociale; }
+
+
+  const { error } = await db.from('assegni').insert({
+    business_id: currentBusiness.id,
+    banca_id: document.getElementById('na-banca').value || null,
+    fornitore_id: fornitoreId,
+    numero: document.getElementById('na-numero').value.trim(),
+    beneficiario,
+    importo,
+    data_emissione: document.getElementById('na-emissione').value,
+    data_scadenza: scadenza,
+    stato: 'emesso',
+    note: document.getElementById('na-note').value
   });
-  const scadKeys = Object.keys(scadSett);
-  const scadMax  = Math.max(...scadKeys.map(k=>scadSett[k]), 1);
-  let scadSvg = '';
-  if (scadKeys.length) {
-    const W=340,H=140,padL=8,padR=8,padT=32,padB=24;
-    const cW=W-padL-padR, cH=H-padT-padB;
-    const bW=Math.min(40,Math.floor(cW/scadKeys.length)-6);
-    const gap=(cW-bW*scadKeys.length)/(scadKeys.length+1);
-    const baseY=padT+cH;
-    let rects='';
-    scadKeys.forEach((k,i)=>{
-      const v=scadSett[k], pct=v/scadMax;
-      const bH=Math.max(4,Math.round(pct*cH));
-      const x=padL+gap+i*(bW+gap), y=baseY-bH;
-      const vStr=v>=1000?(v/1000).toFixed(1)+'k':Math.round(v).toString();
-      rects+='<rect x="'+x+'" y="'+y+'" width="'+bW+'" height="'+bH+'" rx="5" fill="#F59E0B"/>';
-      rects+='<text x="'+(x+bW/2)+'" y="'+(y-5)+'" text-anchor="middle" font-size="9" fill="#F59E0B" font-weight="700">'+vStr+'</text>';
-      rects+='<text x="'+(x+bW/2)+'" y="'+(H-6)+'" text-anchor="middle" font-size="9" fill="#94A3B8">'+k+'</text>';
-    });
-    scadSvg='<svg viewBox="0 0 '+W+' '+H+'" width="100%" style="display:block" xmlns="http://www.w3.org/2000/svg">'
-      +'<rect width="'+W+'" height="'+H+'" fill="#0F172A" rx="10"/>'
-      +'<line x1="'+padL+'" y1="'+baseY+'" x2="'+(W-padR)+'" y2="'+baseY+'" stroke="#1E293B" stroke-width="1.5"/>'
-      +rects+'</svg>';
-  }
-  const fmtS = v => (v>=0?'+ ':' - ')+fmtE(Math.abs(v));
-  const cls  = v => v>=0?'green':'red';
-  return '<div class="dash-section">'
-    +'<div class="dash-section-title">Previsionale finanziario — 30 giorni</div>'
-    +'<div class="disp-grid" style="margin-bottom:12px">'
-    +'<div class="disp-card"><div class="disp-label">Media incasso / giorno</div><div class="disp-val green">'+fmtE(mediaIncasso)+'</div><div class="disp-sub">'+n+' giorni rilevati</div></div>'
-    +'<div class="disp-card"><div class="disp-label">Media spese fornitori / giorno</div><div class="disp-val red">'+fmtE(mediaFornitori)+'</div><div class="disp-sub">solo uscite fornitori</div></div>'
-    +'<div class="disp-card"><div class="disp-label">Margine operativo / giorno</div><div class="disp-val '+cls(margineMedio)+'">'+fmtS(margineMedio)+'</div><div class="disp-sub">incasso meno fornitori</div></div>'
-    +'<div class="disp-card '+(fabbisogno<0?'alarm':'')+'"><div class="disp-label">Fabbisogno netto 30gg</div><div class="disp-val '+cls(fabbisogno)+'">'+fmtS(fabbisogno)+'</div><div class="disp-sub">margine - assegni in scadenza</div></div>'
-    +'</div>'
-    +'<div class="prev30-box" style="margin-bottom:10px">'
-    +'<div class="prev30-title">Proiezione 30 giorni</div>'
-    +'<div class="prev30-row"><span>Incassi previsti (media × 30)</span><span class="p30-val green">+ '+fmtE(incassiPrev30)+'</span></div>'
-    +'<div class="prev30-row"><span>Spese fornitori previste (media × 30)</span><span class="p30-val red"> - '+fmtE(fornPrev30)+'</span></div>'
-    +'<div class="prev30-row"><span>Assegni fornitori in scadenza 30gg</span><span class="p30-val red"> - '+fmtE(assScad30Tot)+'</span></div>'
-    +'<div class="prev30-row total"><span>Fabbisogno netto disponibile</span><span class="p30-val '+cls(fabbisogno)+' big">'+fmtS(fabbisogno)+'</span></div>'
-    +'</div>'
-    +(scadKeys.length?'<div class="dash-section-title" style="margin-top:1rem;margin-bottom:8px">Scadenzario assegni per settimana</div>'+scadSvg:'')
-    +'</div>';
+  if (error) { showToast('Errore: ' + error.message, 'error'); return; }
+  showToast('Assegno registrato ✓', 'success');
+  ['na-numero','na-importo','na-note'].forEach(id => document.getElementById(id).value = '');
+  const naF = document.getElementById('na-fornitore'); if (naF) naF.value = '';
+  loadAssegni(); loadOverview();
 }
 
-async function buildAllineamentoSection(periodoDefault) {
-  const sel = document.getElementById('alig-periodo-filter');
-  const periodo = sel ? sel.value : (periodoDefault || 'mese');
-  const now = new Date();
-  let dataFrom;
-  if (periodo==='settimana'){const d=new Date(now);d.setDate(d.getDate()-d.getDay()+1);dataFrom=d.toISOString().split('T')[0];}
-  else if (periodo==='anno') dataFrom=now.getFullYear()+'-01-01';
-  else if (periodo==='tutto') dataFrom='2020-01-01';
-  else dataFrom=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-01';
-  const [{ data: note }, { data: vers }] = await Promise.all([
-    sb.from('pn_prima_nota').select('money,sisal,incasso,fatture,giornali').gte('data',dataFrom),
-    sb.from('pn_versamenti').select('importo_contante,importo_pos').gte('data_versamento',dataFrom)
+async function loadAssegni(filter = null) {
+  if (!currentBusiness) return;
+  if (filter) currentAssegniFilter = filter;
+  let query = db.from('assegni').select('*').eq('business_id', currentBusiness.id).order('data_scadenza');
+  if (currentAssegniFilter === 'aperti') query = query.eq('incassato', false);
+  const { data } = await query;
+  const today = new Date().toISOString().split('T')[0];
+  const in7 = new Date(); in7.setDate(in7.getDate() + 7);
+  const in7str = in7.toISOString().split('T')[0];
+  const el = document.getElementById('assegni-list');
+  if (!data?.length) { el.innerHTML = '<div class="empty-state">Nessun assegno</div>'; return; }
+  el.innerHTML = data.map(a => {
+    const banca = bancheCache.find(b => b.id === a.banca_id);
+    let stato = 'aperto', badge = 'aperto';
+    if (a.incassato) { stato = 'incassato'; badge = 'incassato'; }
+    else if (a.data_scadenza < today) { stato = 'scaduto'; badge = 'scaduto'; }
+    else if (a.data_scadenza <= in7str) { stato = 'scadenza'; badge = 'scadenza'; }
+    return `<div class="assegno-item ${stato}">
+      <div class="ass-info">
+        <div class="ass-num">${a.numero ? 'N° ' + a.numero : ''}</div>
+        <div class="ass-benef">${a.beneficiario || 'N/D'}</div>
+        <div class="ass-meta">Scadenza: ${formatDate(a.data_scadenza)}${banca ? ' · ' + banca.nome : ''}</div>
+      </div>
+      <span class="ass-badge ${badge}">${{ aperto:'Aperto', scadenza:'In scadenza', scaduto:'Scaduto', incassato:'Incassato' }[badge]}</span>
+      <div class="ass-importo ${a.incassato ? 'incassato' : ''}">${formatEur(a.importo)}</div>
+      <div style="display:flex;gap:4px">
+        ${!a.incassato ? `<button class="btn-secondary sm" onclick="apriModalePagamento('${a.id}')">Paga</button>` : ''}
+        <button class="entry-del" onclick="deleteAssegno('${a.id}')">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function filterAssegni(f) { loadAssegni(f); }
+
+async function incassaAssegno(id) {
+  const today = new Date().toISOString().split('T')[0];
+  await db.from('assegni').update({ incassato: true, data_incasso: today }).eq('id', id);
+  loadAssegni(); loadOverview();
+  showToast('Assegno marcato come incassato ✓', 'success');
+}
+
+async function deleteAssegno(id) {
+  const { error } = await db.from('assegni').delete().eq('id', id);
+  if (error) { showToast('Errore eliminazione: ' + error.message, 'error'); return; }
+  loadAssegniV2(); loadOverview();
+  showToast('Assegno eliminato ✓', 'success');
+}
+
+// ── RID/SDD ───────────────────────────────────────────────────────
+async function saveRid() {
+  if (!currentBusiness) return;
+  const nome = document.getElementById('nr-nome').value.trim();
+  const importo = parseFloat(document.getElementById('nr-importo').value);
+  if (!nome) { showToast('Inserisci il nome del RID', 'error'); return; }
+  if (!importo || importo <= 0) { showToast('Inserisci un importo valido', 'error'); return; }
+  const { error } = await db.from('rid_bancari').insert({
+    business_id: currentBusiness.id,
+    banca_id: document.getElementById('nr-banca').value || null,
+    nome,
+    descrizione: document.getElementById('nr-desc').value,
+    importo,
+    frequenza: document.getElementById('nr-frequenza').value,
+    giorno_addebito: parseInt(document.getElementById('nr-giorno').value) || null,
+    prossimo_addebito: document.getElementById('nr-prossimo').value || null
+  });
+  if (error) { showToast('Errore: ' + error.message, 'error'); return; }
+  showToast('RID aggiunto ✓', 'success');
+  ['nr-nome','nr-importo','nr-giorno','nr-desc'].forEach(id => document.getElementById(id).value = '');
+  loadRid(); loadOverview();
+}
+
+async function loadRid() {
+  if (!currentBusiness) return;
+  const { data } = await db.from('rid_bancari').select('*')
+    .eq('business_id', currentBusiness.id).order('nome');
+  const el = document.getElementById('rid-list');
+  if (!data?.length) { el.innerHTML = '<div class="empty-state">Nessun RID configurato</div>'; return; }
+  const freqLabel = { mensile:'Mensile', bimestrale:'Bimestrale', trimestrale:'Trimestrale', semestrale:'Semestrale', annuale:'Annuale' };
+  el.innerHTML = data.map(r => {
+    const banca = bancheCache.find(b => b.id === r.banca_id);
+    return `<div class="rid-item">
+      <div class="rid-info">
+        <div class="rid-nome">${r.nome}</div>
+        <div class="rid-meta">${freqLabel[r.frequenza] || r.frequenza}${r.giorno_addebito ? ' · giorno ' + r.giorno_addebito : ''}${banca ? ' · ' + banca.nome : ''}</div>
+      </div>
+      <div class="rid-prossimo">${r.prossimo_addebito ? 'Prossimo: ' + formatDate(r.prossimo_addebito) : '—'}</div>
+      <div class="rid-importo">- ${formatEur(r.importo)}</div>
+      <div style="display:flex;gap:4px">
+        <button class="entry-del" onclick="toggleRid('${r.id}', ${r.attivo})" title="${r.attivo ? 'Disattiva' : 'Attiva'}">${r.attivo ? '⏸' : '▶'}</button>
+        <button class="entry-del" onclick="deleteRid('${r.id}')">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function toggleRid(id, attivo) {
+  await db.from('rid_bancari').update({ attivo: !attivo }).eq('id', id);
+  loadRid(); loadOverview();
+}
+
+async function deleteRid(id) {
+  
+  await db.from('rid_bancari').delete().eq('id', id);
+  loadRid(); loadOverview();
+  showToast('RID eliminato', 'success');
+}
+
+// ============================================
+// FORNITORI
+// ============================================
+let fornitoriCache = [];
+
+function switchFornitoriTab(tab) {
+  document.querySelectorAll('.banca-tab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.banca-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('ftab-' + tab).classList.add('active');
+  document.getElementById('fpanel-' + tab).classList.add('active');
+  if (tab === 'fatture') loadFatture();
+  if (tab === 'estratto') initEstratto();
+}
+
+async function initFornitori() {
+  await loadFornitoriCache();
+  populateFornitoriSelects();
+  loadFornitoriList();
+  // Date default estratto
+  const today = new Date().toISOString().split('T')[0];
+  const firstDay = new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0];
+  const ecFrom = document.getElementById('ec-from');
+  const ecTo = document.getElementById('ec-to');
+  if (ecFrom && !ecFrom.value) ecFrom.value = firstDay;
+  if (ecTo && !ecTo.value) ecTo.value = today;
+  // Date default fattura
+  const nftData = document.getElementById('nft-data');
+  if (nftData && !nftData.value) nftData.value = today;
+}
+
+async function loadFornitoriCache() {
+  if (!currentBusiness) return;
+  const { data } = await db.from('fornitori').select('id,ragione_sociale')
+    .eq('business_id', currentBusiness.id).eq('attivo', true).order('ragione_sociale');
+  fornitoriCache = data || [];
+}
+
+function populateFornitoriSelects() {
+  const opts = '<option value="">Seleziona fornitore</option>' +
+    fornitoriCache.map(f => `<option value="${f.id}">${f.ragione_sociale}</option>`).join('');
+  ['nft-fornitore','ec-fornitore','na-fornitore','ft-filter-fornitore'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const first = id === 'ft-filter-fornitore'
+      ? '<option value="">Tutti i fornitori</option>'
+      : id === 'na-fornitore'
+        ? '<option value="">Nessun fornitore collegato</option>'
+        : '<option value="">Seleziona fornitore</option>';
+    el.innerHTML = first + fornitoriCache.map(f => `<option value="${f.id}">${f.ragione_sociale}</option>`).join('');
+  });
+}
+
+// ── ANAGRAFICA ────────────────────────────────────────────────────
+function showAddFornitore() { document.getElementById('add-fornitore-form').classList.remove('hidden'); }
+function hideAddFornitore() { document.getElementById('add-fornitore-form').classList.add('hidden'); }
+
+async function saveFornitore() {
+  if (!currentBusiness) return;
+  const nome = document.getElementById('nf-nome').value.trim();
+  if (!nome) { showToast('Inserisci la ragione sociale', 'error'); return; }
+  const { error } = await db.from('fornitori').insert({
+    business_id: currentBusiness.id,
+    ragione_sociale: nome,
+    piva: document.getElementById('nf-piva').value.trim(),
+    cf: document.getElementById('nf-cf').value.trim(),
+    email: document.getElementById('nf-email').value.trim(),
+    telefono: document.getElementById('nf-tel').value.trim(),
+    indirizzo: document.getElementById('nf-indirizzo').value.trim(),
+    note: document.getElementById('nf-note').value.trim()
+  });
+  if (error) { showToast('Errore: ' + error.message, 'error'); return; }
+  showToast('Fornitore salvato ✓', 'success');
+  hideAddFornitore();
+  ['nf-nome','nf-piva','nf-cf','nf-email','nf-tel','nf-indirizzo','nf-note'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  await loadFornitoriCache();
+  populateFornitoriSelects();
+  loadFornitoriList();
+}
+
+async function loadFornitoriList() {
+  if (!currentBusiness) return;
+  const { data } = await db.from('fornitori').select('*')
+    .eq('business_id', currentBusiness.id).order('ragione_sociale');
+  const el = document.getElementById('fornitori-list');
+  if (!data?.length) { el.innerHTML = '<div class="empty-state">Nessun fornitore registrato</div>'; return; }
+
+  // Carica fatture aperte e assegni emessi per tutti i fornitori in una volta
+  const [{ data: fatture }, { data: assegni }] = await Promise.all([
+    db.from('fatture_fornitori').select('fornitore_id, importo_totale, stato')
+      .eq('business_id', currentBusiness.id)
+      .in('stato', ['aperta', 'pagata_parziale']),
+    db.from('assegni').select('fornitore_id, importo, stato')
+      .eq('business_id', currentBusiness.id)
+      .in('stato', ['emesso', 'da_addebitare'])
   ]);
-  const totMoney   = (note||[]).reduce((a,r)=>a+(r.money||0),0);
-  const totSisal   = (note||[]).reduce((a,r)=>a+(r.sisal||0),0);
-  const totIncasso = (note||[]).reduce((a,r)=>a+(r.incasso||0),0);
-  const totFatture = (note||[]).reduce((a,r)=>a+(r.fatture||0),0);
-  const totGiornali= (note||[]).reduce((a,r)=>a+(r.giornali||0),0);
-  const totFiscale = totMoney + totSisal + totIncasso + totFatture + totGiornali;
-  const contanteVers = (vers||[]).reduce((a,r)=>a+(r.importo_contante||0),0);
-  const posVers      = (vers||[]).reduce((a,r)=>a+(r.importo_pos||0),0);
-  const totVersato   = contanteVers + posVers;
-  const delta = totFiscale - totVersato;
-  const isAlert = delta < 0;
-  const labels = {mese:'Mese corrente',settimana:'Settimana corrente',anno:"Quest'anno",tutto:'Tutto'};
-  const fmtS = v => (v>=0?'+ ':' - ')+fmtE(Math.abs(v));
-  return '<div class="dash-section" id="sezione-allineamento">'
-    +'<div class="dash-section-header">'
-    +'<div class="dash-section-title">Conciliazione fiscale</div>'
-    +'<select id="alig-periodo-filter" class="alig-filter-select" onchange="refreshAllineamento()">'
-    +'<option value="settimana"'+(periodo==='settimana'?' selected':'')+'>Questa settimana</option>'
-    +'<option value="mese"'+(periodo==='mese'?' selected':'')+'>Questo mese</option>'
-    +'<option value="anno"'+(periodo==='anno'?' selected':'')+">Quest'anno</option>"
-    +'<option value="tutto"'+(periodo==='tutto'?' selected':'')+'>Tutto</option>'
-    +'</select>'
-    +'</div>'
-    +(isAlert ? '<div class="allarme-box" style="display:flex;margin-bottom:1rem"><div class="allarme-dot"></div><span>ATTENZIONE: hai versato in banca più di quanto incassato fiscalmente (+'+fmtE(Math.abs(delta))+'). Verificare immediatamente.</span></div>' : '')
-    +'<div class="prev30-box" style="margin-bottom:10px">'
-    +'<div class="prev30-title">Incassato fiscale — ' + (labels[periodo]||periodo) + '</div>'
-    +'<div class="prev30-row"><span>Money</span><span class="p30-val">'+fmtE(totMoney)+'</span></div>'
-    +'<div class="prev30-row"><span>Sisal</span><span class="p30-val">'+fmtE(totSisal)+'</span></div>'
-    +'<div class="prev30-row"><span>Incasso</span><span class="p30-val">'+fmtE(totIncasso)+'</span></div>'
-    +'<div class="prev30-row"><span>Fatture</span><span class="p30-val">'+fmtE(totFatture)+'</span></div>'
-    +'<div class="prev30-row"><span>Giornali</span><span class="p30-val">'+fmtE(totGiornali)+'</span></div>'
-    +'<div class="prev30-row total"><span>Totale incassato fiscale</span><span class="p30-val big">'+fmtE(totFiscale)+'</span></div>'
-    +'</div>'
-    +'<div class="prev30-box '+(isAlert?'prev30-alarm':'')+'">'
-    +'<div class="prev30-title">Versato in banca</div>'
-    +'<div class="prev30-row"><span>Contante versato</span><span class="p30-val">'+fmtE(contanteVers)+'</span></div>'
-    +'<div class="prev30-row"><span>POS versato</span><span class="p30-val">'+fmtE(posVers)+'</span></div>'
-    +'<div class="prev30-row total"><span>Totale versato</span><span class="p30-val big">'+fmtE(totVersato)+'</span></div>'
-    +'<div class="prev30-row '+(isAlert?'total':'delta ok')+'"><span>'+(isAlert?'ALERT: versato supera incassato':'Differenza gestita fuori banca')+'</span><span class="p30-val '+(isAlert?'red big':'green')+'">'+(isAlert?'- '+fmtE(Math.abs(delta)):fmtS(delta))+'</span></div>'
-    +(isAlert?'':('<div style="font-size:10px;color:var(--gray-400);padding:6px 0;font-style:italic">Spese fornitori cash, fondo cassa e gestione interna</div>'))
-    +'</div>'
-    +'</div>';
-}
 
-async function refreshAllineamento() {
-  const sez = document.getElementById('sezione-allineamento');
-  if (!sez) return;
-  const html = await buildAllineamentoSection();
-  sez.outerHTML = html;
-}
+  el.innerHTML = data.map(f => {
+    const ftFornitore = (fatture||[]).filter(x => x.fornitore_id === f.id);
+    const assFornitore = (assegni||[]).filter(x => x.fornitore_id === f.id);
+    const totFatture = ftFornitore.reduce((s, x) => s + Number(x.importo_totale), 0);
+    const totAssegni = assFornitore.reduce((s, x) => s + Number(x.importo), 0);
+    const saldoNetto = totFatture - totAssegni;
+    const haDebiti = totFatture > 0;
 
-function avg(arr){return arr.length?arr.reduce((a,b)=>a+(b||0),0)/arr.length:0;}
-function daysAgo(n){const d=new Date();d.setDate(d.getDate()-n);return d.toISOString().split('T')[0];}
-function getWeekLabel(s){return`S${getWeekNumber(new Date(s))}`;}
-function getWeekNumber(d){const j=new Date(d.getFullYear(),0,1);return Math.ceil((((d-j)/86400000)+j.getDay()+1)/7);}
-function stagionalita(dow){return[0.85,0.90,0.90,0.92,0.95,1.15,1.20][dow]||1;}
-
-// ── ADMIN ─────────────────────────────────────────────────────────────────────
-function localeLabel(locale) {
-  if (!locale) return 'Entrambi i locali';
-  return LOCALE_LABEL[locale] || locale;
-}
-
-async function loadUtenti() {
-  const { data } = await sb.from('pn_utenti').select('*').order('nome');
-  if (!data) return;
-  document.getElementById('utenti-list').innerHTML = `<div class="utenti-list">${data.map(u => `
-    <div class="utente-item">
-      <div>
-        <div class="ut-nome">${u.nome} ${!u.attivo ? '<span style="font-size:10px;color:var(--gray-400)">(disattivo)</span>' : ''}</div>
-        <div class="ut-email">${u.email}</div>
-        <div class="ut-email" style="margin-top:2px">
-          <span style="font-size:11px;color:var(--blue);font-weight:500">${localeLabel(u.locale)}</span>
-          · <span style="font-size:11px">${u.ruolo}</span>
+    return `
+    <div class="fornitore-item ${haDebiti ? 'has-debiti' : ''}">
+      <div class="fornitore-avatar">${f.ragione_sociale[0].toUpperCase()}</div>
+      <div class="fornitore-info">
+        <div class="fornitore-nome">${f.ragione_sociale}</div>
+        <div class="fornitore-meta">
+          ${f.piva ? 'P.IVA: ' + f.piva : ''}
+          ${f.email ? ' · ' + f.email : ''}
+          ${f.telefono ? ' · ' + f.telefono : ''}
         </div>
       </div>
-      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end">
-        <button class="btn-toggle" onclick="toggleUtente('${u.id}',${u.attivo})">${u.attivo ? 'Disattiva' : 'Attiva'}</button>
-        <button class="btn-toggle btn-danger" onclick="eliminaUtente('${u.id}','${u.nome.replace(/'/g,"\\'")}')">Elimina</button>
+
+      ${haDebiti ? `
+      <div class="fornitore-esposizione">
+        <div class="fe-col">
+          <div class="fe-label">Fatture aperte</div>
+          <div class="fe-val red">${formatEur(totFatture)}</div>
+        </div>
+        <div class="fe-col">
+          <div class="fe-label">Assegni emessi</div>
+          <div class="fe-val gold">${totAssegni > 0 ? '- ' + formatEur(totAssegni) : '—'}</div>
+        </div>
+        <div class="fe-col highlight">
+          <div class="fe-label">Saldo netto</div>
+          <div class="fe-val ${saldoNetto <= 0 ? 'green' : 'red'}">${formatEur(saldoNetto)}</div>
+        </div>
+      </div>` : `<div class="fe-col" style="text-align:center"><div class="fe-val green" style="font-size:13px">✓ Saldo zero</div></div>`}
+
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        <button class="btn-secondary sm" onclick="switchFornitoriTab('estratto');document.getElementById('ec-fornitore').value='${f.id}';loadEstratto()">Estratto</button>
+        <button class="entry-del" onclick="deleteFornitore('${f.id}')">✕</button>
       </div>
-    </div>`).join('')}</div>`;
+    </div>`;
+  }).join('');
 }
 
-async function toggleUtente(id, attivo) {
-  await sb.from('pn_utenti').update({ attivo: !attivo }).eq('id', id);
-  loadUtenti();
+async function deleteFornitore(id) {
+  
+  await db.from('fornitori').update({ attivo: false }).eq('id', id);
+  await loadFornitoriCache();
+  populateFornitoriSelects();
+  loadFornitoriList();
+  showToast('Fornitore eliminato', 'success');
 }
 
-async function eliminaUtente(id, nome) {
-  if (!confirm(`Sei sicuro di voler eliminare l'utente "${nome}"?\n\nQuesta operazione è irreversibile.`)) return;
-  const { error } = await sb.from('pn_utenti').delete().eq('id', id);
-  if (error) { alert('Errore eliminazione: ' + error.message); return; }
-  loadUtenti();
+// ── FATTURE ───────────────────────────────────────────────────────
+function calcFattura() {
+  const netto = parseFloat(document.getElementById('nft-netto').value) || 0;
+  const iva = parseFloat(document.getElementById('nft-iva').value) || 0;
+  const totEl = document.getElementById('nft-totale');
+  if (totEl && (netto || iva)) totEl.value = (netto + iva).toFixed(2);
 }
 
-function showAddUser() {
-  const f = document.getElementById('add-user-form');
-  f.style.display = 'flex'; f.style.flexDirection = 'column';
+async function saveFattura() {
+  if (!currentBusiness) return;
+  const totale = parseFloat(document.getElementById('nft-totale').value);
+  const fornitore = document.getElementById('nft-fornitore').value;
+  if (!totale || totale <= 0) { showToast('Inserisci il totale fattura', 'error'); return; }
+  const { error } = await db.from('fatture_fornitori').insert({
+    business_id: currentBusiness.id,
+    fornitore_id: fornitore || null,
+    numero: document.getElementById('nft-numero').value.trim(),
+    data_fattura: document.getElementById('nft-data').value,
+    data_scadenza: document.getElementById('nft-scadenza').value || null,
+    importo_netto: parseFloat(document.getElementById('nft-netto').value) || 0,
+    importo_iva: parseFloat(document.getElementById('nft-iva').value) || 0,
+    importo_totale: totale,
+    metodo_pagamento: document.getElementById('nft-metodo').value || null,
+    note: document.getElementById('nft-note').value,
+    created_by: currentUser.id
+  });
+  if (error) { showToast('Errore: ' + error.message, 'error'); return; }
+  showToast('Fattura registrata ✓', 'success');
+  ['nft-numero','nft-netto','nft-iva','nft-totale','nft-note'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  loadFatture();
 }
-function hideAddUser() { document.getElementById('add-user-form').style.display = 'none'; }
 
-async function creaUtente() {
-  const nome   = document.getElementById('nu-nome').value.trim();
-  const email  = document.getElementById('nu-email').value.trim();
-  const ruolo  = document.getElementById('nu-ruolo').value;
-  const locale = document.getElementById('nu-locale').value || null;
-  const msgEl  = document.getElementById('nu-msg');
-  if (!nome || !email) { showMsgEl(msgEl, 'Compila nome ed email', 'err'); return; }
-  const { error } = await sb.from('pn_utenti').insert({ email, nome, ruolo, locale });
-  if (error) { showMsgEl(msgEl, 'Errore: ' + error.message, 'err'); return; }
-  showMsgEl(msgEl, 'Utente salvato. Crealo su Supabase Auth per abilitare il login.', 'ok');
-  hideAddUser();
-  loadUtenti();
+async function loadFatture() {
+  if (!currentBusiness) return;
+  const stato = document.getElementById('ft-filter-stato')?.value;
+  const fornitore = document.getElementById('ft-filter-fornitore')?.value;
+  const today = new Date().toISOString().split('T')[0];
+  const firstMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
+  const firstYear = new Date().getFullYear() + '-01-01';
+
+  let query = db.from('fatture_fornitori').select('*, fornitori(ragione_sociale)')
+    .eq('business_id', currentBusiness.id).order('data_fattura', { ascending: false });
+  if (stato) query = query.eq('stato', stato);
+  if (fornitore) query = query.eq('fornitore_id', fornitore);
+
+  const { data } = await query;
+  const all = data || [];
+  const in30 = new Date(); in30.setDate(in30.getDate() + 30);
+  const in30str = in30.toISOString().split('T')[0];
+
+  const aperte = all.filter(f => f.stato === 'aperta' || f.stato === 'pagata_parziale');
+  const scad30 = aperte.filter(f => f.data_scadenza && f.data_scadenza <= in30str);
+  const pagateMese = all.filter(f => f.stato === 'pagata' && f.data_fattura >= firstMonth);
+  const annoAll = all.filter(f => f.data_fattura >= firstYear);
+
+  document.getElementById('ft-aperte').textContent = formatEur(aperte.reduce((s,f)=>s+Number(f.importo_totale),0));
+  document.getElementById('ft-aperte-n').textContent = aperte.length + ' fatture';
+  document.getElementById('ft-scadenza').textContent = formatEur(scad30.reduce((s,f)=>s+Number(f.importo_totale),0));
+  document.getElementById('ft-scadenza-n').textContent = scad30.length + ' fatture';
+  document.getElementById('ft-pagate').textContent = formatEur(pagateMese.reduce((s,f)=>s+Number(f.importo_totale),0));
+  document.getElementById('ft-pagate-n').textContent = pagateMese.length + ' fatture';
+  document.getElementById('ft-anno').textContent = formatEur(annoAll.reduce((s,f)=>s+Number(f.importo_totale),0));
+
+  const el = document.getElementById('fatture-list');
+  if (!all.length) { el.innerHTML = '<div class="empty-state">Nessuna fattura registrata</div>'; return; }
+
+  el.innerHTML = all.map(f => {
+    const scaduta = f.stato !== 'pagata' && f.data_scadenza && f.data_scadenza < today;
+    const statoEff = scaduta ? 'scaduta' : f.stato;
+    const statoLabel = { aperta:'Aperta', pagata_parziale:'Parz. pagata', pagata:'Pagata', scaduta:'Scaduta' }[statoEff] || f.stato;
+    return `<div class="fattura-item ${statoEff}">
+      <div class="ft-info">
+        <div class="ft-numero">${f.numero ? 'N° ' + f.numero : 'Senza numero'}</div>
+        <div class="ft-fornitore">${f.fornitori?.ragione_sociale || 'Fornitore generico'}</div>
+        <div class="ft-meta">
+          Emessa: ${formatDate(f.data_fattura)}
+          ${f.data_scadenza ? ' · Scadenza: ' + formatDate(f.data_scadenza) : ''}
+          ${f.metodo_pagamento ? ' · ' + f.metodo_pagamento : ''}
+        </div>
+      </div>
+      <span class="ft-badge ${statoEff}">${statoLabel}</span>
+      <div class="ft-importo ${f.stato === 'pagata' ? 'pagata' : ''}">${formatEur(f.importo_totale)}</div>
+      <div style="display:flex;gap:4px;flex-shrink:0">
+        ${f.stato !== 'pagata' ? `<button class="btn-secondary sm" onclick="pagaFattura('${f.id}')">Paga</button>` : ''}
+        <button class="entry-del" onclick="deleteFattura('${f.id}')">✕</button>
+      </div>
+    </div>`;
+  }).join('');
 }
 
-function showMsgEl(el, msg, type) {
-  el.textContent = msg; el.className = 'save-msg ' + type; el.style.display = 'block';
-  setTimeout(() => { el.style.display = 'none'; }, 4000);
+async function pagaFattura(id) {
+  await db.from('fatture_fornitori').update({ stato: 'pagata' }).eq('id', id);
+  loadFatture();
+  showToast('Fattura marcata come pagata ✓', 'success');
 }
+
+async function deleteFattura(id) {
+  
+  await db.from('fatture_fornitori').delete().eq('id', id);
+  loadFatture();
+  showToast('Fattura eliminata', 'success');
+}
+
+// ── ESTRATTO CONTO ────────────────────────────────────────────────
+function initEstratto() {
+  const today = new Date().toISOString().split('T')[0];
+  const firstYear = new Date().getFullYear() + '-01-01';
+  const ecFrom = document.getElementById('ec-from');
+  const ecTo = document.getElementById('ec-to');
+  if (ecFrom && !ecFrom.value) ecFrom.value = firstYear;
+  if (ecTo && !ecTo.value) ecTo.value = today;
+}
+
+
+// ============================================
+// MODALE PAGAMENTO ASSEGNO
+// ============================================
+let currentAssegnoId = null;
+let currentAssegnoData = null;
+
+function apriModalePagamento(id) {
+  // Trova l'assegno dalla lista già caricata
+  currentAssegnoId = id;
+  openModalAssegno(id);
+}
+
+async function openModalAssegno(id) {
+  const { data: ass } = await db.from('assegni').select('*, fornitori(ragione_sociale)')
+    .eq('id', id).single();
+  if (!ass) return;
+
+  currentAssegnoData = ass;
+
+  // Popola info box
+  document.getElementById('modal-assegno-info').innerHTML = `
+    <div class="mi-label">Assegno da pagare</div>
+    <div class="mi-value">${formatEur(ass.importo)}</div>
+    <div class="mi-meta">
+      ${ass.beneficiario ? 'A: ' + ass.beneficiario : ''}
+      ${ass.fornitori ? ' · ' + ass.fornitori.ragione_sociale : ''}
+      ${ass.numero ? ' · N° ' + ass.numero : ''}
+      · Scadenza: ${formatDate(ass.data_scadenza)}
+    </div>
+  `;
+
+  // Data default = oggi
+  document.getElementById('pag-data').value = new Date().toISOString().split('T')[0];
+
+  // Popola select banca
+  const bancaEl = document.getElementById('pag-banca');
+  bancaEl.innerHTML = '<option value="">Seleziona banca</option>' +
+    bancheCache.map(b => `<option value="${b.id}">${b.nome} — ${b.istituto || ''}</option>`).join('');
+  if (ass.banca_id) bancaEl.value = ass.banca_id;
+
+  document.getElementById('pag-note').value = '';
+  document.getElementById('modal-paga-assegno').classList.remove('hidden');
+}
+
+function closeModalAssegno() {
+  document.getElementById('modal-paga-assegno').classList.add('hidden');
+  currentAssegnoId = null;
+  currentAssegnoData = null;
+}
+
+async function confermaPagamentoAssegno() {
+  if (!currentAssegnoId) return;
+  const dataIncasso = document.getElementById('pag-data').value;
+  const bancaId = document.getElementById('pag-banca').value;
+  const note = document.getElementById('pag-note').value.trim();
+
+  if (!dataIncasso) { showToast('Inserisci la data di pagamento', 'error'); return; }
+
+  // Marca assegno come incassato
+  await db.from('assegni').update({
+    incassato: true,
+    data_incasso: dataIncasso,
+    note: note || currentAssegnoData.note
+  }).eq('id', currentAssegnoId);
+
+  // Registra movimento bancario in uscita se banca selezionata
+  if (bancaId && currentAssegnoData) {
+    await db.from('movimenti_banca').insert({
+      business_id: currentBusiness.id,
+      banca_id: bancaId,
+      data: dataIncasso,
+      segno: 'dare',
+      tipo: 'assegno',
+      descrizione: `Assegno ${currentAssegnoData.numero || ''} - ${currentAssegnoData.beneficiario || 'N/D'}`,
+      importo: currentAssegnoData.importo
+    });
+  }
+
+  closeModalAssegno();
+  showToast('Pagamento registrato ✓', 'success');
+  loadAssegni();
+  loadOverview();
+}
+
+// ============================================
+// ASSEGNI v2 — Logica postdatati
+// ============================================
+
+// Stati assegno:
+// emesso      → assegno dato al fornitore, banca non ancora addebitata
+// da_addebitare → scadenza passata, banca deve essere addebitata
+// addebitato  → banca addebitata, tutto chiuso
+
+async function loadAssegniV2(filter = null) {
+  if (!currentBusiness) return;
+  if (filter) currentAssegniFilter = filter;
+
+  let query = db.from('assegni').select('*, fornitori(ragione_sociale)')
+    .eq('business_id', currentBusiness.id)
+    .order('data_scadenza');
+
+  if (currentAssegniFilter === 'aperti') {
+    query = query.in('stato', ['emesso', 'da_addebitare']);
+  }
+
+  const { data } = await query;
+  const today = new Date().toISOString().split('T')[0];
+  const in7 = new Date(); in7.setDate(in7.getDate() + 7);
+  const in7str = in7.toISOString().split('T')[0];
+  const el = document.getElementById('assegni-list');
+  if (!data?.length) { el.innerHTML = '<div class="empty-state">Nessun assegno</div>'; return; }
+
+  el.innerHTML = data.map(a => {
+    const banca = bancheCache.find(b => b.id === a.banca_id);
+    const stato = a.stato || (a.incassato ? 'addebitato' : 'emesso');
+
+    // Determina classe visiva e badge
+    let cls, badge, badgeLabel;
+    if (stato === 'addebitato') {
+      cls = 'incassato'; badge = 'incassato'; badgeLabel = '✓ Addebitato';
+    } else if (stato === 'da_addebitare' || (stato === 'emesso' && a.data_scadenza < today)) {
+      cls = 'scaduto'; badge = 'scaduto'; badgeLabel = '⚠ Da addebitare';
+    } else if (a.data_scadenza <= in7str) {
+      cls = 'scadenza'; badge = 'scadenza'; badgeLabel = '⏰ In scadenza';
+    } else {
+      cls = 'aperto'; badge = 'aperto'; badgeLabel = '📝 Emesso';
+    }
+
+    const isPostdatato = a.data_emissione && a.data_scadenza > a.data_emissione;
+    const giorniScadenza = Math.ceil((new Date(a.data_scadenza) - new Date()) / 86400000);
+
+    return `<div class="assegno-item ${cls}">
+      <div class="ass-info">
+        <div class="ass-num">${a.numero ? 'N° ' + a.numero : ''}${isPostdatato ? ' <span style="font-size:10px;color:var(--gold-light);font-weight:600">POSTDATATO</span>' : ''}</div>
+        <div class="ass-benef">${a.beneficiario || a.fornitori?.ragione_sociale || 'N/D'}</div>
+        <div class="ass-meta">
+          Emesso: ${formatDate(a.data_emissione)} · Scadenza: ${formatDate(a.data_scadenza)}
+          ${banca ? ' · ' + banca.nome : ''}
+          ${stato !== 'addebitato' && giorniScadenza > 0 ? ` · tra ${giorniScadenza} giorni` : ''}
+          ${stato !== 'addebitato' && giorniScadenza <= 0 ? ` · scaduto ${Math.abs(giorniScadenza)} giorni fa` : ''}
+        </div>
+      </div>
+      <span class="ass-badge ${badge}">${badgeLabel}</span>
+      <div class="ass-importo ${stato === 'addebitato' ? 'incassato' : ''}">${formatEur(a.importo)}</div>
+      <div style="display:flex;gap:4px;flex-shrink:0">
+        ${stato !== 'addebitato' ? `<button class="btn-secondary sm" onclick="apriModaleAddebito('${a.id}')">Registra addebito</button>` : ''}
+        <button class="entry-del" onclick="deleteAssegno('${a.id}')">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// Override loadAssegni
+function loadAssegni(f) { loadAssegniV2(f); }
+
+// ── MODALE ADDEBITO BANCA ─────────────────────────────────────────
+async function apriModaleAddebito(id) {
+  const { data: ass } = await db.from('assegni')
+    .select('*, fornitori(ragione_sociale)').eq('id', id).single();
+  if (!ass) return;
+
+  currentAssegnoId = id;
+  currentAssegnoData = ass;
+
+  // Popola info box
+  document.getElementById('modal-assegno-info').innerHTML = `
+    <div class="mi-label">Assegno — Registra addebito banca</div>
+    <div class="mi-value">${formatEur(ass.importo)}</div>
+    <div class="mi-meta">
+      ${ass.beneficiario || ass.fornitori?.ragione_sociale || 'N/D'}
+      ${ass.numero ? ' · N° ' + ass.numero : ''}
+      · Scadenza: ${formatDate(ass.data_scadenza)}
+      ${ass.data_scadenza > new Date().toISOString().split('T')[0]
+        ? ' <span style="color:var(--gold-light)">(postdatato)</span>'
+        : ' <span style="color:var(--red-400)">(scaduto)</span>'}
+    </div>
+    <div style="margin-top:8px;font-size:11px;color:var(--gray-400);font-family:var(--font-mono)">
+      Il fornitore ha già ricevuto questo assegno. Ora registri l'uscita effettiva dalla banca.
+    </div>`;
+
+  // Data default = data scadenza assegno
+  document.getElementById('pag-data').value = ass.data_scadenza;
+
+  // Popola banca
+  const bancaEl = document.getElementById('pag-banca');
+  bancaEl.innerHTML = '<option value="">Seleziona banca</option>' +
+    bancheCache.map(b => `<option value="${b.id}">${b.nome}${b.istituto ? ' — ' + b.istituto : ''}</option>`).join('');
+  if (ass.banca_id) bancaEl.value = ass.banca_id;
+
+  document.getElementById('pag-note').value = '';
+  document.getElementById('modal-paga-assegno').classList.remove('hidden');
+}
+
+async function confermaPagamentoAssegno() {
+  if (!currentAssegnoId || !currentAssegnoData) return;
+
+  const dataAddebito = document.getElementById('pag-data').value;
+  const bancaId = document.getElementById('pag-banca').value;
+  const note = document.getElementById('pag-note').value.trim();
+
+  if (!dataAddebito) { showToast('Inserisci la data di addebito', 'error'); return; }
+  if (!bancaId) { showToast('Seleziona la banca', 'error'); return; }
+
+  // Aggiorna stato assegno → addebitato
+  await db.from('assegni').update({
+    stato: 'addebitato',
+    incassato: true,
+    data_incasso: dataAddebito,
+    banca_id: bancaId,
+    note: note || currentAssegnoData.note
+  }).eq('id', currentAssegnoId);
+
+  // Registra movimento banca in uscita
+  await db.from('movimenti_banca').insert({
+    business_id: currentBusiness.id,
+    banca_id: bancaId,
+    data: dataAddebito,
+    segno: 'dare',
+    tipo: 'assegno',
+    descrizione: `Assegno ${currentAssegnoData.numero ? 'N° ' + currentAssegnoData.numero + ' ' : ''}— ${currentAssegnoData.beneficiario || 'N/D'}`,
+    importo: currentAssegnoData.importo
+  });
+
+  // Se era collegato a una fattura fornitore → aggiorna stato fattura
+  if (currentAssegnoData.fornitore_id) {
+    // Controlla fatture aperte del fornitore
+    const { data: fatture } = await db.from('fatture_fornitori')
+      .select('*')
+      .eq('business_id', currentBusiness.id)
+      .eq('fornitore_id', currentAssegnoData.fornitore_id)
+      .in('stato', ['aperta', 'pagata_parziale'])
+      .order('data_scadenza');
+
+    if (fatture?.length) {
+      // Segna la prima fattura come pagata se importo corrisponde
+      const fattura = fatture[0];
+      if (Math.abs(Number(fattura.importo_totale) - Number(currentAssegnoData.importo)) < 0.01) {
+        await db.from('fatture_fornitori').update({ stato: 'pagata' }).eq('id', fattura.id);
+      }
+    }
+  }
+
+  closeModalAssegno();
+  showToast('Addebito banca registrato ✓', 'success');
+  loadAssegniV2();
+  loadOverview();
+}
+
+// ── ESTRATTO CONTO V2 — con esposizione finanziaria ──────────────
+async function loadEstratto() {
+  const fornitoreId = document.getElementById('ec-fornitore').value;
+  if (!fornitoreId || !currentBusiness) {
+    document.getElementById('estratto-list').innerHTML = '<div class="empty-state">Seleziona un fornitore</div>';
+    return;
+  }
+  const from = document.getElementById('ec-from').value;
+  const to = document.getElementById('ec-to').value;
+
+  const [{ data: fatture }, { data: assegni }] = await Promise.all([
+    db.from('fatture_fornitori').select('*')
+      .eq('business_id', currentBusiness.id)
+      .eq('fornitore_id', fornitoreId)
+      .gte('data_fattura', from).lte('data_fattura', to)
+      .order('data_fattura'),
+    db.from('assegni').select('*')
+      .eq('business_id', currentBusiness.id)
+      .eq('fornitore_id', fornitoreId)
+      .gte('data_emissione', from).lte('data_emissione', to)
+      .order('data_emissione')
+  ]);
+
+  const totFatturato = (fatture||[]).reduce((s,f) => s + Number(f.importo_totale), 0);
+  const assEmessi = (assegni||[]).filter(a => (a.stato||'emesso') !== 'addebitato');
+  const assAddebitati = (assegni||[]).filter(a => (a.stato||'emesso') === 'addebitato');
+  const totEmesso = assEmessi.reduce((s,a) => s + Number(a.importo), 0);
+  const totAddebitato = assAddebitati.reduce((s,a) => s + Number(a.importo), 0);
+
+  // Saldo contabile = fatturato - assegni emessi - addebitati
+  const saldoContabileTot = totFatturato - totEmesso - totAddebitato;
+  // Saldo effettivo = fatturato - solo addebitati (banca)
+  const saldoEffettivoTot = totFatturato - totAddebitato;
+
+  document.getElementById('ec-fatturato').textContent = formatEur(totFatturato);
+  document.getElementById('ec-assegni').textContent = formatEur(totEmesso);
+  const scopEl = document.getElementById('ec-scoperto');
+  if (scopEl) scopEl.textContent = formatEur(Math.max(0, saldoContabileTot));
+  const saldoEl = document.getElementById('ec-saldo');
+  if (saldoEl) {
+    saldoEl.textContent = formatEur(Math.max(0, saldoEffettivoTot));
+    saldoEl.style.color = saldoEffettivoTot <= 0 ? 'var(--green-400)' : 'var(--red-400)';
+  }
+
+  const movimenti = [
+    ...(fatture||[]).map(function(f) {
+      return {
+        sortData: f.data_fattura,
+        tipo: 'fattura', icon: '🧾',
+        desc: 'Fattura ' + (f.numero || ''),
+        meta: 'Emessa: ' + formatDate(f.data_fattura) + (f.data_scadenza ? ' · Scad: ' + formatDate(f.data_scadenza) : '') + ' · ' + ({aperta:'Aperta',pagata:'Pagata',pagata_parziale:'Parz. pagata'}[f.stato]||f.stato),
+        importo: Number(f.importo_totale),
+        effetto: 'debito'
+      };
+    }),
+    ...(assegni||[]).map(function(a) {
+      const stato = a.stato || (a.incassato ? 'addebitato' : 'emesso');
+      const isAd = stato === 'addebitato';
+      const isPost = a.data_emissione !== a.data_scadenza;
+      return {
+        sortData: a.data_emissione,
+        tipo: 'assegno', icon: isAd ? '✅' : '📝',
+        desc: 'Assegno ' + (a.numero ? 'N° ' + a.numero + ' ' : '') + (isPost ? '— Postdatato' : '— A vista'),
+        meta: isAd
+          ? 'Emesso: ' + formatDate(a.data_emissione) + ' · Addebitato in banca: ' + formatDate(a.data_incasso||a.data_scadenza) + ' ✓'
+          : 'Emesso: ' + formatDate(a.data_emissione) + ' · Addebito banca previsto: ' + formatDate(a.data_scadenza) + ' ⏳',
+        importo: Number(a.importo),
+        effetto: isAd ? 'pagato' : 'emesso'
+      };
+    })
+  ].sort(function(a,b) { return new Date(a.sortData) - new Date(b.sortData); });
+
+  const el = document.getElementById('estratto-list');
+  if (!movimenti.length) { el.innerHTML = '<div class="empty-state">Nessun movimento nel periodo</div>'; return; }
+
+  let saldoC = 0, saldoE = 0;
+  var rows = movimenti.map(function(m) {
+    if (m.effetto === 'debito') { saldoC += m.importo; saldoE += m.importo; }
+    else if (m.effetto === 'emesso') { saldoC -= m.importo; }
+    else if (m.effetto === 'pagato') { saldoE -= m.importo; }
+
+    var importoColor = m.effetto === 'debito' ? 'dare' : 'avere';
+    var opacity = m.effetto === 'emesso' ? 'opacity:0.85;' : '';
+    var cColor = saldoC > 0 ? 'var(--gold-light)' : 'var(--green-400)';
+    var eColor = saldoE > 0 ? 'var(--red-400)' : 'var(--green-400)';
+
+    return '<div class="ec-item" style="' + opacity + '">'
+      + '<div class="ec-tipo">' + m.icon + '</div>'
+      + '<div class="ec-info"><div class="ec-desc">' + m.desc + '</div><div class="ec-meta">' + m.meta + '</div></div>'
+      + '<div class="ec-val ' + importoColor + '" style="min-width:110px;text-align:right">' + (m.effetto === 'debito' ? '+' : '-') + formatEur(m.importo) + '</div>'
+      + '<div style="min-width:130px;text-align:right;font-family:var(--font-mono);font-size:13px;font-weight:500;color:' + cColor + '">' + formatEur(saldoC) + '</div>'
+      + '<div style="min-width:130px;text-align:right;font-family:var(--font-mono);font-size:13px;font-weight:500;color:' + eColor + '">' + formatEur(saldoE) + '</div>'
+      + '</div>';
+  });
+
+  var header = '<div class="ec-header-row">'
+    + '<span style="flex:0 0 28px"></span>'
+    + '<span style="flex:1">Movimento</span>'
+    + '<span style="min-width:110px;text-align:right;font-size:10px;color:var(--gray-500);text-transform:uppercase;letter-spacing:.06em">Importo</span>'
+    + '<span style="min-width:130px;text-align:right;font-size:10px;color:var(--gold);text-transform:uppercase;letter-spacing:.06em">Saldo contabile</span>'
+    + '<span style="min-width:130px;text-align:right;font-size:10px;color:var(--blue-300);text-transform:uppercase;letter-spacing:.06em">Saldo effettivo</span>'
+    + '</div>';
+
+  var footer = '<div class="ec-item" style="background:var(--navy-950);border:1px solid rgba(255,255,255,0.08);font-weight:700;margin-top:8px">'
+    + '<div class="ec-tipo">📊</div>'
+    + '<div class="ec-info"><div class="ec-desc" style="font-weight:700">TOTALE PERIODO</div></div>'
+    + '<div style="min-width:110px;text-align:right;font-family:var(--font-mono);font-size:13px;color:var(--gray-400)">' + formatEur(totFatturato) + '</div>'
+    + '<div style="min-width:130px;text-align:right;font-family:var(--font-mono);font-size:15px;font-weight:700;color:' + (saldoC > 0 ? 'var(--gold-light)' : 'var(--green-400)') + '">' + formatEur(saldoC) + '</div>'
+    + '<div style="min-width:130px;text-align:right;font-family:var(--font-mono);font-size:15px;font-weight:700;color:' + (saldoE > 0 ? 'var(--red-400)' : 'var(--green-400)') + '">' + formatEur(saldoE) + '</div>'
+    + '</div>';
+
+  el.innerHTML = header + rows.join('') + footer;
+}
+
+
+
+// ============================================
+// PRIMA NOTA — collegamento fornitori
+// ============================================
+function populatePNFornitoriSelects() {
+  // Sostituisce i text input fdesc-N con select dall'anagrafica
+  for (let i = 0; i < 10; i++) {
+    const el = document.getElementById('fdesc-' + i);
+    if (!el) break;
+
+    // Se è già un select, aggiorna solo le opzioni
+    if (el.tagName === 'SELECT') {
+      const val = el.value;
+      el.innerHTML = pnFornitoriOptsHtml();
+      if (val) el.value = val;
+      continue;
+    }
+
+    // Crea select
+    const sel = document.createElement('select');
+    sel.id = 'fdesc-' + i;
+    sel.className = 'pn-desc-input';
+    sel.innerHTML = pnFornitoriOptsHtml();
+
+    // Copia valore testuale se c'era già qualcosa
+    if (el.value) {
+      // Cerca fornitore per nome
+      const match = fornitoriCache.find(f =>
+        f.ragione_sociale.toLowerCase() === el.value.toLowerCase()
+      );
+      if (match) sel.value = match.id;
+    }
+
+    el.parentNode.replaceChild(sel, el);
+  }
+}
+
+function pnFornitoriOptsHtml() {
+  return '<option value="">— Fornitore —</option>' +
+    fornitoriCache.map(f => `<option value="${f.id}">${f.ragione_sociale}</option>`).join('') +
+    '<option value="__libero__">✏ Descrizione libera...</option>';
+}
+
+
+// salvaNotaGiorno — versione con fornitore_id dal select
+async function salvaNotaGiorno() {
+  // Prima di salvare, aggiorna daily_note_rows con fornitore_id
+  if (!currentBusiness) return;
+  const data = document.getElementById('pn-data').value;
+  if (!data) { showPNMsg('Inserisci la data', 'error'); return; }
+  const locId = document.getElementById('pn-location').value || null;
+  const fc = getV('pn-fc');
+
+  const payload = {
+    business_id: currentBusiness.id, location_id: locId, data, fondo_cassa: fc,
+    incasso_m: getV('incasso-m'), incasso_p: getV('incasso-p'), incasso_s: getV('incasso-s'),
+    money_m: getV('money-m'), money_p: getV('money-p'), money_s: getV('money-s'),
+    grattavinci_m: getV('grattavinci-m'), grattavinci_p: getV('grattavinci-p'), grattavinci_s: getV('grattavinci-s'),
+    sisal_m: getV('sisal-m'), sisal_p: getV('sisal-p'), sisal_s: getV('sisal-s'),
+    conto_bet_m: getV('conto-bet-m'), conto_bet_p: getV('conto-bet-p'), conto_bet_s: getV('conto-bet-s'),
+    bet_banca_id: document.getElementById('pn-bet-banca')?.value || null,
+    fatture_m: getV('fatture-m'), fatture_p: getV('fatture-p'), fatture_s: getV('fatture-s'),
+    giornali_m: getV('giornali-m'), giornali_p: getV('giornali-p'), giornali_s: getV('giornali-s'),
+    pos_m: getV('pos-m'), pos_p: getV('pos-p'), pos_s: getV('pos-s'),
+    carte_m: getV('carte-m'), carte_p: getV('carte-p'), carte_s: getV('carte-s'),
+    bonifici_m: getV('bonifici-m'), bonifici_p: getV('bonifici-p'), bonifici_s: getV('bonifici-s'),
+    fondo_chiusura_m: getV('fc-usc-m'), fondo_chiusura_p: getV('fc-usc-p'), fondo_chiusura_s: getV('fc-usc-s'),
+    compilatore_m: document.getElementById('cm').value,
+    compilatore_p: document.getElementById('cp').value,
+    compilatore_s: document.getElementById('cs').value,
+    note: document.getElementById('pn-note').value,
+    created_by: currentUser.id, updated_at: new Date().toISOString()
+  };
+
+  const { data: saved, error } = await db.from('daily_notes')
+    .upsert(payload, { onConflict: 'business_id,location_id,data' })
+    .select().single();
+  if (error) { showPNMsg('Errore: ' + error.message, 'error'); return; }
+
+  await db.from('daily_note_rows').delete().eq('daily_note_id', saved.id);
+  const rows = [];
+
+  for (let i = 0; i < pnFornitoriCount; i++) {
+    const descEl = document.getElementById('fdesc-' + i);
+    const m = getV('fm-' + i), p = getV('fp-' + i), s = getV('fs-' + i);
+    if (!descEl && !m && !p && !s) continue;
+
+    let descrizione = '';
+    let fornitoreId = null;
+
+    if (descEl?.tagName === 'SELECT') {
+      const val = descEl.value;
+      if (val && val !== '__libero__') {
+        fornitoreId = val;
+        const f = fornitoriCache.find(x => x.id === val);
+        descrizione = f ? f.ragione_sociale : '';
+      }
+    } else if (descEl?.tagName === 'INPUT') {
+      descrizione = descEl.value?.trim() || '';
+    }
+
+    if (m || p || s || descrizione || fornitoreId) {
+      rows.push({
+        daily_note_id: saved.id,
+        business_id: currentBusiness.id,
+        categoria: 'fornitore',
+        descrizione,
+        fornitore_id: fornitoreId,
+        importo_m: m, importo_p: p, importo_s: s,
+        ordine: i
+      });
+    }
+  }
+
+  for (let i = 0; i < pnPrelieviCount; i++) {
+    const desc = document.getElementById('pdesc-' + i)?.value?.trim() || '';
+    const m = getV('pm-' + i), p = getV('pp-' + i), s = getV('ps-' + i);
+    if (m || p || s || desc) {
+      rows.push({
+        daily_note_id: saved.id,
+        business_id: currentBusiness.id,
+        categoria: 'prelievo',
+        descrizione: desc,
+        importo_m: m, importo_p: p, importo_s: s,
+        ordine: i
+      });
+    }
+  }
+
+  if (rows.length) await db.from('daily_note_rows').insert(rows);
+
+  const fcChiusura = getV('fc-usc-s') || getV('fc-usc-p') || getV('fc-usc-m');
+  if (fcChiusura > 0) {
+    const dom = new Date(data); dom.setDate(dom.getDate() + 1);
+    await db.from('daily_notes').upsert({
+      business_id: currentBusiness.id, location_id: locId,
+      data: dom.toISOString().split('T')[0], fondo_cassa: fcChiusura
+    }, { onConflict: 'business_id,location_id,data', ignoreDuplicates: true });
+  }
+
+  // Scala automaticamente le giocate dal conto bet
+  const betBancaId = document.getElementById('pn-bet-banca')?.value || null;
+  const totBet = getV('conto-bet-m') + getV('conto-bet-p') + getV('conto-bet-s');
+  if (betBancaId && totBet > 0) await scalaCcontoBet(betBancaId, totBet, data);
+
+  showPNMsg('Prima nota salvata ✓' + (fcChiusura > 0 ? ' — fondo cassa domani pre-compilato' : '') + (betBancaId && totBet > 0 ? ' · Conto bet aggiornato' : ''), 'success');
+  await loadDashboard();
+}
+
+// ============================================
+// MOVIMENTI BANCARI — elimina
+// ============================================
+async function deleteMovimentoBanca(id) {
+  if (!confirm('Eliminare questo movimento bancario?')) return;
+  await db.from('movimenti_banca').delete().eq('id', id);
+  loadOverview();
+  showToast('Movimento eliminato', 'success');
+}
+
+async function deleteAssegnoCompleto(id) {
+  if (!confirm('Eliminare questo assegno? L\'operazione è irreversibile.')) return;
+  await db.from('assegni').delete().eq('id', id);
+  loadAssegniV2();
+  loadOverview();
+  showToast('Assegno eliminato', 'success');
+}
+
+// ============================================
+// IMPOSTAZIONI
+// ============================================
+let currentCatFilter = 'tutte';
+
+function switchSettingsTab(tab) {
+  document.querySelectorAll('.banca-tab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.banca-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('stab-' + tab).classList.add('active');
+  document.getElementById('spanel-' + tab).classList.add('active');
+  if (tab === 'azienda') loadAzienda();
+}
+
+async function initImpostazioni() {
+  await loadCategorieLista();
+  loadAzienda();
+}
+
+// ── CATEGORIE ─────────────────────────────────────────────────────
+async function loadCategorieLista() {
+  if (!currentBusiness) return;
+  const { data } = await db.from('categories').select('*')
+    .eq('business_id', currentBusiness.id)
+    .eq('active', true)
+    .order('type').order('name');
+
+  window.allCategories = data || [];
+
+  const entrate = (data||[]).filter(c => c.type === 'entrata');
+  const uscite = (data||[]).filter(c => c.type === 'uscita');
+
+  document.getElementById('cat-n-entrate').textContent = entrate.length;
+  document.getElementById('cat-n-uscite').textContent = uscite.length;
+
+  renderCategorieLista(data||[]);
+
+  // Aggiorna anche i select nella form movimenti
+  filterCategoriesByType('entrata');
+}
+
+function filterCategorie(tipo) {
+  currentCatFilter = tipo;
+  ['tutte','entrata','uscita'].forEach(t => {
+    const btn = document.getElementById('cf-' + t);
+    if (btn) btn.classList.toggle('active', t === tipo);
+  });
+  const filtered = tipo === 'tutte'
+    ? (window.allCategories || [])
+    : (window.allCategories || []).filter(c => c.type === tipo);
+  renderCategorieLista(filtered);
+}
+
+function renderCategorieLista(cats) {
+  const el = document.getElementById('categorie-list');
+  if (!cats.length) { el.innerHTML = '<div class="empty-state">Nessuna categoria</div>'; return; }
+  el.innerHTML = cats.map(c => `
+    <div class="categoria-card" style="border-left-color:${c.color}">
+      <div class="cat-icon">${c.icon || '📌'}</div>
+      <div class="cat-info">
+        <div class="cat-nome">${c.name}</div>
+        <div class="cat-tipo ${c.type}">${c.type === 'entrata' ? 'Entrata' : 'Uscita'}</div>
+      </div>
+      <button class="entry-del" onclick="deleteCategoria('${c.id}')" title="Elimina">✕</button>
+    </div>`).join('');
+}
+
+async function saveCategoria() {
+  if (!currentBusiness) return;
+  const nome = document.getElementById('nc-nome').value.trim();
+  const tipo = document.getElementById('nc-tipo').value;
+  const icon = document.getElementById('nc-icon').value.trim() || '📌';
+  const color = document.getElementById('nc-color').value;
+  const msgEl = document.getElementById('nc-msg');
+
+  if (!nome) { msgEl.textContent = 'Inserisci il nome'; msgEl.className = 'auth-message error'; return; }
+
+  const { error } = await db.from('categories').insert({
+    business_id: currentBusiness.id,
+    name: nome,
+    type: tipo,
+    icon,
+    color,
+    active: true
+  });
+
+  if (error) { msgEl.textContent = 'Errore: ' + error.message; msgEl.className = 'auth-message error'; return; }
+
+  msgEl.textContent = 'Categoria aggiunta ✓';
+  msgEl.className = 'auth-message success';
+  document.getElementById('nc-nome').value = '';
+  document.getElementById('nc-icon').value = '';
+  setTimeout(() => msgEl.textContent = '', 3000);
+  await loadCategorieLista();
+}
+
+async function deleteCategoria(id) {
+  const { error } = await db.from('categories').update({ active: false }).eq('id', id);
+  if (error) { showToast('Errore eliminazione', 'error'); return; }
+  showToast('Categoria eliminata ✓', 'success');
+  await loadCategorieLista();
+}
+
+// ── AZIENDA ───────────────────────────────────────────────────────
+async function loadAzienda() {
+  if (!currentBusiness) return;
+  document.getElementById('az-nome').value = currentBusiness.name || '';
+  document.getElementById('az-email').value = currentBusiness.email || '';
+  document.getElementById('az-piva').value = currentBusiness.vat_number || '';
+  document.getElementById('az-tel').value = currentBusiness.phone || '';
+}
+
+async function saveAzienda() {
+  if (!currentBusiness) return;
+  const nome = document.getElementById('az-nome').value.trim();
+  if (!nome) { showToast('Inserisci il nome attività', 'error'); return; }
+
+  const { error } = await db.from('businesses').update({
+    name: nome,
+    email: document.getElementById('az-email').value.trim(),
+    vat_number: document.getElementById('az-piva').value.trim(),
+    phone: document.getElementById('az-tel').value.trim()
+  }).eq('id', currentBusiness.id);
+
+  if (error) { showToast('Errore: ' + error.message, 'error'); return; }
+
+  currentBusiness.name = nome;
+  document.getElementById('business-name-sidebar').textContent = nome;
+  const msgEl = document.getElementById('az-msg');
+  msgEl.textContent = 'Dati salvati ✓';
+  msgEl.className = 'auth-message success';
+  setTimeout(() => msgEl.textContent = '', 3000);
+  showToast('Azienda aggiornata ✓', 'success');
+}
+
+// ============================================
+// GESTIONE PERMESSI CASSIERE
+// ============================================
+let currentPermessiUserId = null;
+
+async function apriModalPermessi(userId, userName, role) {
+  if (role !== 'cashier') {
+    showToast('I permessi si configurano solo per i cassieri', '');
+    return;
+  }
+
+  currentPermessiUserId = userId;
+
+  document.getElementById('modal-permessi-user').innerHTML = `
+    <div class="mi-label">Configurazione permessi per</div>
+    <div class="mi-value" style="font-size:16px">${userName}</div>
+    <div class="mi-meta">Ruolo: Cassiere</div>`;
+
+  // Carica permessi esistenti
+  const { data: perms } = await db.from('user_permissions')
+    .select('*')
+    .eq('business_id', currentBusiness.id)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  // Imposta checkbox
+  document.getElementById('perm-movimenti').checked = perms?.can_view_movimenti ?? false;
+  document.getElementById('perm-storico').checked = perms?.can_view_storico ?? false;
+  document.getElementById('perm-report').checked = perms?.can_view_report ?? false;
+  document.getElementById('perm-banca').checked = perms?.can_view_banca ?? false;
+  document.getElementById('perm-fornitori').checked = perms?.can_view_fornitori ?? false;
+
+  document.getElementById('modal-permessi').classList.remove('hidden');
+}
+
+function closeModalPermessi() {
+  document.getElementById('modal-permessi').classList.add('hidden');
+  currentPermessiUserId = null;
+}
+
+async function salvaPermessi() {
+  if (!currentPermessiUserId || !currentBusiness) return;
+
+  const payload = {
+    business_id: currentBusiness.id,
+    user_id: currentPermessiUserId,
+    can_view_dashboard: true,
+    can_view_primanota: true,
+    can_view_movimenti: document.getElementById('perm-movimenti').checked,
+    can_view_storico: document.getElementById('perm-storico').checked,
+    can_view_report: document.getElementById('perm-report').checked,
+    can_view_banca: document.getElementById('perm-banca').checked,
+    can_view_fornitori: document.getElementById('perm-fornitori').checked
+  };
+
+  const { error } = await db.from('user_permissions')
+    .upsert(payload, { onConflict: 'business_id,user_id' });
+
+  if (error) { showToast('Errore: ' + error.message, 'error'); return; }
+
+  closeModalPermessi();
+  showToast('Permessi salvati ✓', 'success');
+}
+
+// Carica permessi per l'utente corrente e aggiorna il menu
+async function loadCurrentUserPermissions() {
+  if (!currentBusiness || currentRole !== 'cashier') return;
+
+  const { data: perms } = await db.from('user_permissions')
+    .select('*')
+    .eq('business_id', currentBusiness.id)
+    .eq('user_id', currentUser.id)
+    .maybeSingle();
+
+  // Default cassiere: solo dashboard e primanota
+  window.userPerms = {
+    dashboard: true,
+    primanota: true,
+    movimenti: perms?.can_view_movimenti ?? false,
+    storico: perms?.can_view_storico ?? false,
+    report: perms?.can_view_report ?? false,
+    banca: perms?.can_view_banca ?? false,
+    fornitori: perms?.can_view_fornitori ?? false,
+    sedi: true,
+    team: false,
+    impostazioni: false
+  };
+}
+
+// ============================================
+// FATTURE FORNITORE IN FORM ASSEGNO
+// ============================================
+let fattureAssegnoSelezionate = new Set();
+
+async function loadFattureFornitoreAssegno() {
+  const fornitoreId = document.getElementById('na-fornitore').value;
+  const wrap = document.getElementById('na-fatture-wrap');
+  const listEl = document.getElementById('na-fatture-list');
+
+  fattureAssegnoSelezionate.clear();
+
+  if (!fornitoreId || !currentBusiness) {
+    wrap.style.display = 'none';
+    return;
+  }
+
+  // Carica fatture aperte del fornitore
+  const { data: fatture } = await db.from('fatture_fornitori')
+    .select('*')
+    .eq('business_id', currentBusiness.id)
+    .eq('fornitore_id', fornitoreId)
+    .in('stato', ['aperta', 'pagata_parziale'])
+    .order('data_scadenza');
+
+  if (!fatture?.length) {
+    wrap.style.display = 'block';
+    listEl.innerHTML = '<div class="empty-state" style="padding:12px">Nessuna fattura aperta per questo fornitore</div>';
+    return;
+  }
+
+  wrap.style.display = 'block';
+  listEl.innerHTML = fatture.map(f => `
+    <div class="fattura-assegno-item" id="fai-${f.id}" onclick="toggleFatturaAssegno('${f.id}', ${f.importo_totale})">
+      <input type="checkbox" id="chk-${f.id}" onclick="event.stopPropagation();toggleFatturaAssegno('${f.id}', ${f.importo_totale})" />
+      <div class="fa-info">
+        <div class="fa-numero">${f.numero ? 'N° ' + f.numero : 'Fattura'} · ${f.data_fattura ? formatDate(f.data_fattura) : ''}</div>
+        <div class="fa-scadenza">Scadenza: ${f.data_scadenza ? formatDate(f.data_scadenza) : '—'}</div>
+      </div>
+      <div class="fa-importo">${formatEur(f.importo_totale)}</div>
+    </div>`).join('') + '<div class="fatture-assegno-totale"><span class="fat-tot-label">Totale selezionato</span><span class="fat-tot-val" id="fat-tot-val">€ 0,00</span></div>';
+}
+
+function toggleFatturaAssegno(id, importo) {
+  const item = document.getElementById('fai-' + id);
+  const chk = document.getElementById('chk-' + id);
+
+  if (fattureAssegnoSelezionate.has(id)) {
+    fattureAssegnoSelezionate.delete(id);
+    item.classList.remove('selected');
+    chk.checked = false;
+  } else {
+    fattureAssegnoSelezionate.add(id);
+    item.classList.add('selected');
+    chk.checked = true;
+  }
+
+  // Aggiorna totale e auto-compila importo assegno
+  updateTotaleSelezionato();
+}
+
+function updateTotaleSelezionato() {
+  const totEl = document.getElementById('fat-tot-val');
+  if (!totEl) return;
+
+  // Somma importi dalle fatture selezionate
+  let tot = 0;
+  fattureAssegnoSelezionate.forEach(id => {
+    const chk = document.getElementById('chk-' + id);
+    if (chk) {
+      // Leggi importo dal data attribute
+      const item = document.getElementById('fai-' + id);
+      const importoEl = item?.querySelector('.fa-importo');
+      if (importoEl) {
+        const txt = importoEl.textContent.replace('€','').replace('.','').replace(',','.').trim();
+        tot += parseFloat(txt) || 0;
+      }
+    }
+  });
+
+  totEl.textContent = formatEur(tot);
+
+  // Auto-compila importo assegno
+  if (tot > 0) {
+    const impEl = document.getElementById('na-importo');
+    if (impEl && !impEl.value) impEl.value = tot.toFixed(2);
+  }
+}
+
+// Override saveAssegno per collegare le fatture
+const _origSaveAssegno = saveAssegno;
+async function saveAssegno() {
+  if (!currentBusiness) return;
+  const importo = parseFloat(document.getElementById('na-importo').value);
+  const scadenza = document.getElementById('na-scadenza').value;
+  const fornitoreId = document.getElementById('na-fornitore')?.value || null;
+
+  if (!importo || importo <= 0) { showToast('Inserisci un importo valido', 'error'); return; }
+  if (!scadenza) { showToast('Inserisci la data di scadenza', 'error'); return; }
+
+  let beneficiario = '';
+  if (fornitoreId) { const f = fornitoriCache.find(x => x.id === fornitoreId); if (f) beneficiario = f.ragione_sociale; }
+
+  const { data: assegno, error } = await db.from('assegni').insert({
+    business_id: currentBusiness.id,
+    banca_id: document.getElementById('na-banca').value || null,
+    fornitore_id: fornitoreId,
+    numero: document.getElementById('na-numero').value.trim(),
+    beneficiario,
+    importo,
+    data_emissione: document.getElementById('na-emissione').value,
+    data_scadenza: scadenza,
+    stato: 'emesso',
+    note: document.getElementById('na-note').value
+  }).select().single();
+
+  if (error) { showToast('Errore: ' + error.message, 'error'); return; }
+
+  // Collega fatture selezionate e calcola giorni pagamento
+  if (fattureAssegnoSelezionate.size > 0 && assegno) {
+    const oggi = new Date().toISOString().split('T')[0];
+
+    for (const fatturaId of fattureAssegnoSelezionate) {
+      // Carica fattura per calcolare giorni
+      const { data: fatt } = await db.from('fatture_fornitori')
+        .select('data_fattura, data_scadenza, importo_totale')
+        .eq('id', fatturaId).single();
+
+      // Calcola giorni dalla data fattura all'emissione assegno
+      let giorniPagamento = null;
+      if (fatt?.data_fattura) {
+        const diff = new Date(oggi) - new Date(fatt.data_fattura);
+        giorniPagamento = Math.round(diff / 86400000);
+      }
+
+      // Aggiorna fattura come pagata
+      await db.from('fatture_fornitori').update({
+        stato: 'pagata',
+        metodo_pagamento: 'assegno',
+        note: (fatt?.note ? fatt.note + ' · ' : '') + 'Pagata con assegno N° ' + (document.getElementById('na-numero').value || assegno.id)
+      }).eq('id', fatturaId);
+
+      // Salva giorni pagamento per statistiche
+      if (giorniPagamento !== null && fornitoreId) {
+        await db.from('fornitori').update({
+          note: `Tempo medio pagamento aggiornato: ${giorniPagamento} giorni`
+        }).eq('id', fornitoreId);
+      }
+    }
+
+    showToast(`Assegno registrato ✓ · ${fattureAssegnoSelezionate.size} fattura/e collegate`, 'success');
+  } else {
+    showToast('Assegno registrato ✓', 'success');
+  }
+
+  // Reset form
+  ['na-numero','na-importo','na-note'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  const naF = document.getElementById('na-fornitore'); if (naF) naF.value = '';
+  const naFW = document.getElementById('na-fatture-wrap'); if (naFW) naFW.style.display = 'none';
+  fattureAssegnoSelezionate.clear();
+
+  loadAssegniV2();
+  loadOverview();
+}
+
+// ============================================
+// EXPORT PDF ESTRATTO CONTO FORNITORE
+// ============================================
+async function exportEstrattoPDF() {
+  const fornitoreId = document.getElementById('ec-fornitore').value;
+  if (!fornitoreId || !currentBusiness) {
+    showToast('Seleziona prima un fornitore', 'error'); return;
+  }
+
+  const from = document.getElementById('ec-from').value;
+  const to = document.getElementById('ec-to').value;
+  const fornitore = fornitoriCache.find(f => f.id === fornitoreId);
+  const fornitoreNome = fornitore?.ragione_sociale || 'Fornitore';
+
+  showToast('Generazione PDF...', '');
+
+  const [{ data: fatture }, { data: assegni }] = await Promise.all([
+    db.from('fatture_fornitori').select('*')
+      .eq('business_id', currentBusiness.id)
+      .eq('fornitore_id', fornitoreId)
+      .gte('data_fattura', from).lte('data_fattura', to)
+      .order('data_fattura'),
+    db.from('assegni').select('*')
+      .eq('business_id', currentBusiness.id)
+      .eq('fornitore_id', fornitoreId)
+      .gte('data_emissione', from).lte('data_emissione', to)
+      .order('data_emissione')
+  ]);
+
+  const totFatturato = (fatture||[]).reduce((s,f) => s + Number(f.importo_totale), 0);
+  const assEmessi = (assegni||[]).filter(a => (a.stato||'emesso') !== 'addebitato');
+  const assAddebitati = (assegni||[]).filter(a => (a.stato||'emesso') === 'addebitato');
+  const totEmesso = assEmessi.reduce((s,a) => s + Number(a.importo), 0);
+  const totAddebitato = assAddebitati.reduce((s,a) => s + Number(a.importo), 0);
+  const saldoContabile = totFatturato - totEmesso - totAddebitato;
+  const saldoEffettivo = totFatturato - totAddebitato;
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const W = 210;
+  const margin = 16;
+  let y = 0;
+
+  // ── HEADER ──
+  doc.setFillColor(10, 15, 30);
+  doc.rect(0, 0, W, 38, 'F');
+  doc.setFillColor(37, 99, 235);
+  doc.roundedRect(margin, 10, 16, 16, 2, 2, 'F');
+  doc.setTextColor(255,255,255);
+  doc.setFontSize(12); doc.setFont('helvetica','bold');
+  doc.text('K', margin + 8, 21, { align: 'center' });
+  doc.setFontSize(18); doc.text('KONTRO', margin + 20, 21);
+  doc.setFontSize(8); doc.setFont('helvetica','normal');
+  doc.setTextColor(156,163,175);
+  doc.text('Generato il ' + new Date().toLocaleDateString('it-IT'), W - margin, 21, { align: 'right' });
+  y = 46;
+
+  // ── TITOLO ──
+  doc.setTextColor(10,15,30);
+  doc.setFontSize(16); doc.setFont('helvetica','bold');
+  doc.text('Estratto Conto Fornitore', margin, y);
+  y += 7;
+  doc.setFontSize(11); doc.setFont('helvetica','normal');
+  doc.setTextColor(37,99,235);
+  doc.text(fornitoreNome, margin, y);
+  y += 5;
+  doc.setFontSize(9); doc.setTextColor(107,114,128);
+  doc.text('Periodo: ' + formatDate(from) + ' — ' + formatDate(to), margin, y);
+  doc.text(currentBusiness?.name || '', W - margin, y, { align: 'right' });
+  y += 10;
+
+  // ── KPI BOX ──
+  const kpiW = (W - margin * 2 - 12) / 4;
+  const kpis = [
+    { label: 'Fatturato', val: formatEur(totFatturato), color: [239,68,68] },
+    { label: 'Assegni emessi', val: formatEur(totEmesso), color: [245,158,11] },
+    { label: 'Saldo contabile', val: formatEur(saldoContabile), color: [245,158,11] },
+    { label: 'Saldo effettivo', val: formatEur(saldoEffettivo), color: saldoEffettivo > 0 ? [239,68,68] : [16,185,129] }
+  ];
+
+  kpis.forEach((k, i) => {
+    const x = margin + i * (kpiW + 4);
+    doc.setFillColor(248,250,252);
+    doc.roundedRect(x, y, kpiW, 16, 2, 2, 'F');
+    doc.setDrawColor(...k.color);
+    doc.setLineWidth(0.8);
+    doc.roundedRect(x, y, kpiW, 16, 2, 2, 'S');
+    doc.setFontSize(7); doc.setFont('helvetica','bold');
+    doc.setTextColor(107,114,128);
+    doc.text(k.label.toUpperCase(), x + 4, y + 5.5);
+    doc.setFontSize(10); doc.setTextColor(...k.color);
+    doc.text(k.val, x + 4, y + 12);
+  });
+  y += 22;
+
+  // ── TABELLA MOVIMENTI ──
+  doc.setFontSize(11); doc.setFont('helvetica','bold');
+  doc.setTextColor(10,15,30);
+  doc.text('Dettaglio movimenti', margin, y);
+  y += 6;
+
+  // Header tabella
+  doc.setFillColor(10,15,30);
+  doc.rect(margin, y, W - margin*2, 7, 'F');
+  doc.setTextColor(255,255,255);
+  doc.setFontSize(7.5); doc.setFont('helvetica','bold');
+  doc.text('DATA', margin+2, y+5);
+  doc.text('TIPO', margin+24, y+5);
+  doc.text('DESCRIZIONE', margin+44, y+5);
+  doc.text('IMPORTO', margin+120, y+5);
+  doc.text('S. CONTABILE', margin+145, y+5);
+  doc.text('S. EFFETTIVO', W-margin-2, y+5, { align:'right' });
+  y += 9;
+
+  // Righe movimenti
+  const movimenti = [
+    ...(fatture||[]).map(f => ({
+      data: f.data_fattura, tipo: 'Fattura',
+      desc: (f.numero ? 'N° '+f.numero : '') + (f.data_scadenza ? ' scad.'+formatDate(f.data_scadenza) : ''),
+      importo: Number(f.importo_totale), effetto: 'debito'
+    })),
+    ...(assegni||[]).map(a => {
+      const isAd = (a.stato||'emesso') === 'addebitato';
+      return {
+        data: a.data_emissione, tipo: isAd ? 'Ass. addebitato' : 'Ass. emesso',
+        desc: (a.numero ? 'N° '+a.numero+' ' : '') + 'scad.'+formatDate(a.data_scadenza),
+        importo: Number(a.importo), effetto: isAd ? 'pagato' : 'emesso'
+      };
+    })
+  ].sort((a,b) => new Date(a.data) - new Date(b.data));
+
+  let sC = 0, sE = 0;
+  doc.setFont('helvetica','normal');
+  movimenti.forEach((m, i) => {
+    if (y > 270) { doc.addPage(); y = 20; }
+    if (m.effetto === 'debito') { sC += m.importo; sE += m.importo; }
+    else if (m.effetto === 'emesso') { sC -= m.importo; }
+    else if (m.effetto === 'pagato') { sE -= m.importo; }
+
+    if (i % 2 === 0) { doc.setFillColor(248,250,252); doc.rect(margin, y-3, W-margin*2, 7, 'F'); }
+
+    doc.setTextColor(107,114,128); doc.setFontSize(7.5);
+    doc.text(formatDate(m.data), margin+2, y+2);
+    doc.setTextColor(10,15,30);
+    doc.text(m.tipo, margin+24, y+2);
+    doc.text(m.desc.substring(0,28), margin+44, y+2);
+    m.effetto === 'debito' ? doc.setTextColor(239,68,68) : doc.setTextColor(16,185,129);
+    doc.setFont('helvetica','bold');
+    doc.text((m.effetto==='debito'?'+':'-')+formatEur(m.importo), margin+120, y+2);
+    sC >= 0 ? doc.setTextColor(245,158,11) : doc.setTextColor(16,185,129);
+    doc.text(formatEur(sC), margin+145, y+2);
+    sE >= 0 ? doc.setTextColor(239,68,68) : doc.setTextColor(16,185,129);
+    doc.text(formatEur(sE), W-margin-2, y+2, { align:'right' });
+    doc.setFont('helvetica','normal');
+    y += 7;
+  });
+
+  // Riga totale
+  y += 2;
+  doc.setDrawColor(10,15,30); doc.setLineWidth(0.3);
+  doc.line(margin, y, W-margin, y); y += 4;
+  doc.setFillColor(10,15,30); doc.rect(margin, y, W-margin*2, 8, 'F');
+  doc.setTextColor(255,255,255); doc.setFontSize(8); doc.setFont('helvetica','bold');
+  doc.text('TOTALE PERIODO', margin+2, y+5.5);
+  doc.text(formatEur(totFatturato), margin+120, y+5.5);
+  saldoContabile >= 0 ? doc.setTextColor(245,158,11) : doc.setTextColor(52,211,153);
+  doc.text(formatEur(saldoContabile), margin+145, y+5.5);
+  saldoEffettivo >= 0 ? doc.setTextColor(248,113,113) : doc.setTextColor(52,211,153);
+  doc.text(formatEur(saldoEffettivo), W-margin-2, y+5.5, { align:'right' });
+
+  // Footer
+  doc.setPage(1);
+  doc.setFontSize(7); doc.setTextColor(156,163,175); doc.setFont('helvetica','normal');
+  doc.text('KONTRO — Prima nota digitale · www.kontro.cloud', margin, 290);
+
+  const filename = 'KONTRO_Estratto_' + fornitoreNome.replace(/\s/g,'_') + '_' + from + '_' + to + '.pdf';
+  doc.save(filename);
+  showToast('PDF scaricato ✓', 'success');
+}
+
+// ============================================
+// ESTRATTO CONTO BANCA
+// ============================================
+async function initEstrattoBanca() {
+  const today = new Date().toISOString().split('T')[0];
+  const firstMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
+  const ebFrom = document.getElementById('eb-from');
+  const ebTo = document.getElementById('eb-to');
+  if (ebFrom && !ebFrom.value) ebFrom.value = firstMonth;
+  if (ebTo && !ebTo.value) ebTo.value = today;
+
+  // Popola select banca
+  const sel = document.getElementById('eb-banca');
+  if (sel) {
+    sel.innerHTML = '<option value="">Seleziona banca</option>' +
+      bancheCache.map(b => `<option value="${b.id}">${b.nome}${b.istituto ? ' — ' + b.istituto : ''}</option>`).join('');
+  }
+}
+
+async function loadEstrattoBanca() {
+  const bancaId = document.getElementById('eb-banca').value;
+  const from = document.getElementById('eb-from').value;
+  const to = document.getElementById('eb-to').value;
+  const el = document.getElementById('estratto-banca-list');
+
+  if (!bancaId || !currentBusiness) {
+    el.innerHTML = '<div class="empty-state">Seleziona una banca</div>';
+    return;
+  }
+
+  const banca = bancheCache.find(b => b.id === bancaId);
+
+  // Carica tutti i movimenti della banca nel periodo
+  const [{ data: versamenti }, { data: movimenti }, { data: assegniAd }] = await Promise.all([
+    // Versamenti (entrate)
+    db.from('versamenti').select('*')
+      .eq('business_id', currentBusiness.id)
+      .eq('banca_id', bancaId)
+      .gte('data_versamento', from).lte('data_versamento', to)
+      .order('data_versamento'),
+    // Movimenti manuali
+    db.from('movimenti_banca').select('*')
+      .eq('business_id', currentBusiness.id)
+      .eq('banca_id', bancaId)
+      .gte('data', from).lte('data', to)
+      .order('data'),
+    // Assegni addebitati
+    db.from('assegni').select('*')
+      .eq('business_id', currentBusiness.id)
+      .eq('banca_id', bancaId)
+      .eq('stato', 'addebitato')
+      .gte('data_incasso', from).lte('data_incasso', to)
+      .order('data_incasso')
+  ]);
+
+  // Merge tutti i movimenti
+  const allMov = [
+    ...(versamenti||[]).map(v => ({
+      data: v.data_versamento,
+      tipo: '💵 Versamento',
+      desc: 'Versamento cassa',
+      importo: Number(v.importo_contante||0) + Number(v.importo_pos||0),
+      segno: 'avere',
+      dettaglio: `Contante: ${formatEur(v.importo_contante)} · POS: ${formatEur(v.importo_pos)}`
+    })),
+    ...(movimenti||[]).map(m => ({
+      data: m.data,
+      tipo: m.segno === 'avere' ? '↑ Entrata' : '↓ Uscita',
+      desc: m.descrizione || m.tipo || '—',
+      importo: Number(m.importo),
+      segno: m.segno,
+      dettaglio: m.tipo || ''
+    })),
+    ...(assegniAd||[]).map(a => ({
+      data: a.data_incasso || a.data_scadenza,
+      tipo: '📝 Assegno',
+      desc: `Assegno ${a.numero ? 'N° '+a.numero : ''} — ${a.beneficiario || 'N/D'}`,
+      importo: Number(a.importo),
+      segno: 'dare',
+      dettaglio: `Scadenza: ${formatDate(a.data_scadenza)}`
+    }))
+  ].sort((a, b) => new Date(a.data) - new Date(b.data));
+
+  // Calcola totali
+  const totEntrate = allMov.filter(m => m.segno === 'avere').reduce((s,m) => s + m.importo, 0);
+  const totUscite = allMov.filter(m => m.segno === 'dare').reduce((s,m) => s + m.importo, 0);
+  const saldoIniziale = Number(banca?.saldo_iniziale || 0);
+  const saldoFinale = saldoIniziale + totEntrate - totUscite;
+
+  document.getElementById('eb-saldo-iniziale').textContent = formatEur(saldoIniziale);
+  document.getElementById('eb-tot-entrate').textContent = formatEur(totEntrate);
+  document.getElementById('eb-tot-uscite').textContent = formatEur(totUscite);
+  document.getElementById('eb-saldo-finale').textContent = formatEur(saldoFinale);
+  document.getElementById('eb-saldo-finale').style.color = saldoFinale >= 0 ? 'var(--green-400)' : 'var(--red-400)';
+  document.getElementById('eb-count').textContent = allMov.length + ' movimenti';
+
+  if (!allMov.length) {
+    el.innerHTML = '<div class="empty-state">Nessun movimento nel periodo</div>';
+    return;
+  }
+
+  // Render con saldo progressivo
+  let saldo = saldoIniziale;
+  const header = '<div class="ec-header-row">'
+    + '<span style="flex:0 0 28px"></span>'
+    + '<span style="flex:1">Movimento</span>'
+    + '<span style="min-width:110px;text-align:right;font-size:10px;color:var(--gray-500);text-transform:uppercase;letter-spacing:.06em">Importo</span>'
+    + '<span style="min-width:120px;text-align:right;font-size:10px;color:var(--blue-300);text-transform:uppercase;letter-spacing:.06em">Saldo</span>'
+    + '</div>';
+
+  const rows = allMov.map((m, i) => {
+    saldo += m.segno === 'avere' ? m.importo : -m.importo;
+    const bg = i % 2 === 0 ? '' : 'background:rgba(255,255,255,0.015);';
+    return '<div class="ec-item" style="' + bg + '">'
+      + '<div class="ec-tipo" style="font-size:14px">' + m.tipo.split(' ')[0] + '</div>'
+      + '<div class="ec-info">'
+      + '<div class="ec-desc">' + (m.tipo.split(' ').slice(1).join(' ') || '') + ' — ' + m.desc + '</div>'
+      + '<div class="ec-meta">' + formatDate(m.data) + (m.dettaglio ? ' · ' + m.dettaglio : '') + '</div>'
+      + '</div>'
+      + '<div class="ec-val ' + (m.segno === 'avere' ? 'avere' : 'dare') + '" style="min-width:110px;text-align:right">'
+      + (m.segno === 'avere' ? '+' : '-') + formatEur(m.importo)
+      + '</div>'
+      + '<div style="min-width:120px;text-align:right;font-family:var(--font-mono);font-size:13px;font-weight:500;color:' + (saldo >= 0 ? 'var(--blue-300)' : 'var(--red-400)') + '">'
+      + formatEur(saldo)
+      + '</div>'
+      + '</div>';
+  });
+
+  const footer = '<div class="ec-item" style="background:var(--navy-950);border:1px solid rgba(255,255,255,0.08);font-weight:700;margin-top:8px">'
+    + '<div class="ec-tipo">📊</div>'
+    + '<div class="ec-info"><div class="ec-desc" style="font-weight:700">SALDO FINALE</div></div>'
+    + '<div style="min-width:110px"></div>'
+    + '<div style="min-width:120px;text-align:right;font-family:var(--font-mono);font-size:15px;font-weight:700;color:' + (saldo >= 0 ? 'var(--green-400)' : 'var(--red-400)') + '">'
+    + formatEur(saldo) + '</div></div>';
+
+  el.innerHTML = header + rows.join('') + footer;
+
+  // Salva dati per PDF
+  window._estrattoBancaData = { banca, from, to, allMov, saldoIniziale, totEntrate, totUscite, saldoFinale };
+}
+
+async function exportEstrattoBancaPDF() {
+  const d = window._estrattoBancaData;
+  if (!d) { showToast('Carica prima l\'estratto conto', 'error'); return; }
+
+  showToast('Generazione PDF...', '');
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const W = 210, margin = 16;
+  let y = 0;
+
+  // Header
+  doc.setFillColor(10,15,30); doc.rect(0,0,W,38,'F');
+  doc.setFillColor(37,99,235); doc.roundedRect(margin,10,16,16,2,2,'F');
+  doc.setTextColor(255,255,255); doc.setFontSize(12); doc.setFont('helvetica','bold');
+  doc.text('K', margin+8, 21, {align:'center'});
+  doc.setFontSize(18); doc.text('KONTRO', margin+20, 21);
+  doc.setFontSize(8); doc.setFont('helvetica','normal');
+  doc.setTextColor(156,163,175);
+  doc.text('Generato il ' + new Date().toLocaleDateString('it-IT'), W-margin, 21, {align:'right'});
+  y = 46;
+
+  // Titolo
+  doc.setTextColor(10,15,30); doc.setFontSize(16); doc.setFont('helvetica','bold');
+  doc.text('Estratto Conto Bancario', margin, y); y += 7;
+  doc.setFontSize(11); doc.setTextColor(37,99,235);
+  doc.text(d.banca?.nome + (d.banca?.istituto ? ' — ' + d.banca.istituto : ''), margin, y); y += 5;
+  doc.setFontSize(9); doc.setTextColor(107,114,128);
+  doc.text('Periodo: ' + formatDate(d.from) + ' — ' + formatDate(d.to), margin, y);
+  doc.text(currentBusiness?.name || '', W-margin, y, {align:'right'}); y += 10;
+
+  // KPI
+  const kpiW = (W - margin*2 - 12)/4;
+  const kpis = [
+    {label:'Saldo iniziale', val:formatEur(d.saldoIniziale), color:[37,99,235]},
+    {label:'Entrate', val:formatEur(d.totEntrate), color:[16,185,129]},
+    {label:'Uscite', val:formatEur(d.totUscite), color:[239,68,68]},
+    {label:'Saldo finale', val:formatEur(d.saldoFinale), color:d.saldoFinale>=0?[16,185,129]:[239,68,68]}
+  ];
+  kpis.forEach((k,i) => {
+    const x = margin + i*(kpiW+4);
+    doc.setFillColor(248,250,252); doc.roundedRect(x,y,kpiW,16,2,2,'F');
+    doc.setDrawColor(...k.color); doc.setLineWidth(0.8); doc.roundedRect(x,y,kpiW,16,2,2,'S');
+    doc.setFontSize(7); doc.setFont('helvetica','bold'); doc.setTextColor(107,114,128);
+    doc.text(k.label.toUpperCase(), x+4, y+5.5);
+    doc.setFontSize(10); doc.setTextColor(...k.color);
+    doc.text(k.val, x+4, y+12);
+  });
+  y += 22;
+
+  // Tabella
+  doc.setFontSize(11); doc.setFont('helvetica','bold'); doc.setTextColor(10,15,30);
+  doc.text('Dettaglio movimenti', margin, y); y += 6;
+  doc.setFillColor(10,15,30); doc.rect(margin,y,W-margin*2,7,'F');
+  doc.setTextColor(255,255,255); doc.setFontSize(7.5); doc.setFont('helvetica','bold');
+  doc.text('DATA', margin+2, y+5);
+  doc.text('TIPO', margin+24, y+5);
+  doc.text('DESCRIZIONE', margin+50, y+5);
+  doc.text('IMPORTO', margin+130, y+5);
+  doc.text('SALDO', W-margin-2, y+5, {align:'right'});
+  y += 9;
+
+  let saldo = d.saldoIniziale;
+  d.allMov.forEach((m, i) => {
+    if (y > 270) { doc.addPage(); y = 20; }
+    saldo += m.segno === 'avere' ? m.importo : -m.importo;
+    if (i%2===0) { doc.setFillColor(248,250,252); doc.rect(margin,y-3,W-margin*2,7,'F'); }
+    doc.setFont('helvetica','normal'); doc.setFontSize(7.5);
+    doc.setTextColor(107,114,128); doc.text(formatDate(m.data), margin+2, y+2);
+    doc.setTextColor(10,15,30); doc.text(m.tipo.replace(/[^\x00-\x7F]/g,'').trim(), margin+24, y+2);
+    doc.text(m.desc.substring(0,35), margin+50, y+2);
+    m.segno==='avere' ? doc.setTextColor(16,185,129) : doc.setTextColor(239,68,68);
+    doc.setFont('helvetica','bold');
+    doc.text((m.segno==='avere'?'+':'-')+formatEur(m.importo), margin+130, y+2);
+    saldo>=0 ? doc.setTextColor(37,99,235) : doc.setTextColor(239,68,68);
+    doc.text(formatEur(saldo), W-margin-2, y+2, {align:'right'});
+    doc.setFont('helvetica','normal');
+    y += 7;
+  });
+
+  // Totale
+  y += 2;
+  doc.setDrawColor(10,15,30); doc.setLineWidth(0.3); doc.line(margin,y,W-margin,y); y += 4;
+  doc.setFillColor(10,15,30); doc.rect(margin,y,W-margin*2,8,'F');
+  doc.setTextColor(255,255,255); doc.setFontSize(8); doc.setFont('helvetica','bold');
+  doc.text('SALDO FINALE', margin+2, y+5.5);
+  d.saldoFinale>=0 ? doc.setTextColor(52,211,153) : doc.setTextColor(248,113,113);
+  doc.text(formatEur(d.saldoFinale), W-margin-2, y+5.5, {align:'right'});
+
+  doc.setPage(1); doc.setFontSize(7); doc.setTextColor(156,163,175); doc.setFont('helvetica','normal');
+  doc.text('KONTRO — Prima nota digitale · www.kontro.cloud', margin, 290);
+
+  const filename = 'KONTRO_Banca_' + (d.banca?.nome||'').replace(/\s/g,'_') + '_' + d.from + '_' + d.to + '.pdf';
+  doc.save(filename);
+  showToast('PDF scaricato ✓', 'success');
+}
+
+// ============================================
+// PREVISIONI DASHBOARD
+// ============================================
+
+async function loadPrevisioni() {
+  if (!currentBusiness) return;
+  await Promise.all([
+    buildPrevisioneIncasso(),
+    buildFabbisognoFinanziario()
+  ]);
+}
+
+// ── PREVISIONE INCASSO ─────────────────────────────────────────────
+async function buildPrevisioneIncasso() {
+  const el = document.getElementById('prev-incasso-content');
+  if (!el) return;
+
+  const today = new Date();
+  const todayStr = today.toISOString().split('T')[0];
+
+  // Prendo storico ultimi 8 settimane dalla prima nota
+  const otto = new Date(today); otto.setDate(otto.getDate() - 56);
+  const ottoStr = otto.toISOString().split('T')[0];
+
+  const { data: note } = await db.from('daily_notes')
+    .select('data, incasso_giornaliero, incasso_m, incasso_p, incasso_s')
+    .eq('business_id', currentBusiness.id)
+    .gte('data', ottoStr)
+    .order('data');
+
+  const storici = note || [];
+
+  // Calcolo media per giorno della settimana (0=dom, 1=lun, ...)
+  const mediaDow = Array(7).fill(0).map(() => ({ tot: 0, n: 0 }));
+  storici.forEach(n => {
+    const dow = new Date(n.data + 'T12:00:00').getDay();
+    const inc = Number(n.incasso_giornaliero || 0);
+    if (inc > 0) {
+      mediaDow[dow].tot += inc;
+      mediaDow[dow].n++;
+    }
+  });
+
+  const mediaGiorno = mediaDow.map(d => d.n > 0 ? d.tot / d.n : 0);
+  const dowLabels = ['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
+
+  // Prossimi 7 giorni
+  const giorni = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(today); d.setDate(d.getDate() + i);
+    const dStr = d.toISOString().split('T')[0];
+    const dow = d.getDay();
+    const previsto = mediaGiorno[dow];
+
+    // Cerca dato reale se già registrato
+    const reale = storici.find(n => n.data === dStr);
+    const incReale = reale ? Number(reale.incasso_giornaliero || 0) : null;
+
+    giorni.push({
+      data: dStr,
+      label: i === 0 ? 'Oggi' : i === 1 ? 'Domani' : dowLabels[dow] + ' ' + d.getDate() + '/' + (d.getMonth()+1),
+      previsto,
+      reale: incReale,
+      isOggi: i === 0,
+      dow
+    });
+  }
+
+  const maxVal = Math.max(...giorni.map(g => Math.max(g.previsto, g.reale || 0)), 1);
+
+  // Accuracy badge
+  const accuracy = storici.length;
+  const badge = document.getElementById('prev-accuracy');
+  if (badge) {
+    if (accuracy >= 14) { badge.textContent = 'Alta precisione (' + accuracy + ' giorni)'; badge.className = 'prev-badge ok'; }
+    else if (accuracy >= 7) { badge.textContent = 'Media precisione (' + accuracy + ' giorni)'; badge.className = 'prev-badge warning'; }
+    else { badge.textContent = 'Dati insufficienti'; badge.className = 'prev-badge'; }
+  }
+
+  el.innerHTML = '<div class="prev-incasso-list">'
+    + giorni.map(g => {
+      const val = g.reale !== null ? g.reale : g.previsto;
+      const pct = maxVal > 0 ? Math.round((val / maxVal) * 100) : 0;
+      const isReale = g.reale !== null;
+      const barClass = g.isOggi ? 'og-bar' : isReale ? 'storico' : '';
+      const valClass = g.isOggi ? 'oggi-val' : isReale ? 'storico' : '';
+
+      return '<div class="prev-giorno' + (g.isOggi ? ' oggi' : '') + '">'
+        + '<div class="pg-data">' + g.label + '</div>'
+        + '<div class="pg-bar-wrap"><div class="pg-bar ' + barClass + '" style="width:' + pct + '%"></div></div>'
+        + '<div class="pg-val ' + valClass + '">'
+        + (isReale ? '' : '~') + formatEur(val)
+        + (isReale ? ' ✓' : '')
+        + '</div>'
+        + '</div>';
+    }).join('')
+    + '</div>'
+    + '<div style="margin-top:10px;font-size:11px;font-family:var(--font-mono);color:var(--gray-500)">'
+    + '✓ = dato reale · ~ = previsione basata su media storica per giorno settimana'
+    + '</div>';
+}
+
+// ── FABBISOGNO FINANZIARIO ─────────────────────────────────────────
+async function buildFabbisognoFinanziario() {
+  const el = document.getElementById('prev-fabbisogno-content');
+  if (!el) return;
+
+  const today = new Date().toISOString().split('T')[0];
+  const in30 = new Date(); in30.setDate(in30.getDate() + 30);
+  const in30str = in30.toISOString().split('T')[0];
+
+  // Dati finanziari
+  const [{ data: vers }, { data: movUsc }, { data: assegni }, { data: rid }, { data: fatture }, { data: noteStorico }] = await Promise.all([
+    db.from('versamenti').select('importo_contante,importo_pos').eq('business_id', currentBusiness.id),
+    db.from('movimenti_banca').select('importo').eq('business_id', currentBusiness.id).eq('segno','dare'),
+    db.from('assegni').select('importo,data_scadenza,beneficiario,stato').eq('business_id', currentBusiness.id).eq('stato','emesso').lte('data_scadenza', in30str),
+    db.from('rid_bancari').select('*').eq('business_id', currentBusiness.id).eq('attivo', true).lte('prossimo_addebito', in30str),
+    db.from('fatture_fornitori').select('importo_totale,data_scadenza,fornitori(ragione_sociale)').eq('business_id', currentBusiness.id).in('stato',['aperta','pagata_parziale']).lte('data_scadenza', in30str),
+    db.from('daily_notes').select('data,incasso_giornaliero').eq('business_id', currentBusiness.id).gte('data', new Date(new Date().setDate(new Date().getDate()-28)).toISOString().split('T')[0]).order('data')
+  ]);
+
+  // Saldo banche attuale
+  let saldoBanche = bancheCache.reduce((s,b) => s + Number(b.saldo_iniziale||0), 0);
+  saldoBanche += (vers||[]).reduce((s,v) => s + Number(v.importo_contante||0) + Number(v.importo_pos||0), 0);
+  saldoBanche -= (movUsc||[]).reduce((s,m) => s + Number(m.importo||0), 0);
+
+  // Previsione incasso prossimi 30 giorni (basata su media settimanale)
+  const noteArr = noteStorico || [];
+  const mediaDow2 = Array(7).fill(0).map(() => ({ tot:0, n:0 }));
+  noteArr.forEach(n => {
+    const dow = new Date(n.data + 'T12:00:00').getDay();
+    const inc = Number(n.incasso_giornaliero||0);
+    if (inc > 0) { mediaDow2[dow].tot += inc; mediaDow2[dow].n++; }
+  });
+  const mediaG2 = mediaDow2.map(d => d.n > 0 ? d.tot/d.n : 0);
+
+  let prevIncasso30 = 0;
+  for (let i = 1; i <= 30; i++) {
+    const d = new Date(); d.setDate(d.getDate() + i);
+    prevIncasso30 += mediaG2[d.getDay()];
+  }
+
+  // Costruisci eventi futuri
+  const eventi = [];
+
+  (assegni||[]).forEach(a => {
+    if (a.data_scadenza >= today) {
+      eventi.push({ data: a.data_scadenza, desc: 'Assegno — ' + (a.beneficiario||'N/D'), importo: -Number(a.importo), tipo: 'assegno' });
+    }
+  });
+
+  (rid||[]).forEach(r => {
+    if (r.prossimo_addebito && r.prossimo_addebito >= today) {
+      eventi.push({ data: r.prossimo_addebito, desc: 'RID — ' + r.nome, importo: -Number(r.importo), tipo: 'rid' });
+    }
+  });
+
+  (fatture||[]).forEach(f => {
+    if (f.data_scadenza && f.data_scadenza >= today) {
+      eventi.push({ data: f.data_scadenza, desc: 'Fattura — ' + (f.fornitori?.ragione_sociale||'N/D'), importo: -Number(f.importo_totale), tipo: 'fattura' });
+    }
+  });
+
+  eventi.sort((a,b) => new Date(a.data) - new Date(b.data));
+
+  const totUscite30 = eventi.reduce((s,e) => s + Math.abs(e.importo), 0);
+  const dispFinale = saldoBanche + prevIncasso30 - totUscite30;
+
+  // Status badge
+  const badge = document.getElementById('fab-status');
+  if (badge) {
+    if (dispFinale < 0) { badge.textContent = '⚠ Deficit previsto'; badge.className = 'prev-badge danger'; }
+    else if (dispFinale < totUscite30 * 0.2) { badge.textContent = '⚡ Attenzione liquidità'; badge.className = 'prev-badge warning'; }
+    else { badge.textContent = '✓ Situazione equilibrata'; badge.className = 'prev-badge ok'; }
+  }
+
+  // Saldo progressivo
+  let saldo = saldoBanche;
+  const eventiRows = eventi.slice(0, 10).map(e => {
+    saldo += e.importo;
+    const cls = saldo < 0 ? 'negativo' : Math.abs(e.importo) > saldoBanche * 0.2 ? 'warning' : 'ok';
+    return '<div class="fab-evento ' + cls + '">'
+      + '<span class="fe-data">' + formatDate(e.data) + '</span>'
+      + '<span class="fe-desc">' + e.desc + '</span>'
+      + '<span class="fe-importo" style="color:var(--red-400)">' + formatEur(Math.abs(e.importo)) + '</span>'
+      + '<span class="fe-saldo" style="color:' + (saldo >= 0 ? 'var(--blue-300)' : 'var(--red-400)') + '">' + formatEur(saldo) + '</span>'
+      + '</div>';
+  }).join('');
+
+  el.innerHTML = '<div class="fab-summary">'
+    + '<div class="fab-kpi"><div class="fab-kpi-label">Saldo banche oggi</div><div class="fab-kpi-val ' + (saldoBanche>=0?'blue':'red') + '">' + formatEur(saldoBanche) + '</div></div>'
+    + '<div class="fab-kpi"><div class="fab-kpi-label">Incasso previsto 30gg</div><div class="fab-kpi-val green">' + formatEur(prevIncasso30) + '</div></div>'
+    + '<div class="fab-kpi"><div class="fab-kpi-label">Uscite previste 30gg</div><div class="fab-kpi-val red">' + formatEur(totUscite30) + '</div></div>'
+    + '<div class="fab-kpi"><div class="fab-kpi-label">Disponibilità finale</div><div class="fab-kpi-val ' + (dispFinale>=0?'green':'red') + '">' + formatEur(dispFinale) + '</div></div>'
+    + '</div>'
+    + (eventi.length > 0
+      ? '<div style="display:flex;justify-content:space-between;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--gray-500);padding:0 4px;margin-bottom:6px">'
+        + '<span>Evento</span><span>Importo</span><span>Saldo prev.</span></div>'
+        + '<div class="fab-eventi">' + eventiRows + '</div>'
+      : '<div class="empty-state">Nessuna uscita prevista nei prossimi 30 giorni 🎉</div>');
+}
+
+// ============================================
+// CONTO BET — Prima Nota
+// ============================================
+
+function populatePNBetSelect() {
+  const sel = document.getElementById('pn-bet-banca');
+  if (!sel) return;
+  const betBanche = bancheCache.filter(b => b.tipo === 'bet');
+  sel.innerHTML = '<option value="">— Seleziona conto bet —</option>' +
+    betBanche.map(b => `<option value="${b.id}">${b.nome}</option>`).join('');
+}
+
+// Chiama populatePNBetSelect dentro initPrimaNota
+const _origInitPN2 = initPrimaNota;
+function initPrimaNota() {
+  _origInitPN2();
+  populatePNBetSelect();
+}
+
+// Aggiorna calcPN2 per includere grattavinci e conto_bet nei totali
+const _origCalcPN2 = calcPN2;
+function calcPN2() {
+  _origCalcPN2();
+
+  // Calcola totali grattavinci
+  const gv = getV('grattavinci-m') + getV('grattavinci-p') + getV('grattavinci-s');
+  const gvEl = document.getElementById('tot-grattavinci');
+  if (gvEl) gvEl.textContent = fmtPN(gv);
+
+  // Calcola totali conto bet
+  const cb = getV('conto-bet-m') + getV('conto-bet-p') + getV('conto-bet-s');
+  const cbEl = document.getElementById('tot-conto-bet');
+  if (cbEl) cbEl.textContent = fmtPN(cb);
+}
+
+// Aggiorna salvaNotaGiorno per scalare automaticamente dal conto bet
+async function scalaCcontoBet(betBancaId, totBet, data) {
+  if (!betBancaId || !totBet || totBet <= 0 || !currentBusiness) return;
+
+  // Registra movimento dare (uscita) sul conto bet
+  await db.from('movimenti_banca').insert({
+    business_id: currentBusiness.id,
+    banca_id: betBancaId,
+    data: data,
+    segno: 'dare',
+    tipo: 'bet',
+    descrizione: 'Giocate giornaliere — Prima Nota ' + formatDate(data),
+    importo: totBet
+  });
+}
+
+// ============================================
+// HR — DIPENDENTI
+// ============================================
+let dipendentiCache = [];
+
+function switchHRTab(tab) {
+  document.querySelectorAll('.banca-tab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.banca-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('hrtab-' + tab).classList.add('active');
+  document.getElementById('hrpanel-' + tab).classList.add('active');
+  if (tab === 'organico') initOrganico();
+  if (tab === 'turni') initTurni();
+  if (tab === 'presenze') initPresenze();
+  if (tab === 'acconti') initAcconti();
+  if (tab === 'export') initExportHR();
+}
+
+async function initHR() {
+  await loadDipendentiCache();
+  loadDipendentiList();
+}
+
+async function loadDipendentiCache() {
+  if (!currentBusiness) return;
+  const { data } = await db.from('dipendenti').select('*')
+    .eq('business_id', currentBusiness.id)
+    .eq('attivo', true).order('cognome');
+  dipendentiCache = data || [];
+}
+
+function populateDipendentiSelects() {
+  const opts = '<option value="">Seleziona dipendente</option>' +
+    dipendentiCache.map(d => `<option value="${d.id}">${d.nome} ${d.cognome}</option>`).join('');
+  ['pres-dipendente','acc-dipendente','exp-dipendente','acc-filter-dip'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const first = id === 'acc-filter-dip' ? '<option value="">Tutti i dipendenti</option>'
+      : id === 'exp-dipendente' ? '<option value="">Tutti</option>'
+      : '<option value="">Seleziona dipendente</option>';
+    el.innerHTML = first + dipendentiCache.map(d =>
+      `<option value="${d.id}">${d.nome} ${d.cognome}</option>`).join('');
+  });
+}
+
+// ── ANAGRAFICA ────────────────────────────────────────────────────
+function showAddDipendente() { document.getElementById('add-dipendente-form').classList.remove('hidden'); populateSedeDipendente(); }
+function hideAddDipendente() { document.getElementById('add-dipendente-form').classList.add('hidden'); }
+
+async function saveDipendente() {
+  if (!currentBusiness) return;
+  const nome = document.getElementById('nd-nome').value.trim();
+  const cognome = document.getElementById('nd-cognome').value.trim();
+  if (!nome || !cognome) { showToast('Inserisci nome e cognome', 'error'); return; }
+  const { error } = await db.from('dipendenti').insert({
+    business_id: currentBusiness.id,
+    nome, cognome,
+    ruolo: document.getElementById('nd-ruolo').value.trim(),
+    location_id: document.getElementById('nd-sede').value || null,
+    data_assunzione: document.getElementById('nd-assunzione').value || null,
+    note: document.getElementById('nd-note').value.trim(),
+    telefono: document.getElementById('nd-telefono').value.trim(),
+    colore: document.getElementById('nd-colore')?.value || '#3b82f6'
+  });
+  if (error) { showToast('Errore: ' + error.message, 'error'); return; }
+  showToast('Dipendente salvato ✓', 'success');
+  hideAddDipendente();
+  ['nd-nome','nd-cognome','nd-ruolo','nd-note','nd-telefono'].forEach(id => document.getElementById(id).value = '');
+  await loadDipendentiCache();
+  populateDipendentiSelects();
+  loadDipendentiList();
+}
+
+async function loadDipendentiList() {
+  if (!currentBusiness) return;
+  const { data } = await db.from('dipendenti').select('*, locations(name)')
+    .eq('business_id', currentBusiness.id).order('cognome');
+  const el = document.getElementById('dipendenti-list');
+  if (!data?.length) { el.innerHTML = '<div class="empty-state">Nessun dipendente registrato</div>'; return; }
+
+  // Raggruppa per sede
+  const bySede = {};
+  data.forEach(d => {
+    const sedeNome = d.locations?.name || 'Sede principale';
+    if (!bySede[sedeNome]) bySede[sedeNome] = [];
+    bySede[sedeNome].push(d);
+  });
+
+  el.innerHTML = Object.entries(bySede).map(([sede, dips]) => `
+    <div class="sede-gruppo">
+      <div class="sede-gruppo-label">📍 ${sede}</div>
+      ${dips.map(d => `
+        <div class="dipendente-item">
+          <div class="dip-avatar">${d.nome[0]}${d.cognome[0]}</div>
+          <div class="dip-info">
+            <div class="dip-nome">${d.nome} ${d.cognome}</div>
+            <div class="dip-ruolo">${d.ruolo || '—'}${d.data_assunzione ? ' · dal ' + formatDate(d.data_assunzione) : ''}${d.telefono ? ' · 📞 ' + d.telefono : ''}</div>
+          </div>
+          <button class="btn-secondary sm" onclick="switchHRTab('presenze');document.getElementById('pres-dipendente').value='${d.id}';loadPresenzeMese()">Presenze</button>
+          <button class="btn-secondary sm" onclick="switchHRTab('acconti');document.getElementById('acc-dipendente').value='${d.id}'">Acconti</button>
+          <button class="entry-del" onclick="deleteDipendente('${d.id}')">✕</button>
+        </div>`).join('')}
+    </div>`).join('');
+}
+
+async function deleteDipendente(id) {
+  await db.from('dipendenti').update({ attivo: false }).eq('id', id);
+  await loadDipendentiCache();
+  populateDipendentiSelects();
+  loadDipendentiList();
+  showToast('Dipendente rimosso', 'success');
+}
+
+// ── PRESENZE ──────────────────────────────────────────────────────
+function initPresenze() {
+  populateDipendentiSelects();
+  const months = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
+                  'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+  const meseEl = document.getElementById('pres-mese');
+  const annoEl = document.getElementById('pres-anno');
+  if (meseEl && !meseEl.options.length) {
+    months.forEach((m,i) => {
+      const o = document.createElement('option');
+      o.value = i+1; o.textContent = m;
+      if (i === new Date().getMonth()) o.selected = true;
+      meseEl.appendChild(o);
+    });
+  }
+  if (annoEl && !annoEl.options.length) {
+    for (let y = new Date().getFullYear(); y >= 2023; y--) {
+      const o = document.createElement('option');
+      o.value = y; o.textContent = y;
+      if (y === new Date().getFullYear()) o.selected = true;
+      annoEl.appendChild(o);
+    }
+  }
+  const npData = document.getElementById('np-data');
+  if (npData && !npData.value) npData.value = new Date().toISOString().split('T')[0];
+}
+
+function showAddPresenza() { document.getElementById('add-presenza-form').classList.remove('hidden'); }
+function hideAddPresenza() { document.getElementById('add-presenza-form').classList.add('hidden'); }
+
+async function savePresenza() {
+  const dipId = document.getElementById('pres-dipendente').value;
+  const data = document.getElementById('np-data').value;
+  const tipo = document.getElementById('np-tipo').value;
+  if (!dipId) { showToast('Seleziona dipendente', 'error'); return; }
+  if (!data) { showToast('Inserisci la data', 'error'); return; }
+  const { error } = await db.from('presenze').upsert({
+    business_id: currentBusiness.id,
+    dipendente_id: dipId,
+    data, tipo,
+    ore: parseFloat(document.getElementById('np-ore').value) || 0,
+    motivazione: document.getElementById('np-motivazione').value.trim()
+  }, { onConflict: 'dipendente_id,data,tipo' });
+  if (error) { showToast('Errore: ' + error.message, 'error'); return; }
+  showToast('Presenza salvata ✓', 'success');
+  hideAddPresenza();
+  loadPresenzeMese();
+}
+
+async function loadPresenzeMese() {
+  const dipId = document.getElementById('pres-dipendente').value;
+  const mese = parseInt(document.getElementById('pres-mese')?.value);
+  const anno = parseInt(document.getElementById('pres-anno')?.value);
+  const el = document.getElementById('presenze-list');
+  if (!dipId) { el.innerHTML = '<div class="empty-state">Seleziona dipendente e mese</div>'; return; }
+
+  const from = `${anno}-${String(mese).padStart(2,'0')}-01`;
+  const lastDay = new Date(anno, mese, 0).getDate();
+  const to = `${anno}-${String(mese).padStart(2,'0')}-${lastDay}`;
+
+  const { data } = await db.from('presenze').select('*')
+    .eq('dipendente_id', dipId).gte('data', from).lte('data', to).order('data');
+
+  const presenze = data || [];
+  const tipoLabels = { assenza:'Assenza', ferie:'Ferie', permesso:'Permesso', straordinario:'Straordinario', festivo:'Festivo' };
+
+  // KPI
+  document.getElementById('pr-lavoro').textContent = presenze.filter(p => p.tipo === 'lavoro').length || '—';
+  document.getElementById('pr-assenze').textContent = presenze.filter(p => p.tipo === 'assenza').length;
+  document.getElementById('pr-ferie').textContent = presenze.filter(p => ['ferie','permesso'].includes(p.tipo)).length;
+  const straOre = presenze.filter(p => ['straordinario','festivo'].includes(p.tipo)).reduce((s,p) => s + Number(p.ore||0), 0);
+  document.getElementById('pr-straordinari').textContent = straOre + 'h';
+
+  if (!presenze.length) { el.innerHTML = '<div class="empty-state">Nessuna assenza/straordinario registrato</div>'; return; }
+
+  el.innerHTML = presenze.map(p => `
+    <div class="presenza-card ${p.tipo}">
+      <button class="pc-del" onclick="deletePresenza('${p.id}')">✕</button>
+      <div class="pc-data">${formatDate(p.data)}</div>
+      <div class="pc-tipo ${p.tipo}">${tipoLabels[p.tipo] || p.tipo}${p.ore ? ' · ' + p.ore + 'h' : ''}</div>
+      ${p.motivazione ? `<div class="pc-note">${p.motivazione}</div>` : ''}
+    </div>`).join('');
+}
+
+async function deletePresenza(id) {
+  await db.from('presenze').delete().eq('id', id);
+  loadPresenzeMese();
+  showToast('Presenza eliminata', 'success');
+}
+
+// ── ACCONTI ───────────────────────────────────────────────────────
+function initAcconti() {
+  populateDipendentiSelects();
+  const accData = document.getElementById('acc-data');
+  if (accData && !accData.value) accData.value = new Date().toISOString().split('T')[0];
+  const accBanca = document.getElementById('acc-banca');
+  if (accBanca) {
+    accBanca.innerHTML = '<option value="">Seleziona banca</option>' +
+      bancheCache.filter(b => b.tipo !== 'bet').map(b => `<option value="${b.id}">${b.nome}</option>`).join('');
+  }
+  loadAcconti();
+}
+
+function toggleAccBanca() {
+  const tipo = document.getElementById('acc-tipo').value;
+  const wrap = document.getElementById('acc-banca-wrap');
+  if (wrap) wrap.style.display = tipo === 'bonifico' ? 'block' : 'none';
+}
+
+async function saveAcconto() {
+  if (!currentBusiness) return;
+  const dipId = document.getElementById('acc-dipendente').value;
+  const importo = parseFloat(document.getElementById('acc-importo').value);
+  const tipo = document.getElementById('acc-tipo').value;
+  const data = document.getElementById('acc-data').value;
+  if (!dipId) { showToast('Seleziona dipendente', 'error'); return; }
+  if (!importo || importo <= 0) { showToast('Inserisci importo', 'error'); return; }
+
+  const { error } = await db.from('acconti_stipendio').insert({
+    business_id: currentBusiness.id,
+    dipendente_id: dipId,
+    data, importo, tipo,
+    banca_id: document.getElementById('acc-banca').value || null,
+    note: document.getElementById('acc-note').value.trim(),
+    created_by: currentUser.id
+  });
+  if (error) { showToast('Errore: ' + error.message, 'error'); return; }
+
+  // Collegamento automatico
+  const dip = dipendentiCache.find(d => d.id === dipId);
+  const dipNome = dip ? dip.nome + ' ' + dip.cognome : 'Dipendente';
+
+  if (tipo === 'contanti_cassa') {
+    // Registra uscita in cash_entries
+    await db.from('cash_entries').insert({
+      business_id: currentBusiness.id,
+      user_id: currentUser.id,
+      type: 'uscita', amount: importo,
+      description: 'Acconto stipendio — ' + dipNome,
+      payment_method: 'contanti', entry_date: data
+    });
+  } else if (tipo === 'bonifico') {
+    const bancaId = document.getElementById('acc-banca').value;
+    if (bancaId) {
+      await db.from('movimenti_banca').insert({
+        business_id: currentBusiness.id,
+        banca_id: bancaId, data,
+        segno: 'dare', tipo: 'bonifico',
+        descrizione: 'Acconto stipendio — ' + dipNome,
+        importo
+      });
+    }
+  }
+
+  showToast('Acconto registrato ✓', 'success');
+  ['acc-importo','acc-note'].forEach(id => document.getElementById(id).value = '');
+  loadAcconti();
+}
+
+async function loadAcconti() {
+  if (!currentBusiness) return;
+  const dipFilter = document.getElementById('acc-filter-dip')?.value;
+  let query = db.from('acconti_stipendio')
+    .select('*, dipendenti(nome,cognome)')
+    .eq('business_id', currentBusiness.id)
+    .order('data', { ascending: false }).limit(30);
+  if (dipFilter) query = query.eq('dipendente_id', dipFilter);
+  const { data } = await query;
+  const el = document.getElementById('acconti-list');
+  if (!data?.length) { el.innerHTML = '<div class="empty-state">Nessun acconto registrato</div>'; return; }
+
+  const tipoLabel = { contanti_cassa:'💵 Cassa', contanti_extra:'💰 Extra', bonifico:'🏦 Bonifico', fuori_busta:'🤫 Fuori busta' };
+
+  el.innerHTML = data.map(a => `
+    <div class="acconto-item">
+      <div class="entry-dot uscita"></div>
+      <div class="entry-info">
+        <div class="entry-desc">${a.dipendenti?.nome || ''} ${a.dipendenti?.cognome || ''}</div>
+        <div class="entry-meta">${formatDate(a.data)}${a.note ? ' · ' + a.note : ''}</div>
+      </div>
+      <span class="acc-tipo-badge ${a.tipo}">${tipoLabel[a.tipo] || a.tipo}</span>
+      <div class="entry-amount uscita">- ${formatEur(a.importo)}</div>
+      <button class="entry-del" onclick="deleteAcconto('${a.id}')">✕</button>
+    </div>`).join('');
+}
+
+async function deleteAcconto(id) {
+  await db.from('acconti_stipendio').delete().eq('id', id);
+  loadAcconti();
+  showToast('Acconto eliminato', 'success');
+}
+
+// ── EXPORT CONSULENTE ─────────────────────────────────────────────
+function initExportHR() {
+  populateDipendentiSelects();
+  const months = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
+                  'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+  ['exp-mese'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el && !el.options.length) {
+      months.forEach((m,i) => {
+        const o = document.createElement('option');
+        o.value = i+1; o.textContent = m;
+        if (i === new Date().getMonth()) o.selected = true;
+        el.appendChild(o);
+      });
+    }
+  });
+  ['exp-anno'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el && !el.options.length) {
+      for (let y = new Date().getFullYear(); y >= 2023; y--) {
+        const o = document.createElement('option');
+        o.value = y; o.textContent = y;
+        if (y === new Date().getFullYear()) o.selected = true;
+        el.appendChild(o);
+      }
+    }
+  });
+}
+
+async function exportHRPDF() {
+  const mese = parseInt(document.getElementById('exp-mese').value);
+  const anno = parseInt(document.getElementById('exp-anno').value);
+  const dipId = document.getElementById('exp-dipendente').value;
+  const months = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
+                  'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+
+  const from = `${anno}-${String(mese).padStart(2,'0')}-01`;
+  const lastDay = new Date(anno, mese, 0).getDate();
+  const to = `${anno}-${String(mese).padStart(2,'0')}-${lastDay}`;
+
+  const dipList = dipId ? dipendentiCache.filter(d => d.id === dipId) : dipendentiCache;
+  if (!dipList.length) { showToast('Nessun dipendente', 'error'); return; }
+
+  showToast('Generazione PDF...', '');
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const W = 210, margin = 16;
+
+  for (let di = 0; di < dipList.length; di++) {
+    const dip = dipList[di];
+    if (di > 0) doc.addPage();
+    let y = 0;
+
+    // Header
+    doc.setFillColor(10,15,30); doc.rect(0,0,W,38,'F');
+    doc.setFillColor(37,99,235); doc.roundedRect(margin,10,16,16,2,2,'F');
+    doc.setTextColor(255,255,255); doc.setFontSize(12); doc.setFont('helvetica','bold');
+    doc.text('K', margin+8, 21, {align:'center'});
+    doc.setFontSize(18); doc.text('KONTRO', margin+20, 21);
+    doc.setFontSize(8); doc.setFont('helvetica','normal');
+    doc.setTextColor(156,163,175);
+    doc.text('Riepilogo per consulente paghe', W-margin, 21, {align:'right'});
+    y = 46;
+
+    // Titolo
+    doc.setTextColor(10,15,30); doc.setFontSize(16); doc.setFont('helvetica','bold');
+    doc.text(dip.nome + ' ' + dip.cognome, margin, y); y += 7;
+    doc.setFontSize(10); doc.setTextColor(107,114,128); doc.setFont('helvetica','normal');
+    doc.text((dip.ruolo||'—') + ' · ' + months[mese-1] + ' ' + anno, margin, y);
+    doc.text(currentBusiness?.name || '', W-margin, y, {align:'right'}); y += 10;
+
+    // Carica dati
+    const [{ data: presenze }, { data: acconti }] = await Promise.all([
+      db.from('presenze').select('*').eq('dipendente_id', dip.id).gte('data', from).lte('data', to).order('data'),
+      db.from('acconti_stipendio').select('*').eq('dipendente_id', dip.id).gte('data', from).lte('data', to)
+    ]);
+
+    const assenze = (presenze||[]).filter(p => p.tipo === 'assenza');
+    const ferie = (presenze||[]).filter(p => p.tipo === 'ferie');
+    const permessi = (presenze||[]).filter(p => p.tipo === 'permesso');
+    const straordinari = (presenze||[]).filter(p => p.tipo === 'straordinario');
+    const festivi = (presenze||[]).filter(p => p.tipo === 'festivo');
+    const straOre = [...straordinari, ...festivi].reduce((s,p) => s + Number(p.ore||0), 0);
+
+    // KPI box
+    const kpiW = (W - margin*2 - 12) / 4;
+    const kpis = [
+      { label:'Assenze', val: assenze.length + ' gg', color:[239,68,68] },
+      { label:'Ferie godute', val: ferie.length + ' gg', color:[245,158,11] },
+      { label:'Permessi', val: permessi.length + ' gg', color:[139,92,246] },
+      { label:'Straordinari', val: straOre + 'h', color:[37,99,235] }
+    ];
+    kpis.forEach((k,i) => {
+      const x = margin + i*(kpiW+4);
+      doc.setFillColor(248,250,252); doc.roundedRect(x,y,kpiW,16,2,2,'F');
+      doc.setDrawColor(...k.color); doc.setLineWidth(0.8); doc.roundedRect(x,y,kpiW,16,2,2,'S');
+      doc.setFontSize(7); doc.setFont('helvetica','bold'); doc.setTextColor(107,114,128);
+      doc.text(k.label.toUpperCase(), x+4, y+5.5);
+      doc.setFontSize(12); doc.setTextColor(...k.color);
+      doc.text(k.val, x+4, y+13);
+    });
+    y += 22;
+
+    // Dettaglio assenze/straordinari
+    if (presenze?.length) {
+      doc.setFontSize(11); doc.setFont('helvetica','bold'); doc.setTextColor(10,15,30);
+      doc.text('Dettaglio presenze da segnalare', margin, y); y += 6;
+      doc.setFillColor(10,15,30); doc.rect(margin,y,W-margin*2,7,'F');
+      doc.setTextColor(255,255,255); doc.setFontSize(7.5); doc.setFont('helvetica','bold');
+      doc.text('DATA', margin+2, y+5); doc.text('TIPO', margin+30, y+5);
+      doc.text('ORE', margin+80, y+5); doc.text('MOTIVAZIONE', margin+100, y+5);
+      y += 9;
+      presenze.forEach((p,i) => {
+        if (y > 265) { doc.addPage(); y = 20; }
+        if (i%2===0) { doc.setFillColor(248,250,252); doc.rect(margin,y-3,W-margin*2,7,'F'); }
+        const tipoLabel = {assenza:'Assenza',ferie:'Ferie',permesso:'Permesso',straordinario:'Straordinario',festivo:'Festivo lavorato'}[p.tipo]||p.tipo;
+        doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(10,15,30);
+        doc.text(formatDate(p.data), margin+2, y+2);
+        doc.text(tipoLabel, margin+30, y+2);
+        doc.text(p.ore ? p.ore+'h' : '—', margin+80, y+2);
+        doc.text((p.motivazione||'—').substring(0,40), margin+100, y+2);
+        y += 7;
+      });
+      y += 4;
+    }
+
+    // Acconti (escludi fuori busta)
+    const accontiVisibili = (acconti||[]).filter(a => a.tipo !== 'fuori_busta');
+    if (accontiVisibili.length) {
+      doc.setFontSize(11); doc.setFont('helvetica','bold'); doc.setTextColor(10,15,30);
+      doc.text('Acconti da scalare dalla busta paga', margin, y); y += 6;
+      doc.setFillColor(10,15,30); doc.rect(margin,y,W-margin*2,7,'F');
+      doc.setTextColor(255,255,255); doc.setFontSize(7.5); doc.setFont('helvetica','bold');
+      doc.text('DATA', margin+2, y+5); doc.text('TIPO', margin+30, y+5); doc.text('IMPORTO', W-margin-2, y+5, {align:'right'});
+      y += 9;
+      const tipoAccLabel = {contanti_cassa:'Contanti cassa',contanti_extra:'Contanti extra',bonifico:'Bonifico'};
+      let totAcc = 0;
+      accontiVisibili.forEach((a,i) => {
+        if (i%2===0) { doc.setFillColor(248,250,252); doc.rect(margin,y-3,W-margin*2,7,'F'); }
+        doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(10,15,30);
+        doc.text(formatDate(a.data), margin+2, y+2);
+        doc.text(tipoAccLabel[a.tipo]||a.tipo, margin+30, y+2);
+        doc.setTextColor(239,68,68); doc.setFont('helvetica','bold');
+        doc.text(formatEur(a.importo), W-margin-2, y+2, {align:'right'});
+        totAcc += Number(a.importo); y += 7;
+      });
+      y += 2;
+      doc.setFillColor(10,15,30); doc.rect(margin,y,W-margin*2,8,'F');
+      doc.setTextColor(255,255,255); doc.setFontSize(8); doc.setFont('helvetica','bold');
+      doc.text('TOTALE ACCONTI DA SCALARE', margin+2, y+5.5);
+      doc.setTextColor(248,113,113);
+      doc.text(formatEur(totAcc), W-margin-2, y+5.5, {align:'right'});
+    }
+
+    // Footer
+    doc.setFontSize(7); doc.setTextColor(156,163,175); doc.setFont('helvetica','normal');
+    doc.text('KONTRO — Riepilogo generato il ' + new Date().toLocaleDateString('it-IT') + ' · Documento riservato', margin, 290);
+  }
+
+  const filename = 'KONTRO_HR_' + months[mese-1] + '_' + anno + '.pdf';
+  doc.save(filename);
+  showToast('PDF consulente scaricato ✓', 'success');
+}
+
+async function exportHRCSV() {
+  const mese = parseInt(document.getElementById('exp-mese').value);
+  const anno = parseInt(document.getElementById('exp-anno').value);
+  const dipId = document.getElementById('exp-dipendente').value;
+  const from = `${anno}-${String(mese).padStart(2,'0')}-01`;
+  const lastDay = new Date(anno, mese, 0).getDate();
+  const to = `${anno}-${String(mese).padStart(2,'0')}-${lastDay}`;
+
+  const dipList = dipId ? dipendentiCache.filter(d => d.id === dipId) : dipendentiCache;
+  const rows = [['Dipendente','Ruolo','Tipo','Data','Ore','Motivazione','Importo acconto','Tipo acconto']];
+
+  for (const dip of dipList) {
+    const [{ data: presenze }, { data: acconti }] = await Promise.all([
+      db.from('presenze').select('*').eq('dipendente_id', dip.id).gte('data', from).lte('data', to).order('data'),
+      db.from('acconti_stipendio').select('*').eq('dipendente_id', dip.id).gte('data', from).lte('data', to).neq('tipo', 'fuori_busta')
+    ]);
+    const nome = dip.nome + ' ' + dip.cognome;
+    (presenze||[]).forEach(p => rows.push([nome, dip.ruolo||'', p.tipo, p.data, p.ore||'', p.motivazione||'', '', '']));
+    (acconti||[]).forEach(a => rows.push([nome, dip.ruolo||'', 'acconto', a.data, '', a.note||'', a.importo, a.tipo]));
+  }
+
+  const csv = rows.map(r => r.map(v => `"${v}"`).join(',')).join('\n');
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `KONTRO_HR_${anno}_${String(mese).padStart(2,'0')}.csv`;
+  a.click();
+  showToast('CSV scaricato ✓', 'success');
+}
+
+// Popola select sede nel form dipendente
+function populateSedeDipendente() {
+  const sel = document.getElementById('nd-sede');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Sede principale</option>' +
+    currentLocations.map(l => `<option value="${l.id}">${l.name}</option>`).join('');
+}
+
+// ============================================
+// ORGANICO & TURNI
+// ============================================
+// ORGANICO & TURNI — Stile Excel (Planning settimanale)
+// ============================================
+
+async function initOrganico() {
+  await loadDipendentiCache();
+  buildOggiList();
+  buildOrganicoBySede();
+}
+
+async function initTurni() {
+  await loadDipendentiCache();
+  const sel = document.getElementById('turni-sede-filter');
+  if (sel) {
+    sel.innerHTML = '<option value="">Tutte le sedi</option>' +
+      currentLocations.map(l => `<option value="${l.id}">${l.name}</option>`).join('');
+  }
+  const nav = document.getElementById('planning-data-nav');
+  if (nav && !nav.value) nav.value = new Date().toISOString().split('T')[0];
+  await loadPlanningSettimanale();
+}
+
+function getSettimanaKontro(dataRef) {
+  const d = dataRef ? new Date(dataRef + 'T12:00:00') : new Date();
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  const lun = new Date(d); lun.setDate(diff);
+  const giorni = [];
+  for (let i = 0; i < 7; i++) { const g = new Date(lun); g.setDate(lun.getDate() + i); giorni.push(g.toISOString().split('T')[0]); }
+  return giorni;
+}
+
+function navSettimana(dir) {
+  const el = document.getElementById('planning-data-nav');
+  const d = new Date((el.value || new Date().toISOString().split('T')[0]) + 'T12:00:00');
+  d.setDate(d.getDate() + dir * 7);
+  el.value = d.toISOString().split('T')[0];
+  loadPlanningSettimanale();
+}
+
+function navSettimanaOggi() {
+  document.getElementById('planning-data-nav').value = new Date().toISOString().split('T')[0];
+  loadPlanningSettimanale();
+}
+
+function dipBadgeHTML(dip, size) {
+  if (!dip) return '';
+  const fs = size === 'sm' ? '10px' : '11px';
+  const pad = size === 'sm' ? '3px 7px' : '4px 9px';
+  const nome = dip.nome.split(' ')[0];
+  return `<span style="background:${dip.colore||'#3b82f6'};color:white;border-radius:5px;padding:${pad};font-size:${fs};font-weight:700;display:inline-block;white-space:nowrap;cursor:pointer">${nome}</span>`;
+}
+
+async function loadPlanningSettimanale() {
+  const el = document.getElementById('turni-grid'); if (!el) return;
+  const dataNav = document.getElementById('planning-data-nav')?.value || new Date().toISOString().split('T')[0];
+  const sedeFilter = document.getElementById('turni-sede-filter')?.value || '';
+  const giorni = getSettimanaKontro(dataNav);
+  const giorniNomi = ['Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato','Domenica'];
+  const oggi = new Date().toISOString().split('T')[0];
+  const fmt = d => `${new Date(d+'T12:00:00').getDate()}/${new Date(d+'T12:00:00').getMonth()+1}`;
+  const anno = new Date(giorni[0]+'T12:00:00').getFullYear();
+
+  // Carica turni dal DB (basati su data, non giorno_settimana)
+  const { data: turni } = await db.from('turni_dipendenti')
+    .select('*, dipendenti(id,nome,cognome,colore,location_id)')
+    .eq('business_id', currentBusiness.id)
+    .gte('data', giorni[0]).lte('data', giorni[6]);
+
+  const tMap = {}, rMap = {};
+  (turni||[]).forEach(t => {
+    tMap[`${t.dipendente_id}_${t.data}_${t.location_id}_${t.turno}`] = t;
+    if (t.turno === 'riposo') {
+      rMap[`${t.dipendente_id}_${t.data}_${t.location_id}`] = t;
+      rMap[`${t.dipendente_id}_${t.data}_any`] = t;
+    }
+  });
+
+  // Sedi da mostrare
+  const sedi = sedeFilter
+    ? currentLocations.filter(l => l.id === sedeFilter)
+    : currentLocations;
+
+  if (!sedi.length) { el.innerHTML = '<div class="empty-state">Nessuna sede configurata</div>'; return; }
+
+  function getLavoratori(locId, data, turno) {
+    return dipendentiCache.filter(d => {
+      if (d.location_id && d.location_id !== locId) return false;
+      if (rMap[`${d.id}_${data}_any`]) return false;
+      return tMap[`${d.id}_${data}_${locId}_${turno}`];
+    });
+  }
+  function getRiposi(locId, data) {
+    return dipendentiCache.filter(d =>
+      (!d.location_id || d.location_id === locId) && rMap[`${d.id}_${data}_${locId}`]
+    );
+  }
+
+  // Calcola max lavoratori per sede
+  const maxPerSede = {};
+  sedi.forEach(loc => {
+    let m = 2;
+    giorni.forEach(g => {
+      ['mattina','pomeriggio'].forEach(t => {
+        m = Math.max(m, getLavoratori(loc.id, g, t).length + 1);
+      });
+    });
+    maxPerSede[loc.id] = Math.min(m, 4);
+  });
+
+  // Colori sedi (cicla su palette)
+  const sedePalette = [
+    { hdr:'#7C3AED', sub:'#8B5CF6', rip:'#DDD6FE', ripTxt:'#5B21B6', ser:'#EDE9FE', ripBg:'#FAF5FF' },
+    { hdr:'#059669', sub:'#10B981', rip:'#A7F3D0', ripTxt:'#065F46', ser:'#D1FAE5', ripBg:'#ECFDF5' },
+    { hdr:'#1D4ED8', sub:'#3B82F6', rip:'#BFDBFE', ripTxt:'#1E40AF', ser:'#DBEAFE', ripBg:'#EFF6FF' },
+    { hdr:'#B45309', sub:'#D97706', rip:'#FDE68A', ripTxt:'#92400E', ser:'#FEF3C7', ripBg:'#FFFBEB' }
+  ];
+
+  let html = `<div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+    <table style="border-collapse:collapse;font-size:12px;min-width:600px;width:100%">
+      <thead>
+        <tr>
+          <th colspan="2" style="background:white;border:none"></th>`;
+
+  sedi.forEach((loc, si) => {
+    const pal = sedePalette[si % sedePalette.length];
+    const cols = maxPerSede[loc.id];
+    html += `<th colspan="${cols}" style="background:${pal.hdr};color:white;padding:7px 10px;text-align:center;font-size:11px;letter-spacing:.06em;text-transform:uppercase">📍 ${loc.name}</th>
+             <th style="background:${pal.rip};color:${pal.ripTxt};padding:7px 6px;font-size:10px;text-align:center;font-weight:700;text-transform:uppercase;letter-spacing:.04em">Riposi</th>`;
+  });
+
+  html += `</tr><tr>
+    <th style="padding:5px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#64748B;text-align:center;background:#EEF2FF">GIORNO</th>
+    <th style="padding:5px 4px;font-size:9px;font-weight:700;text-transform:uppercase;color:#64748B;text-align:center;background:#EEF2FF">T.</th>`;
+
+  sedi.forEach((loc, si) => {
+    const pal = sedePalette[si % sedePalette.length];
+    const cols = maxPerSede[loc.id];
+    for (let c = 0; c < cols; c++) {
+      html += `<th style="padding:5px 6px;font-size:9px;font-weight:700;color:white;text-align:center;background:${pal.sub};text-transform:uppercase;letter-spacing:.04em">IN SERVIZIO</th>`;
+    }
+    html += `<th style="padding:5px 4px;font-size:9px;font-weight:700;text-transform:uppercase;color:${pal.ripTxt};text-align:center;background:${pal.rip}">😴 RIPOSI</th>`;
+  });
+
+  html += `</tr></thead><tbody>`;
+
+  giorni.forEach((g, gi) => {
+    const isOggi = g === oggi;
+    const rowBg = isOggi ? '#EFF6FF' : (gi % 2 === 0 ? 'white' : '#F8FAFC');
+
+    ['mattina','pomeriggio'].forEach((turno, ti) => {
+      const turnoLabel = turno === 'mattina' ? 'MAT' : 'POM';
+      html += `<tr style="background:${rowBg}">`;
+
+      if (ti === 0) {
+        html += `<td rowspan="2" style="padding:8px 10px;border-left:${isOggi?'3px solid #2563EB':'1px solid #E2EAF8'};border-bottom:2px solid #E2EAF8;font-weight:700;color:${isOggi?'#2563EB':'#0F1E3C'};font-size:12px;white-space:nowrap;vertical-align:middle;min-width:80px">
+          ${giorniNomi[gi]}<br><span style="font-size:16px;font-weight:800">${fmt(g)}</span>
+        </td>`;
+      }
+
+      html += `<td style="padding:5px 8px;border-left:1px solid #E2EAF8;border-bottom:1px solid #F1F5F9;font-size:10px;color:#94A3B8;font-weight:600;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;min-width:45px;text-align:center">${turnoLabel}</td>`;
+
+      sedi.forEach((loc, si) => {
+        const pal = sedePalette[si % sedePalette.length];
+        const cols = maxPerSede[loc.id];
+        const lavoratori = getLavoratori(loc.id, g, turno);
+        const riposi = getRiposi(loc.id, g);
+
+        for (let c = 0; c < cols; c++) {
+          const dip = lavoratori[c];
+          html += `<td style="padding:4px 5px;border-left:1px solid ${pal.ser};border-bottom:1px solid #F1F5F9;text-align:center;min-width:70px">
+            ${dip
+              ? `<button onclick="rimuoviTurnoKontro('${dip.id}','${g}','${loc.id}','${turno}')" style="background:none;border:none;cursor:pointer;padding:0">${dipBadgeHTML(dip)}</button>`
+              : `<button onclick="aggiungiTurnoKontro('${g}','${loc.id}','${turno}')" style="background:none;border:1px dashed ${pal.rip};color:${pal.sub};border-radius:5px;padding:4px 10px;cursor:pointer;font-size:13px;width:100%">+</button>`
+            }
+          </td>`;
+        }
+
+        if (ti === 0) {
+          html += `<td rowspan="2" style="padding:5px 6px;border-left:2px solid ${pal.rip};border-bottom:2px solid #E2EAF8;text-align:center;background:${pal.ripBg};vertical-align:middle;min-width:80px">
+            ${riposi.map(d => `<button onclick="rimuoviRiposoKontro('${d.id}','${g}','${loc.id}')" style="background:none;border:none;cursor:pointer;display:block;margin:2px auto">${dipBadgeHTML(d,'sm')}</button>`).join('')}
+            <button onclick="aggiungiRiposoKontro('${g}','${loc.id}')" style="background:none;border:1px dashed ${pal.rip};color:${pal.sub};border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;margin-top:2px">+R</button>
+          </td>`;
+        }
+      });
+
+      html += `</tr>`;
+    });
+
+    html += `<tr><td colspan="${2 + sedi.reduce((s,l) => s + maxPerSede[l.id] + 1, 0)}" style="padding:0;height:3px;background:#E2EAF8"></td></tr>`;
+  });
+
+  html += `</tbody></table></div>
+    <div style="margin-top:10px;font-size:11px;color:#64748B">
+      Clicca <b>+</b> per aggiungere un turno · <b>+R</b> per aggiungere riposo · clicca su un nome per rimuoverlo
+    </div>`;
+
+  el.innerHTML = html;
+}
+
+// ── AZIONI PLANNING ───────────────────────────────────────────────────────────
+async function aggiungiTurnoKontro(data, locId, turno) {
+  const dipSede = dipendentiCache.filter(d => !d.location_id || d.location_id === locId);
+  if (!dipSede.length) { showToast('Nessun dipendente per questa sede', 'error'); return; }
+
+  const { data: existing } = await db.from('turni_dipendenti')
+    .select('dipendente_id').eq('data', data).eq('location_id', locId).eq('turno', turno);
+  const assegnatiIds = (existing||[]).map(t => t.dipendente_id);
+  const disponibili = dipSede.filter(d => !assegnatiIds.includes(d.id) && !assegnatiIds.includes(d.id));
+
+  // Escludi chi è in riposo quel giorno
+  const { data: riposi } = await db.from('turni_dipendenti')
+    .select('dipendente_id').eq('data', data).eq('turno', 'riposo');
+  const inRiposo = (riposi||[]).map(t => t.dipendente_id);
+  const final = disponibili.filter(d => !inRiposo.includes(d.id));
+
+  if (!final.length) { showToast('Tutti i dipendenti sono già assegnati o in riposo', ''); return; }
+
+  const lista = final.map((d,i) => `${i+1} = ${d.nome} ${d.cognome}`).join('\n');
+  const scelta = prompt(`Chi aggiungere al turno ${turno === 'mattina' ? 'mattina' : 'pomeriggio'}?\n\n${lista}`, '1');
+  if (!scelta) return;
+  const idx = parseInt(scelta.trim()) - 1;
+  if (isNaN(idx) || idx < 0 || idx >= final.length) return;
+  const dip = final[idx];
+
+  await db.from('turni_dipendenti').insert({
+    business_id: currentBusiness.id,
+    dipendente_id: dip.id,
+    location_id: locId,
+    data, turno,
+    giorno_settimana: new Date(data + 'T12:00:00').getDay()
+  });
+  loadPlanningSettimanale();
+}
+
+async function rimuoviTurnoKontro(dipId, data, locId, turno) {
+  await db.from('turni_dipendenti').delete()
+    .eq('dipendente_id', dipId).eq('data', data).eq('location_id', locId).eq('turno', turno);
+  loadPlanningSettimanale();
+}
+
+async function aggiungiRiposoKontro(data, locId) {
+  const dipSede = dipendentiCache.filter(d => !d.location_id || d.location_id === locId);
+  const { data: existing } = await db.from('turni_dipendenti')
+    .select('dipendente_id').eq('data', data).eq('turno', 'riposo');
+  const giàInRiposo = (existing||[]).map(t => t.dipendente_id);
+  const disponibili = dipSede.filter(d => !giàInRiposo.includes(d.id));
+  if (!disponibili.length) { showToast('Nessun dipendente disponibile', ''); return; }
+
+  const lista = disponibili.map((d,i) => `${i+1} = ${d.nome} ${d.cognome}`).join('\n');
+  const scelta = prompt(`Chi è in riposo?\n\n${lista}`, '1');
+  if (!scelta) return;
+  const idx = parseInt(scelta.trim()) - 1;
+  if (isNaN(idx) || idx < 0 || idx >= disponibili.length) return;
+  const dip = disponibili[idx];
+
+  await db.from('turni_dipendenti').insert({
+    business_id: currentBusiness.id,
+    dipendente_id: dip.id,
+    location_id: locId,
+    data, turno: 'riposo',
+    giorno_settimana: new Date(data + 'T12:00:00').getDay()
+  });
+  loadPlanningSettimanale();
+}
+
+async function rimuoviRiposoKontro(dipId, data, locId) {
+  await db.from('turni_dipendenti').delete()
+    .eq('dipendente_id', dipId).eq('data', data).eq('location_id', locId).eq('turno', 'riposo');
+  loadPlanningSettimanale();
+}
+
+// ── EXPORT PDF PLANNING ───────────────────────────────────────────────────────
+async function exportTurniPDF() {
+  const dataNav = document.getElementById('planning-data-nav')?.value || new Date().toISOString().split('T')[0];
+  const giorni = getSettimanaKontro(dataNav);
+  const giorniNomi = ['Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato','Domenica'];
+  const fmt = d => `${new Date(d+'T12:00:00').getDate()}/${new Date(d+'T12:00:00').getMonth()+1}`;
+  const anno = new Date(giorni[0]+'T12:00:00').getFullYear();
+
+  const { data: turni } = await db.from('turni_dipendenti')
+    .select('*, dipendenti(id,nome,cognome,colore,location_id)')
+    .eq('business_id', currentBusiness.id)
+    .gte('data', giorni[0]).lte('data', giorni[6]);
+
+  const tMap = {}, rMap = {};
+  (turni||[]).forEach(t => {
+    tMap[`${t.dipendente_id}_${t.data}_${t.location_id}_${t.turno}`] = t;
+    if (t.turno === 'riposo') {
+      rMap[`${t.dipendente_id}_${t.data}_${t.location_id}`] = t;
+      rMap[`${t.dipendente_id}_${t.data}_any`] = t;
+    }
+  });
+
+  const sedi = currentLocations;
+  const getLav = (locId, data, turno) => dipendentiCache.filter(d =>
+    (!d.location_id || d.location_id === locId) && !rMap[`${d.id}_${data}_any`] && tMap[`${d.id}_${data}_${locId}_${turno}`]
+  );
+  const getRip = (locId, data) => dipendentiCache.filter(d =>
+    (!d.location_id || d.location_id === locId) && rMap[`${d.id}_${data}_${locId}`]
+  );
+
+  const sedePalette = [
+    { hdr:'#7C3AED', rip:'#DDD6FE', ripTxt:'#5B21B6', ripBg:'#FAF5FF' },
+    { hdr:'#059669', rip:'#A7F3D0', ripTxt:'#065F46', ripBg:'#ECFDF5' },
+    { hdr:'#1D4ED8', rip:'#BFDBFE', ripTxt:'#1E40AF', ripBg:'#EFF6FF' },
+    { hdr:'#B45309', rip:'#FDE68A', ripTxt:'#92400E', ripBg:'#FFFBEB' }
+  ];
+
+  const bpdf = dip => dip
+    ? `<span style="background:${dip.colore||'#3b82f6'};color:#fff;border-radius:3px;padding:1px 6px;font-size:9px;font-weight:700;display:inline-block;margin:1px;white-space:nowrap">${dip.nome.split(' ')[0]}</span>`
+    : '';
+
+  let thSedi = '', rows = '';
+
+  thSedi = sedi.map((loc, si) => {
+    const pal = sedePalette[si % sedePalette.length];
+    return `<th class="th-bar" style="background:${pal.hdr}">📍 ${loc.name}</th>
+            <th class="th-rbar" style="background:${pal.rip};color:${pal.ripTxt};width:65px">😴 Riposi</th>`;
+  }).join('');
+
+  giorni.forEach((g, gi) => {
+    const bg = gi % 2 === 0 ? '#fff' : '#F7F9FF';
+    ['mattina','pomeriggio'].forEach((t, ti) => {
+      rows += `<tr style="background:${bg}">`;
+      if (ti === 0) rows += `<td rowspan="2" class="cg">${giorniNomi[gi]}<br><b>${fmt(g)}</b></td>`;
+      rows += `<td class="ct">${t==='mattina'?'MAT':'POM'}</td>`;
+      sedi.forEach((loc, si) => {
+        const pal = sedePalette[si % sedePalette.length];
+        const lb = getLav(loc.id, g, t);
+        const rb = getRip(loc.id, g);
+        rows += `<td class="cn" style="border-left:2px solid ${pal.rip}">${lb.map(bpdf).join('')}&nbsp;</td>`;
+        if (ti === 0) rows += `<td rowspan="2" class="cr" style="background:${pal.ripBg};border-left:2px solid ${pal.rip}">${rb.map(bpdf).join('<br>')}&nbsp;</td>`;
+      });
+      rows += `</tr>`;
+    });
+  });
+
+  const html = `<!DOCTYPE html><html lang="it"><head><meta charset="UTF-8">
+<title>Planning ${currentBusiness?.name} — ${fmt(giorni[0])}–${fmt(giorni[6])}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Helvetica Neue',Arial,sans-serif;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.page{padding:8px 10px}
+.hdr{display:flex;justify-content:space-between;align-items:center;padding-bottom:6px;border-bottom:2px solid #0F1E3C;margin-bottom:6px}
+.logo{font-size:13px;font-weight:800}.logo b{color:#2563EB}
+.sett{font-size:10px;color:#4A6490}
+table{width:100%;border-collapse:collapse;table-layout:fixed}
+.th-bar{color:white;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:5px 4px;text-align:center;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.th-rbar{font-size:8px;font-weight:700;text-align:center;padding:5px 3px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.th-empty{background:#E2EAF8;color:#475569;font-size:8px;font-weight:700;text-transform:uppercase;padding:5px 4px;text-align:center}
+.cg{padding:4px 5px;font-weight:800;font-size:9px;color:#0F1E3C;vertical-align:middle;border-bottom:2px solid #E2EAF8;border-left:2px solid #E2EAF8;width:55px}
+.ct{padding:2px 3px;font-size:7px;color:#94A3B8;font-weight:700;text-transform:uppercase;text-align:center;vertical-align:middle;border-left:1px solid #F1F5F9;border-bottom:1px solid #F1F5F9;width:25px}
+.cn{padding:3px 4px;border-bottom:1px solid #F1F5F9;vertical-align:middle}
+.cr{padding:4px 3px;text-align:center;vertical-align:middle;border-bottom:2px solid #E2EAF8;width:65px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.ftr{margin-top:5px;font-size:7px;color:#94A3B8;text-align:right}
+.no-print{padding:8px 12px;background:#EEF2FF;display:flex;gap:8px;align-items:center}
+.btn-print{background:#2563EB;color:white;border:none;border-radius:6px;padding:7px 16px;font-size:12px;cursor:pointer}
+.btn-close{background:#E2EAF8;color:#0F1E3C;border:none;border-radius:6px;padding:7px 12px;font-size:12px;cursor:pointer}
+.hint{font-size:11px;color:#4A6490}
+@page{size:A4 landscape;margin:0}
+@media print{.no-print{display:none!important}html,body{width:297mm;height:210mm;overflow:hidden}.page{padding:5mm 6mm;height:210mm;display:flex;flex-direction:column}table{flex:1}}
+</style></head><body>
+<div class="no-print">
+  <button class="btn-print" onclick="window.print()">🖨️ Stampa / Salva PDF</button>
+  <button class="btn-close" onclick="window.close()">✕</button>
+  <span class="hint">Seleziona <b>Salva come PDF</b> · layout <b>Orizzontale</b> · margini <b>Nessuno</b></span>
+</div>
+<div class="page">
+  <div class="hdr">
+    <div class="logo">KONTRO — <b>${currentBusiness?.name}</b> · Planning Staff</div>
+    <div class="sett">Settimana ${fmt(giorni[0])} — ${fmt(giorni[6])} ${anno}</div>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th class="th-empty" style="width:55px">Giorno</th>
+        <th class="th-empty" style="width:25px">T.</th>
+        ${thSedi}
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <div class="ftr">KONTRO — www.kontro.cloud · ${new Date().toLocaleDateString('it-IT')}</div>
+</div>
+<script>window.onload=function(){setTimeout(function(){window.print();},500);};<\/script>
+</body></html>`;
+
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `planning_${giorni[0]}.html`;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 3000);
+  showToast('File scaricato — aprilo, si avvia la stampa automaticamente ✓', 'success');
+}
+
+// ── EXPORT PNG WHATSAPP ───────────────────────────────────────────────────────
+async function condividiPlanningWhatsApp() {
+  const dataNav = document.getElementById('planning-data-nav')?.value || new Date().toISOString().split('T')[0];
+  const giorni = getSettimanaKontro(dataNav);
+  const giorniNomi = ['Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato','Domenica'];
+  const fmt = d => `${new Date(d+'T12:00:00').getDate()}/${new Date(d+'T12:00:00').getMonth()+1}`;
+  const oggi = new Date().toISOString().split('T')[0];
+  const anno = new Date(giorni[0]+'T12:00:00').getFullYear();
+
+  const { data: turni } = await db.from('turni_dipendenti')
+    .select('*, dipendenti(id,nome,cognome,colore,location_id)')
+    .eq('business_id', currentBusiness.id)
+    .gte('data', giorni[0]).lte('data', giorni[6]);
+
+  const tMap = {}, rMap = {};
+  (turni||[]).forEach(t => {
+    tMap[`${t.dipendente_id}_${t.data}_${t.location_id}_${t.turno}`] = t;
+    if (t.turno === 'riposo') {
+      rMap[`${t.dipendente_id}_${t.data}_${t.location_id}`] = t;
+      rMap[`${t.dipendente_id}_${t.data}_any`] = t;
+    }
+  });
+
+  const sedi = currentLocations.slice(0, 2); // max 2 sedi per leggibilità
+  const getLav = (locId, data, turno) => dipendentiCache.filter(d =>
+    (!d.location_id || d.location_id === locId) && !rMap[`${d.id}_${data}_any`] && tMap[`${d.id}_${data}_${locId}_${turno}`]
+  );
+  const getRip = (locId, data) => dipendentiCache.filter(d =>
+    (!d.location_id || d.location_id === locId) && rMap[`${d.id}_${data}_${locId}`]
+  );
+
+  const sedePalette = [
+    { hdr:'#7C3AED', sub:'#8B5CF6', rip:'#DDD6FE', ripTxt:'#5B21B6', ripBg:'#FAF5FF' },
+    { hdr:'#059669', sub:'#10B981', rip:'#A7F3D0', ripTxt:'#065F46', ripBg:'#ECFDF5' }
+  ];
+
+  const S = 2, W = 900;
+  const nSedi = sedi.length;
+  const xG = 0, wG = 80, xT = 80, wT = 48;
+  const areaW = W - wG - wT;
+  const sedeW = Math.floor(areaW / nSedi);
+  const isW = Math.floor(sedeW * 0.72);
+  const ripW = sedeW - isW;
+
+  const ROW = 32, SEP = 4, hHDR = 46, hTH1 = 26, hTH2 = 22;
+  const TOTAL = hHDR + hTH1 + hTH2 + 7 * (ROW * 2 + SEP) + 16;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = W * S; canvas.height = TOTAL * S;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(S, S);
+
+  const fill = (x,y,w,h,c) => { ctx.fillStyle=c; ctx.fillRect(x,y,w,h); };
+  const line = (x,y1,y2,c='#E2EAF8') => {
+    ctx.strokeStyle=c; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(x,y1); ctx.lineTo(x,y2); ctx.stroke();
+  };
+  const txt = (t,x,y,font,color,align='left',base='middle') => {
+    ctx.font=font; ctx.fillStyle=color; ctx.textAlign=align; ctx.textBaseline=base; ctx.fillText(t,x,y);
+  };
+  const badge = (x,y,w,h,r,bg,label,fs) => {
+    ctx.beginPath();
+    ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+    ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+    ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+    ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y); ctx.closePath();
+    ctx.fillStyle=bg; ctx.fill();
+    txt(label, x+w/2, y+h/2, `700 ${fs}px 'Helvetica Neue',Arial,sans-serif`, 'white', 'center');
+  };
+
+  fill(0, 0, W, TOTAL, '#F1F5F9');
+  fill(0, 0, W, hHDR, '#0F1E3C');
+  txt('KONTRO — Planning Staff', 16, hHDR/2, "800 14px 'Helvetica Neue',Arial,sans-serif", 'white');
+  txt(`Sett. ${fmt(giorni[0])} – ${fmt(giorni[6])} ${anno}`, W-14, hHDR/2, "400 11px 'Helvetica Neue',Arial,sans-serif", 'rgba(255,255,255,.5)', 'right');
+
+  let ty = hHDR;
+  fill(0, ty, wG+wT, hTH1, '#E2EAF8');
+  sedi.forEach((loc, si) => {
+    const pal = sedePalette[si];
+    const xBase = wG + wT + si * sedeW;
+    fill(xBase, ty, isW + ripW, hTH1, pal.hdr);
+    txt('📍 ' + loc.name, xBase + sedeW/2, ty+hTH1/2, "700 10px 'Helvetica Neue',Arial,sans-serif", 'white', 'center');
+  });
+  ty += hTH1;
+
+  fill(xG, ty, wG, hTH2, '#EEF2FF');
+  fill(xT, ty, wT, hTH2, '#EEF2FF');
+  sedi.forEach((loc, si) => {
+    const pal = sedePalette[si];
+    const xBase = wG + wT + si * sedeW;
+    fill(xBase, ty, isW, hTH2, pal.sub);
+    fill(xBase+isW, ty, ripW, hTH2, pal.rip);
+    txt('IN SERVIZIO', xBase+isW/2, ty+hTH2/2, "600 8px 'Helvetica Neue',Arial,sans-serif", 'white', 'center');
+    txt('😴 RIPOSI', xBase+isW+ripW/2, ty+hTH2/2, "700 8px 'Helvetica Neue',Arial,sans-serif", pal.ripTxt, 'center');
+  });
+  txt('GIORNO', xG+wG/2, ty+hTH2/2, "600 8px 'Helvetica Neue',Arial,sans-serif", '#64748B', 'center');
+  txt('T.', xT+wT/2, ty+hTH2/2, "600 8px 'Helvetica Neue',Arial,sans-serif", '#64748B', 'center');
+  ty += hTH2;
+
+  let y = ty;
+  const fDip = "700 10px 'Helvetica Neue',Arial,sans-serif";
+  const fDipS = "700 9px 'Helvetica Neue',Arial,sans-serif";
+  const fTurno = "600 7px 'Helvetica Neue',Arial,sans-serif";
+
+  giorni.forEach((g, gi) => {
+    const isOggi = g === oggi;
+    const bg = gi%2===0 ? '#FFFFFF' : '#F8FAFC';
+    const dayH = ROW * 2;
+
+    fill(0, y, W, dayH, bg);
+    if (isOggi) { fill(0, y, W, dayH, 'rgba(37,99,235,.05)'); fill(0, y, 3, dayH, '#2563EB'); }
+
+    sedi.forEach((loc, si) => {
+      const pal = sedePalette[si];
+      const xBase = wG + wT + si * sedeW;
+      fill(xBase+isW, y, ripW, dayH, pal.ripBg + '88');
+    });
+
+    const gc = isOggi ? '#2563EB' : '#0F1E3C';
+    txt(giorniNomi[gi], xG+6, y+7, "600 10px 'Helvetica Neue',Arial,sans-serif", gc, 'left', 'top');
+    txt(fmt(g), xG+6, y+19, "800 14px 'Helvetica Neue',Arial,sans-serif", gc, 'left', 'top');
+
+    ['mattina','pomeriggio'].forEach((turno, ti) => {
+      const ry = y + ti * ROW;
+      if (ti === 1) { ctx.strokeStyle='#EEEEEE'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(xT, ry); ctx.lineTo(W, ry); ctx.stroke(); }
+      txt(turno==='mattina'?'MAT':'POM', xT+wT/2, ry+ROW/2, fTurno, '#94A3B8', 'center');
+
+      sedi.forEach((loc, si) => {
+        const xBase = wG + wT + si * sedeW;
+        const lav = getLav(loc.id, g, turno);
+        let bx = xBase + 5;
+        lav.forEach(dip => {
+          const nome = dip.nome.split(' ')[0];
+          ctx.font = fDip;
+          const tw = ctx.measureText(nome).width;
+          const bw = tw + 12, bh = 19, by = ry + (ROW-bh)/2;
+          if (bx + bw < xBase + isW - 4) { badge(bx, by, bw, bh, 4, dip.colore||'#3b82f6', nome, 10); bx += bw+4; }
+        });
+      });
+    });
+
+    sedi.forEach((loc, si) => {
+      const pal = sedePalette[si];
+      const xBase = wG + wT + si * sedeW;
+      const rip = getRip(loc.id, g);
+      let ry2 = y + 5;
+      rip.forEach(dip => {
+        const nome = dip.nome.split(' ')[0];
+        ctx.font = fDipS;
+        const tw = ctx.measureText(nome).width;
+        const bw = Math.min(tw+10, ripW-10), bh = 17;
+        const bx = xBase + isW + (ripW-bw)/2;
+        badge(bx, ry2, bw, bh, 3, dip.colore||'#3b82f6', nome, 9);
+        ry2 += bh+3;
+      });
+    });
+
+    // linee verticali
+    [xT].forEach(lx => line(lx, y, y+dayH));
+    sedi.forEach((loc, si) => {
+      const xBase = wG + wT + si * sedeW;
+      line(xBase, y, y+dayH);
+      line(xBase+isW, y, y+dayH, '#CBD5E1');
+    });
+
+    y += dayH;
+    fill(0, y, W, SEP, '#CBD5E1');
+    y += SEP;
+  });
+
+  txt(`KONTRO · www.kontro.cloud · ${new Date().toLocaleDateString('it-IT')}`, W-12, y+9, "400 8px 'Helvetica Neue',Arial,sans-serif", '#94A3B8', 'right');
+
+  canvas.toBlob(async (blob) => {
+    const fileName = `planning_${giorni[0]}.png`;
+    const file = new File([blob], fileName, { type: 'image/png' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: `Planning ${fmt(giorni[0])}–${fmt(giorni[6])}`, text: '📋 Planning settimanale KONTRO' });
+        showToast('Condiviso ✓', 'success'); return;
+      } catch(e) { if (e.name === 'AbortError') return; }
+    }
+    try {
+      await navigator.clipboard.write([new ClipboardItem({'image/png': blob})]);
+      window.open('https://web.whatsapp.com/', '_blank');
+      showToast('Immagine copiata! Incolla su WhatsApp Web con Ctrl+V / Cmd+V', 'success');
+    } catch(e) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href=url; a.download=fileName;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 3000);
+      showToast('Immagine scaricata — condividila su WhatsApp', 'success');
+    }
+  }, 'image/png', 1.0);
+}
+
+// ── ORGANICO ─────────────────────────────────────────────────────────────────
+async function buildOrganicoBySede() {
+  const { data: dips } = await db.from('dipendenti')
+    .select('*, locations(name)').eq('business_id', currentBusiness.id).eq('attivo', true);
+  const el = document.getElementById('org-sedi-grid');
+  if (!dips?.length) { el.innerHTML = '<div class="empty-state">Nessun dipendente</div>'; return; }
+
+  const oggi = new Date().toISOString().split('T')[0];
+  const todayDow = new Date().getDay();
+  const { data: turni } = await db.from('turni_dipendenti')
+    .select('dipendente_id,turno,ora_inizio,ora_fine').eq('business_id', currentBusiness.id).eq('data', oggi);
+
+  const bySede = {};
+  dips.forEach(d => {
+    const k = d.locations?.name || 'Sede principale';
+    if (!bySede[k]) bySede[k] = [];
+    bySede[k].push(d);
+  });
+
+  el.innerHTML = Object.entries(bySede).map(([sede, dipList]) => `
+    <div class="org-sede-card">
+      <div class="org-sede-header">
+        <span class="org-sede-nome">📍 ${sede}</span>
+        <span class="org-sede-count">${dipList.length} dipendenti</span>
+      </div>
+      <div class="org-sede-body">
+        ${dipList.map(d => {
+          const turno = (turni||[]).find(t => t.dipendente_id === d.id && t.turno !== 'riposo');
+          const riposo = (turni||[]).find(t => t.dipendente_id === d.id && t.turno === 'riposo');
+          return `<div class="org-dip-row">
+            <div class="org-dip-avatar" style="background:${d.colore||'#3b82f6'}22;color:${d.colore||'#3b82f6'}">${d.nome[0]}${d.cognome[0]}</div>
+            <div style="flex:1">
+              <div class="org-dip-nome">${d.nome} ${d.cognome}</div>
+              <div class="org-dip-ruolo">${d.ruolo||'—'}${d.telefono ? ' · ' + d.telefono : ''}</div>
+            </div>
+            <span class="org-oggi-badge ${turno?'lavora':riposo?'riposo':''}">
+              ${turno ? (turno.turno==='mattina'?'Mattina':'Pomeriggio') : riposo ? 'Riposo' : 'N/D'}
+            </span>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`).join('');
+}
+
+async function buildOggiList() {
+  const oggi = new Date().toISOString().split('T')[0];
+  const todayStr = new Date().toLocaleDateString('it-IT', { weekday:'long', day:'numeric', month:'long' });
+  const oggiEl = document.getElementById('org-oggi-data');
+  if (oggiEl) oggiEl.textContent = todayStr.charAt(0).toUpperCase() + todayStr.slice(1);
+
+  const { data: turni } = await db.from('turni_dipendenti')
+    .select('*, dipendenti(nome,cognome,ruolo,colore)')
+    .eq('business_id', currentBusiness.id).eq('data', oggi)
+    .neq('turno', 'riposo');
+
+  const el = document.getElementById('org-oggi-list');
+  if (!turni?.length) { el.innerHTML = '<div class="empty-state">Nessun turno configurato per oggi</div>'; return; }
+
+  el.innerHTML = turni.map(t => `
+    <div class="entry-item">
+      <div class="entry-dot entrata" style="background:${t.dipendenti?.colore||'#3b82f6'}"></div>
+      <div class="entry-info">
+        <div class="entry-desc">${t.dipendenti?.nome} ${t.dipendenti?.cognome}</div>
+        <div class="entry-meta">${t.dipendenti?.ruolo||'—'} · ${t.turno === 'mattina' ? 'Turno mattina' : 'Turno pomeriggio'}</div>
+      </div>
+      <div style="font-family:var(--font-mono);font-size:12px;color:var(--green-400);font-weight:600;text-transform:uppercase">
+        ${t.turno}
+      </div>
+    </div>`).join('');
+}
+
+// MOBILE MENU
+// ============================================
+function toggleMobileMenu() {
+  const sidebar = document.querySelector('.sidebar');
+  const overlay = document.getElementById('mobile-overlay');
+  const btn = document.getElementById('hamburger-btn');
+  const isOpen = sidebar.classList.contains('open');
+  if (isOpen) {
+    closeMobileMenu();
+  } else {
+    sidebar.classList.add('open');
+    overlay.classList.remove('hidden');
+    btn.classList.add('open');
+  }
+}
+
+function closeMobileMenu() {
+  const sidebar = document.querySelector('.sidebar');
+  const overlay = document.getElementById('mobile-overlay');
+  const btn = document.getElementById('hamburger-btn');
+  sidebar.classList.remove('open');
+  overlay.classList.add('hidden');
+  btn.classList.remove('open');
+}
+
+// Chiudi menu quando si clicca una voce
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.nav-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (window.innerWidth <= 768) closeMobileMenu();
+    });
+  });
+});
