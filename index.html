@@ -1217,6 +1217,36 @@
             </div>
             <div id="az-msg" class="auth-message"></div>
           </div>
+
+          <!-- ZONA PERICOLOSA -->
+          <div class="section-card" style="border:1px solid rgba(239,68,68,0.3);margin-top:20px">
+            <h2 style="color:#ef4444;margin-bottom:8px">⚠️ Zona pericolosa</h2>
+            <p style="font-size:13px;color:var(--gray-400);margin-bottom:16px">
+              Elimina tutti i dati contabili (prime note, fatture, movimenti banca, assegni, versamenti, presenze, acconti). Anagrafica, fornitori, banche e utenti restano intatti.
+            </p>
+            <button class="btn-danger" onclick="showResetModal()">🗑 Reset dati contabili</button>
+          </div>
+        </div>
+
+        <!-- MODAL RESET -->
+        <div id="reset-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;align-items:center;justify-content:center">
+          <div style="background:var(--surface);border:1px solid rgba(239,68,68,0.4);border-radius:16px;padding:32px;max-width:420px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.5)">
+            <h2 style="color:#ef4444;margin-bottom:8px">⚠️ Reset dati contabili</h2>
+            <p style="font-size:13px;color:var(--gray-400);margin-bottom:20px">Questa operazione è <strong style="color:#ef4444">irreversibile</strong>. Inserisci la tua password per confermare.</p>
+            <div class="field" style="margin-bottom:16px">
+              <label>Password owner</label>
+              <input type="password" id="reset-password" placeholder="Inserisci la tua password..." />
+            </div>
+            <div class="field" style="margin-bottom:20px">
+              <label>Scrivi <strong>RESET</strong> per confermare</label>
+              <input type="text" id="reset-confirm-text" placeholder="RESET" />
+            </div>
+            <div id="reset-msg" class="auth-message" style="margin-bottom:12px"></div>
+            <div style="display:flex;gap:10px">
+              <button class="btn-secondary" onclick="hideResetModal()" style="flex:1">Annulla</button>
+              <button class="btn-danger" onclick="eseguiReset()" style="flex:1">Conferma reset →</button>
+            </div>
+          </div>
         </div>
 
       </div>

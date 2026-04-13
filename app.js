@@ -5412,3 +5412,82 @@ async function deleteCausalePrelievo(id) {
   await loadCausaliLista();
   buildPNPrelievoSelects();
 }
+
+// ============================================
+// RESET DATI CONTABILI
+// ============================================
+function showResetModal() {
+  if (currentRole !== 'owner') { showToast('Solo il proprietario può eseguire il reset', 'error'); return; }
+  document.getElementById('reset-password').value = '';
+  document.getElementById('reset-confirm-text').value = '';
+  document.getElementById('reset-msg').textContent = '';
+  document.getElementById('reset-msg').className = 'auth-message';
+  document.getElementById('reset-modal').style.display = 'flex';
+}
+
+function hideResetModal() {
+  document.getElementById('reset-modal').style.display = 'none';
+}
+
+async function eseguiReset() {
+  const pwd = document.getElementById('reset-password').value;
+  const confirmText = document.getElementById('reset-confirm-text').value.trim();
+  const msgEl = document.getElementById('reset-msg');
+
+  if (confirmText !== 'RESET') {
+    msgEl.textContent = 'Scrivi esattamente RESET per confermare';
+    msgEl.className = 'auth-message error';
+    return;
+  }
+  if (!pwd) {
+    msgEl.textContent = 'Inserisci la password';
+    msgEl.className = 'auth-message error';
+    return;
+  }
+
+  // Verifica password tramite re-autenticazione Supabase
+  msgEl.textContent = 'Verifica in corso...';
+  msgEl.className = 'auth-message';
+
+  const { error: authError } = await db.auth.signInWithPassword({
+    email: currentUser.email,
+    password: pwd
+  });
+
+  if (authError) {
+    msgEl.textContent = 'Password errata';
+    msgEl.className = 'auth-message error';
+    return;
+  }
+
+  msgEl.textContent = 'Reset in corso...';
+
+  // Tabelle contabili da cancellare (in ordine per rispettare le FK)
+  const tabelle = [
+    'daily_note_rows',
+    'daily_notes',
+    'fatture_fornitori',
+    'fatture',
+    'assegni',
+    'versamenti',
+    'movimenti_banca',
+    'rid_bancari',
+    'cash_entries',
+    'acconti_stipendio',
+    'presenze',
+    'turni_dipendenti'
+  ];
+
+  for (const tabella of tabelle) {
+    const { error } = await db.from(tabella)
+      .delete()
+      .eq('business_id', currentBusiness.id);
+    if (error) console.warn(`Errore reset ${tabella}:`, error.message);
+  }
+
+  hideResetModal();
+  showToast('Reset completato — tutti i dati contabili eliminati', 'success');
+
+  // Ricarica la vista corrente
+  showView('primanota');
+}
