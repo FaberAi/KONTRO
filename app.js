@@ -2963,9 +2963,24 @@ async function salvaNotaGiorno() {
     created_by: currentUser.id, updated_at: new Date().toISOString()
   };
 
-  const { data: saved, error } = await db.from('daily_notes')
-    .upsert(payload, { onConflict: 'business_id,location_id,data' })
-    .select().single();
+  // Cerca nota esistente per questo giorno/sede (gestisce anche location_id NULL)
+  let existingQuery = db.from('daily_notes').select('id')
+    .eq('business_id', currentBusiness.id).eq('data', data);
+  if (locId) existingQuery = existingQuery.eq('location_id', locId);
+  else existingQuery = existingQuery.is('location_id', null);
+  const { data: existing } = await existingQuery.single();
+
+  let saved, error;
+  if (existing?.id) {
+    // Aggiorna la nota esistente
+    ({ data: saved, error } = await db.from('daily_notes')
+      .update({ ...payload, updated_at: new Date().toISOString() })
+      .eq('id', existing.id).select().single());
+  } else {
+    // Inserisce nuova nota
+    ({ data: saved, error } = await db.from('daily_notes')
+      .insert(payload).select().single());
+  }
   if (error) { showPNMsg('Errore: ' + error.message, 'error'); return; }
 
   await db.from('daily_note_rows').delete().eq('daily_note_id', saved.id);
