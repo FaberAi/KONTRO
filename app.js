@@ -1545,16 +1545,22 @@ function calcPN2() {
 
   // ── DIFFERENZE (come Love Me dm/dt) ──
   const dm = emM - umM;  // differenza mattina
-  const dp = emP - umP;  // differenza pomeriggio (sovrascrive M)
-  const ds = emS - umS;  // differenza sera / totale (= dt di Love Me)
+  const dp = emP - umP;  // differenza pomeriggio (P sovrascrive M)
+  const ds = emS - umS;  // differenza sera finale (= dt di Love Me)
 
-  // ── INCASSO (identico a Love Me) ──
-  // ig = incasso_effettivo + |dt|
-  const incM = getV('incasso-m') + Math.abs(dm);
-  const incP = eff2('incasso-m','incasso-p') + Math.abs(dp);
-  const incS = eff3('incasso-m','incasso-p','incasso-s') + Math.abs(ds);
-  // Giornaliero = valore effettivo finale + |differenza finale| (= ig di Love Me)
-  const ig = incS;
+  // ── Visual auto-inherit: P e S grigi se ereditano (come Love Me ni-auto) ──
+  [...vociFisse, ...uscVoci, 'fc-usc'].forEach(k => {
+    const elM = document.getElementById(k+'-m');
+    const elP = document.getElementById(k+'-p');
+    const elS = document.getElementById(k+'-s');
+    if (!elM || !elP || !elS) return;
+    // P eredita da M se vuoto
+    if (elP.value.trim() === '' && elM.value.trim() !== '') elP.classList.add('pn-auto');
+    else elP.classList.remove('pn-auto');
+    // S eredita da P (o M) se vuoto
+    if (elS.value.trim() === '' && eff2(k+'-m', k+'-p') !== 0) elS.classList.add('pn-auto');
+    else elS.classList.remove('pn-auto');
+  });
 
   // ── AGGIORNA UI ──
   const setT = (id, v) => { const el = document.getElementById(id); if(el) el.textContent = fmtPN(v); };
@@ -1570,9 +1576,20 @@ function calcPN2() {
     }
   });
 
-  setT('r-inc-m', incM);
-  setT('r-inc-p', incP);
-  setT('r-inc-s', incS);
+  // ── INCASSO (identico a Love Me, esteso a 3 turni) ──
+  // Love Me: incassoMCalc = incasso-m + |dm|
+  //          ig = effFixed(incasso-m, incasso-t) + |dt|
+  //          incassoPCalc = ig - incassoMCalc
+  // KONTRO 3 turni:
+  const incassoMCalc = getV('incasso-m') + Math.abs(dm);
+  const igPM         = eff2('incasso-m','incasso-p') + Math.abs(dp);
+  const ig           = eff3('incasso-m','incasso-p','incasso-s') + Math.abs(ds);
+  const incassoPCalc = Math.max(0, igPM - incassoMCalc);
+  const incassoSCalc = Math.max(0, ig  - igPM);
+
+  setT('r-inc-m',   incassoMCalc);
+  setT('r-inc-p',   incassoPCalc);
+  setT('r-inc-s',   incassoSCalc);
   setT('r-inc-tot', ig);
 
   const allarme = document.getElementById('pn-allarme');

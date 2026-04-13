@@ -2383,3 +2383,10 @@ html, body {
   .turni-table { font-size: 11px; }
   .turno-cell { min-height: 36px; padding: 4px 2px; }
 }
+
+/* Auto-inherit: campo P o S che eredita il valore da colonna precedente */
+.pn-auto {
+  color: var(--gray-400) !important;
+  opacity: 0.5;
+  font-style: italic;
+}
