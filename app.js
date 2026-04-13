@@ -1528,23 +1528,30 @@ function calcPN2() {
   const fcUscEl = document.getElementById('tot-fc-usc');
   if (fcUscEl) fcUscEl.textContent = fmtPN(fcUscM+fcUscP+fcUscS);
 
-  // Totali entrate per turno
-  // Il fondo cassa si somma ad ogni turno per la chiusura parziale
-  const entM = fc + vociFisse.reduce((s,k) => s + getV(k+'-m'), 0);
-  const entP = fc + vociFisse.reduce((s,k) => s + getV(k+'-p'), 0);
-  const entS = fc + vociFisse.reduce((s,k) => s + getV(k+'-s'), 0);
-  // Nel totale giornaliero il fondo cassa si conta una sola volta
-  const entTot = fc + vociFisse.reduce((s,k) => s + getV(k+'-m') + getV(k+'-p') + getV(k+'-s'), 0);
+  // Totali entrate cumulativi per chiusura parziale (come Love Me)
+  // Mattina: fc + valori M
+  // Pomeriggio: fc + valori M + valori P (quanto c'è in cassa alla chiusura PM)
+  // Sera: fc + valori M + P + S (chiusura giornata)
+  const rawM = vociFisse.reduce((s,k) => s + getV(k+'-m'), 0);
+  const rawP = vociFisse.reduce((s,k) => s + getV(k+'-p'), 0);
+  const rawS = vociFisse.reduce((s,k) => s + getV(k+'-s'), 0);
+  const entM   = fc + rawM;
+  const entP   = fc + rawM + rawP;
+  const entS   = fc + rawM + rawP + rawS;
+  const entTot = entS; // la sera è la chiusura finale
 
   const setT = (id, v) => { const el = document.getElementById(id); if(el) el.textContent = fmtPN(v); };
   setT('tot-ent-m', entM); setT('tot-ent-p', entP);
   setT('tot-ent-s', entS); setT('tot-ent', entTot);
 
-  // Totali uscite per turno
-  const uscM = uscVoci.reduce((s,k)=>s+getV(k+'-m'),0) + fM + pM + fcUscM;
-  const uscP = uscVoci.reduce((s,k)=>s+getV(k+'-p'),0) + fP + pP + fcUscP;
-  const uscS = uscVoci.reduce((s,k)=>s+getV(k+'-s'),0) + fS + pS + fcUscS;
-  const uscTot = uscM + uscP + uscS;
+  // Totali uscite cumulativi per chiusura parziale
+  const uscRawM = uscVoci.reduce((s,k)=>s+getV(k+'-m'),0) + fM + pM + fcUscM;
+  const uscRawP = uscVoci.reduce((s,k)=>s+getV(k+'-p'),0) + fP + pP + fcUscP;
+  const uscRawS = uscVoci.reduce((s,k)=>s+getV(k+'-s'),0) + fS + pS + fcUscS;
+  const uscM   = uscRawM;
+  const uscP   = uscRawM + uscRawP;
+  const uscS   = uscRawM + uscRawP + uscRawS;
+  const uscTot = uscS;
 
   setT('tot-usc-m', uscM); setT('tot-usc-p', uscP);
   setT('tot-usc-s', uscS); setT('tot-usc', uscTot);
