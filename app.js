@@ -2957,6 +2957,14 @@ async function salvaNotaGiorno() {
   const locId = document.getElementById('pn-location').value || null;
   const fc = getV('pn-fc');
 
+  // Calcola valori effettivi finali (eff3: S se compilato, else P, else M)
+  function e3(idM, idP, idS) {
+    const s = document.getElementById(idS), p = document.getElementById(idP), m = document.getElementById(idM);
+    if (s && s.value.trim() !== '') return parseFloat(s.value)||0;
+    if (p && p.value.trim() !== '') return parseFloat(p.value)||0;
+    return parseFloat(m?.value)||0;
+  }
+
   const payload = {
     business_id: currentBusiness.id, location_id: locId, data, fondo_cassa: fc,
     incasso_m: getV('incasso-m'), incasso_p: getV('incasso-p'), incasso_s: getV('incasso-s'),
@@ -2975,6 +2983,12 @@ async function salvaNotaGiorno() {
     compilatore_p: document.getElementById('cp').value,
     compilatore_s: document.getElementById('cs').value,
     note: document.getElementById('pn-note').value,
+    // Valori effettivi finali per conciliazione fiscale
+    incasso_eff:     e3('incasso-m','incasso-p','incasso-s'),
+    money_eff:       e3('money-m','money-p','money-s'),
+    grattavinci_eff: e3('grattavinci-m','grattavinci-p','grattavinci-s'),
+    sisal_eff:       e3('sisal-m','sisal-p','sisal-s'),
+    conto_bet_eff:   e3('conto-bet-m','conto-bet-p','conto-bet-s'),
     created_by: currentUser.id, updated_at: new Date().toISOString()
   };
 
@@ -4095,6 +4109,142 @@ async function buildFabbisognoFinanziario() {
         + '<span>Evento</span><span>Importo</span><span>Saldo prev.</span></div>'
         + '<div class="fab-eventi">' + eventiRows + '</div>'
       : '<div class="empty-state">Nessuna uscita prevista nei prossimi 30 giorni 🎉</div>');
+
+  // Aggiungi conciliazione fiscale
+  await buildConciliazioneFiscale();
+}
+
+// ============================================
+// CONCILIAZIONE FISCALE
+// ============================================
+async function buildConciliazioneFiscale(periodo) {
+  const el = document.getElementById('dash-conciliazione');
+  if (!el) return;
+
+  // Periodo selezionato
+  const selEl = document.getElementById('cf-periodo');
+  const per = periodo || selEl?.value || 'mese';
+  const now = new Date();
+  let dataFrom;
+  if (per === 'settimana') { const d = new Date(now); d.setDate(d.getDate()-d.getDay()+1); dataFrom = d.toISOString().split('T')[0]; }
+  else if (per === 'anno') dataFrom = now.getFullYear() + '-01-01';
+  else if (per === 'tutto') dataFrom = '2020-01-01';
+  else dataFrom = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-01';
+
+  const [{ data: note }, { data: vers }] = await Promise.all([
+    db.from('daily_notes')
+      .select('incasso_eff,money_eff,grattavinci_eff,sisal_eff,conto_bet_eff,incasso_m,incasso_p,incasso_s,money_m,money_p,money_s,grattavinci_m,grattavinci_p,grattavinci_s,sisal_m,sisal_p,sisal_s,conto_bet_m,conto_bet_p,conto_bet_s')
+      .eq('business_id', currentBusiness.id).gte('data', dataFrom),
+    db.from('versamenti').select('importo_contante,importo_pos')
+      .eq('business_id', currentBusiness.id).gte('data_versamento', dataFrom)
+  ]);
+
+  // Calcola totali fiscali dalle note
+  // Se _eff è salvato usa quello, altrimenti calcola da M/P/S
+  function effNote(n, campo) {
+    if (n[campo+'_eff'] > 0) return Number(n[campo+'_eff']||0);
+    const s = Number(n[campo+'_s']||0), p = Number(n[campo+'_p']||0), m = Number(n[campo+'_m']||0);
+    if (s > 0) return s;
+    if (p > 0) return p;
+    return m;
+  }
+
+  const totIncasso     = (note||[]).reduce((a,n) => a + effNote(n,'incasso'), 0);
+  const totMoney       = (note||[]).reduce((a,n) => a + effNote(n,'money'), 0);
+  const totGrattavinci = (note||[]).reduce((a,n) => a + effNote(n,'grattavinci'), 0);
+  const totSisal       = (note||[]).reduce((a,n) => a + effNote(n,'sisal'), 0);
+  const totContoBet    = (note||[]).reduce((a,n) => a + effNote(n,'conto_bet'), 0);
+
+  // Totale fiscale = solo Incasso Cassa
+  const totFiscale = totIncasso;
+  // Totale cash gestito = tutte le voci
+  const totCash = totIncasso + totMoney + totGrattavinci + totSisal + totContoBet;
+
+  // Versamenti in banca
+  const totContante = (vers||[]).reduce((a,v) => a + Number(v.importo_contante||0), 0);
+  const totPOS      = (vers||[]).reduce((a,v) => a + Number(v.importo_pos||0), 0);
+  const totVersato  = totContante + totPOS;
+
+  // Delta fiscale vs versato
+  const delta = totFiscale - totVersato;
+  const isAlert = delta < 0; // versato > fiscale = problema!
+
+  const labels = { mese: 'Mese corrente', settimana: 'Settimana corrente', anno: "Quest'anno", tutto: 'Tutto' };
+  const fmtE = v => '€ ' + Math.abs(v).toFixed(2).replace('.',',');
+  const fmtS = v => (v >= 0 ? '+ ' : '- ') + fmtE(v);
+  const clr  = v => v >= 0 ? 'var(--green-400)' : 'var(--red-400)';
+
+  el.innerHTML = `
+    <div class="section-card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+        <h2>⚖️ Conciliazione fiscale — ${labels[per]||per}</h2>
+        <select id="cf-periodo" class="pn-desc-input" style="width:auto;font-size:12px" onchange="buildConciliazioneFiscale(this.value)">
+          <option value="settimana" ${per==='settimana'?'selected':''}>Settimana</option>
+          <option value="mese" ${per==='mese'?'selected':''}>Mese corrente</option>
+          <option value="anno" ${per==='anno'?'selected':''}>Quest'anno</option>
+          <option value="tutto" ${per==='tutto'?'selected':''}>Tutto</option>
+        </select>
+      </div>
+
+      ${isAlert ? `<div class="pn-allarme" style="display:flex;margin-bottom:16px">
+        ⚠️ ATTENZIONE: hai versato in banca <strong>${fmtE(totVersato)}</strong> ma il fiscale dichiarato è solo <strong>${fmtE(totFiscale)}</strong>. Differenza: ${fmtE(Math.abs(delta))} in eccesso.
+      </div>` : ''}
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+
+        <div class="section-card" style="margin:0">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--gray-400);margin-bottom:10px">📊 Cash gestito</div>
+          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">
+            <span style="font-size:13px">Incasso cassa <span style="font-size:10px;color:var(--blue-400)">(fiscale)</span></span>
+            <strong style="color:var(--green-400)">${fmtE(totIncasso)}</strong>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">
+            <span style="font-size:13px">Ricariche / Pagamenti</span>
+            <span>${fmtE(totMoney)}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">
+            <span style="font-size:13px">Gratta e Vinci</span>
+            <span>${fmtE(totGrattavinci)}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">
+            <span style="font-size:13px">Sisal</span>
+            <span>${fmtE(totSisal)}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">
+            <span style="font-size:13px">Scommesse / Bet</span>
+            <span>${fmtE(totContoBet)}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:8px 0 0">
+            <strong>Totale cash gestito</strong>
+            <strong style="color:var(--blue-300)">${fmtE(totCash)}</strong>
+          </div>
+        </div>
+
+        <div class="section-card" style="margin:0">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--gray-400);margin-bottom:10px">🏦 Versato in banca</div>
+          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">
+            <span style="font-size:13px">Contante versato</span>
+            <span>${fmtE(totContante)}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">
+            <span style="font-size:13px">POS versato</span>
+            <span>${fmtE(totPOS)}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:8px 0 0">
+            <strong>Totale versato</strong>
+            <strong style="color:var(--blue-300)">${fmtE(totVersato)}</strong>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:8px 0;margin-top:8px;border-top:2px solid var(--border)">
+            <strong>Fiscale vs Versato</strong>
+            <strong style="color:${clr(delta)}">${fmtS(delta)}</strong>
+          </div>
+          <div style="font-size:11px;color:var(--gray-400);margin-top:4px">
+            ${delta >= 0 ? '✓ Differenza gestita internamente (fondo cassa, spese cash)' : '⚠️ Versato supera il fiscale dichiarato — verificare'}
+          </div>
+        </div>
+
+      </div>
+    </div>`;
 }
 
 // ============================================
