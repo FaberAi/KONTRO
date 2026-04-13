@@ -1362,94 +1362,6 @@ function setPN(id, val) {
 }
 
 // ── CALCOLO ───────────────────────────────────────────────────────
-function calcPN() {
-  const fc = getPN('pn-fc');
-  const voci = ['incasso','money','grattavinci','sisal','fatture','giornali'];
-  const uscVoci = ['pos','carte','bonifici'];
-
-  // Totali per voce
-  voci.forEach(k => {
-    const tot = sumTurni(k);
-    setPN('tot-'+k, tot);
-  });
-  uscVoci.forEach(k => {
-    const tot = sumTurni(k);
-    setPN('tot-'+k, tot);
-  });
-
-  // Totali fornitori per turno
-  let fM=0, fP=0, fS=0;
-  pnFornitoriRows.forEach(r => {
-    fM += parseFloat(r.im.value)||0;
-    fP += parseFloat(r.ip.value)||0;
-    fS += parseFloat(r.is.value)||0;
-  });
-
-  // Totali prelievi per turno
-  let pM=0, pP=0, pS=0;
-  pnPrelieviRows.forEach(r => {
-    pM += parseFloat(r.im.value)||0;
-    pP += parseFloat(r.ip.value)||0;
-    pS += parseFloat(r.is.value)||0;
-  });
-
-  // Fondo chiusura
-  const fcUscM = getPN('fc-usc-m'), fcUscP = getPN('fc-usc-p'), fcUscS = getPN('fc-usc-s');
-  setPN('tot-fc-usc', fcUscM + fcUscP + fcUscS);
-
-  // Totali entrate per turno (fc solo in totale, non per turno)
-  const entM = voci.reduce((s,k) => s + getPN(k+'-m'), 0);
-  const entP = voci.reduce((s,k) => s + getPN(k+'-p'), 0);
-  const entS = voci.reduce((s,k) => s + getPN(k+'-s'), 0);
-  const entTot = fc + entM + entP + entS;
-
-  setPN('tot-ent-m', entM); setPN('tot-ent-p', entP);
-  setPN('tot-ent-s', entS); setPN('tot-ent', entTot);
-
-  // Totali uscite per turno
-  const uscM = uscVoci.reduce((s,k) => s + getPN(k+'-m'), 0) + fM + pM + fcUscM;
-  const uscP = uscVoci.reduce((s,k) => s + getPN(k+'-p'), 0) + fP + pP + fcUscP;
-  const uscS = uscVoci.reduce((s,k) => s + getPN(k+'-s'), 0) + fS + pS + fcUscS;
-  const uscTot = uscM + uscP + uscS;
-
-  setPN('tot-usc-m', uscM); setPN('tot-usc-p', uscP);
-  setPN('tot-usc-s', uscS); setPN('tot-usc', uscTot);
-
-  // Differenze per turno
-  const diffM = entM - uscM;
-  const diffP = entP - uscP;
-  const diffS = entS - uscS;
-  const diffTot = entTot - uscTot;
-
-  ['m','p','s'].forEach((t, i) => {
-    const d = [diffM, diffP, diffS][i];
-    const el = document.getElementById('diff-'+t);
-    if (el) {
-      el.textContent = (d >= 0 ? '+ ' : '- ') + fmtPN(d);
-      el.className = 'td-tot' + (d > 0 ? ' alarm' : '');
-    }
-  });
-  const dtEl = document.getElementById('diff-tot');
-  if (dtEl) {
-    dtEl.textContent = (diffTot >= 0 ? '+ ' : '- ') + fmtPN(diffTot);
-    dtEl.className = 'td-tot' + (diffTot > 0 ? ' alarm' : '');
-  }
-
-  // Incasso per turno = incasso dichiarato + |differenza turno|
-  const incM = getPN('incasso-m') + Math.abs(diffM);
-  const incP = getPN('incasso-p') + Math.abs(diffP);
-  const incS = getPN('incasso-s') + Math.abs(diffS);
-  const incTot = incM + incP + incS;
-
-  setPN('r-inc-m', incM);
-  setPN('r-inc-p', incP);
-  setPN('r-inc-s', incS);
-  setPN('r-inc-tot', incTot);
-
-  // Allarme
-  const allarme = document.getElementById('pn-allarme');
-  if (allarme) allarme.classList.toggle('hidden', diffTot <= 0);
-}
 
 // ── CARICA/SALVA ──────────────────────────────────────────────────
 async function loadNotaGiorno() {
@@ -1577,23 +1489,16 @@ function getV(id) { return parseFloat(document.getElementById(id)?.value) || 0; 
 
 function calcPN2() {
   const fc = getV('pn-fc');
-  const voci = ['incasso','money','grattavinci','sisal','fatture','giornali'];
+  // Tutte le voci entrata (incluse grattavinci, sisal, conto-bet)
+  const vociFisse = ['incasso','money','grattavinci','sisal','conto-bet','fatture','giornali'];
   const uscVoci = ['pos','carte','bonifici'];
 
-  // Totali voci entrata
-  voci.forEach(k => {
+  // Totali per voce — aggiorna la colonna TOT di ogni riga
+  vociFisse.forEach(k => {
     const tot = getV(k+'-m') + getV(k+'-p') + getV(k+'-s');
     const el = document.getElementById('tot-'+k);
     if (el) el.textContent = fmtPN(tot);
   });
-
-  // Totali grattavinci e conto bet (non inclusi in voci standard)
-  ['grattavinci','conto-bet','sisal'].forEach(k => {
-    const el = document.getElementById('tot-'+k);
-    if (el) el.textContent = fmtPN(getV(k+'-m') + getV(k+'-p') + getV(k+'-s'));
-  });
-
-  // Totali voci uscita fisse
   uscVoci.forEach(k => {
     const tot = getV(k+'-m') + getV(k+'-p') + getV(k+'-s');
     const el = document.getElementById('tot-'+k);
@@ -1623,10 +1528,11 @@ function calcPN2() {
   const fcUscEl = document.getElementById('tot-fc-usc');
   if (fcUscEl) fcUscEl.textContent = fmtPN(fcUscM+fcUscP+fcUscS);
 
-  // Totali entrate per turno
-  const entM = voci.reduce((s,k) => s + getV(k+'-m'), 0);
-  const entP = voci.reduce((s,k) => s + getV(k+'-p'), 0);
-  const entS = voci.reduce((s,k) => s + getV(k+'-s'), 0);
+  // Totali entrate per turno — TUTTE le voci entrata incluso conto-bet
+  const entM = vociFisse.reduce((s,k) => s + getV(k+'-m'), 0);
+  const entP = vociFisse.reduce((s,k) => s + getV(k+'-p'), 0);
+  const entS = vociFisse.reduce((s,k) => s + getV(k+'-s'), 0);
+  // Fondo cassa iniziale sommato al totale generale
   const entTot = fc + entM + entP + entS;
 
   const setT = (id, v) => { const el = document.getElementById(id); if(el) el.textContent = fmtPN(v); };
