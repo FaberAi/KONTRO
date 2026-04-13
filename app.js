@@ -1492,51 +1492,69 @@ function calcPN2() {
   const vociFisse = ['incasso','money','grattavinci','sisal','conto-bet','fatture','giornali'];
   const uscVoci = ['pos','carte','bonifici'];
 
-  // ── Totali fornitori per turno ──
-  let fM=0, fP=0, fS=0;
-  for (let i = 0; i < pnFornitoriCount; i++) {
-    fM += getV('fm-'+i); fP += getV('fp-'+i); fS += getV('fs-'+i);
+  // Come Love Me effFixed ma con 3 colonne:
+  // S sovrascrive P, P sovrascrive M
+  // Se sera è compilata → usa sera (= totale giornata)
+  // Se pomeriggio è compilato → usa pomeriggio (= totale fino al PM)
+  // Altrimenti → usa mattina
+  function eff3(idM, idP, idS) {
+    const s = document.getElementById(idS), p = document.getElementById(idP), m = document.getElementById(idM);
+    if (s && s.value.trim() !== '') return parseFloat(s.value) || 0;
+    if (p && p.value.trim() !== '') return parseFloat(p.value) || 0;
+    return parseFloat(m?.value) || 0;
+  }
+  function eff2(idM, idP) {
+    const p = document.getElementById(idP), m = document.getElementById(idM);
+    if (p && p.value.trim() !== '') return parseFloat(p.value) || 0;
+    return parseFloat(m?.value) || 0;
   }
 
-  // ── Totali prelievi per turno ──
-  let pM=0, pP=0, pS=0;
+  // ── Fornitori ──
+  let fM=0, fP=0, fS=0;
+  for (let i = 0; i < pnFornitoriCount; i++) {
+    fM += getV('fm-'+i);
+    fP += eff2('fm-'+i, 'fp-'+i);
+    fS += eff3('fm-'+i, 'fp-'+i, 'fs-'+i);
+  }
+
+  // ── Prelievi ──
+  let prlM=0, prlP=0, prlS=0;
   for (let i = 0; i < pnPrelieviCount; i++) {
-    pM += getV('pm-'+i); pP += getV('pp-'+i); pS += getV('ps-'+i);
+    prlM += getV('pm-'+i);
+    prlP += eff2('pm-'+i, 'pp-'+i);
+    prlS += eff3('pm-'+i, 'pp-'+i, 'ps-'+i);
   }
 
   // ── Fondo chiusura ──
-  const fcUscM = getV('fc-usc-m'), fcUscP = getV('fc-usc-p'), fcUscS = getV('fc-usc-s');
+  const fcUscM = getV('fc-usc-m');
+  const fcUscP = eff2('fc-usc-m','fc-usc-p');
+  const fcUscS = eff3('fc-usc-m','fc-usc-p','fc-usc-s');
 
-  // ── ENTRATE per turno (come Love Me: emSum = fc + voci M) ──
-  // Ogni turno ha le sue entrate INDIPENDENTI — il fc va in ogni turno
-  // perché ogni chiusura parziale deve includere il fondo iniziale
+  // ── ENTRATE per colonna (come Love Me emSum/etSum) ──
+  // Mattina: fc + voci M
   const emM = fc + vociFisse.reduce((s,k) => s + getV(k+'-m'), 0);
-  const emP = fc + vociFisse.reduce((s,k) => s + getV(k+'-p'), 0);
-  const emS = fc + vociFisse.reduce((s,k) => s + getV(k+'-s'), 0);
+  // Pomeriggio: fc + voci effettivi P (P se compilato, altrimenti M)
+  const emP = fc + vociFisse.reduce((s,k) => s + eff2(k+'-m', k+'-p'), 0);
+  // Sera: fc + voci effettivi S (S se compilato, else P, else M)
+  const emS = fc + vociFisse.reduce((s,k) => s + eff3(k+'-m', k+'-p', k+'-s'), 0);
 
-  // ── USCITE per turno (come Love Me: umSum = uscite M) ──
-  const umM = uscVoci.reduce((s,k) => s + getV(k+'-m'), 0) + fM + pM + fcUscM;
-  const umP = uscVoci.reduce((s,k) => s + getV(k+'-p'), 0) + fP + pP + fcUscP;
-  const umS = uscVoci.reduce((s,k) => s + getV(k+'-s'), 0) + fS + pS + fcUscS;
+  // ── USCITE per colonna (stessa logica) ──
+  const umM = uscVoci.reduce((s,k) => s + getV(k+'-m'), 0) + fM + prlM + fcUscM;
+  const umP = uscVoci.reduce((s,k) => s + eff2(k+'-m', k+'-p'), 0) + fP + prlP + fcUscP;
+  const umS = uscVoci.reduce((s,k) => s + eff3(k+'-m', k+'-p', k+'-s'), 0) + fS + prlS + fcUscS;
 
-  // ── DIFFERENZE per turno (come Love Me: dm = emSum - umSum) ──
-  const dm = emM - umM;
-  const dp = emP - umP;
-  const ds = emS - umS;
+  // ── DIFFERENZE (come Love Me dm/dt) ──
+  const dm = emM - umM;  // differenza mattina
+  const dp = emP - umP;  // differenza pomeriggio (sovrascrive M)
+  const ds = emS - umS;  // differenza sera / totale (= dt di Love Me)
 
-  // ── TOTALI GIORNALIERI (come Love Me: etSum = fc + effFixed = totale finale) ──
-  // Il totale giornaliero usa la logica Love Me: fc una sola volta + tutti i valori
-  const etTot = fc + vociFisse.reduce((s,k) => s + getV(k+'-m') + getV(k+'-p') + getV(k+'-s'), 0);
-  const utTot = umM + umP + umS;
-  const dt = etTot - utTot; // differenza totale (= "dt" di Love Me)
-
-  // ── INCASSO (come Love Me: ig = incasso_eff + |dt|) ──
-  // Per turno: incasso_turno + |diff_turno|
+  // ── INCASSO (identico a Love Me) ──
+  // ig = incasso_effettivo + |dt|
   const incM = getV('incasso-m') + Math.abs(dm);
-  const incP = getV('incasso-p') + Math.abs(dp);
-  const incS = getV('incasso-s') + Math.abs(ds);
-  // Giornaliero = incasso totale cassa + |diff totale| (identico a Love Me)
-  const ig = getV('incasso-m') + getV('incasso-p') + getV('incasso-s') + Math.abs(dt);
+  const incP = eff2('incasso-m','incasso-p') + Math.abs(dp);
+  const incS = eff3('incasso-m','incasso-p','incasso-s') + Math.abs(ds);
+  // Giornaliero = valore effettivo finale + |differenza finale| (= ig di Love Me)
+  const ig = incS;
 
   // ── AGGIORNA UI ──
   const setT = (id, v) => { const el = document.getElementById(id); if(el) el.textContent = fmtPN(v); };
@@ -1558,7 +1576,7 @@ function calcPN2() {
   setT('r-inc-tot', ig);
 
   const allarme = document.getElementById('pn-allarme');
-  if (allarme) allarme.classList.toggle('hidden', dt <= 0);
+  if (allarme) allarme.classList.toggle('hidden', ds <= 0);
 }
 
 // Override calcPN con la v2
