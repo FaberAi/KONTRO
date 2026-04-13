@@ -229,7 +229,7 @@ function showScreen(name) {
   document.getElementById(`screen-${name}`).classList.add('active');
 }
 
-function showView(name) {
+async function showView(name) {
   // Controllo accessi
   const ownerOnly = ['impostazioni', 'team', 'hr'];
   const adminOnly = ['storico', 'report', 'banca', 'fornitori'];
@@ -251,7 +251,19 @@ function showView(name) {
   if (name === 'report') loadReport();
   if (name === 'sedi') renderLocationsList();
   if (name === 'team') loadTeam();
-  if (name === 'primanota') initPrimaNota();
+  if (name === 'primanota') {
+    // Ricarica cache fornitori e causali prima di inizializzare
+    if (currentBusiness) {
+      const [{ data: forn }] = await Promise.all([
+        db.from('fornitori').select('id,ragione_sociale')
+          .eq('business_id', currentBusiness.id).eq('attivo', true).order('ragione_sociale')
+      ]);
+      fornitoriCache = forn || [];
+      await loadCausaliCache();
+    }
+    initPrimaNota();
+    buildPNPrelievoSelects();
+  }
   if (name === 'storico') initStorico();
   if (name === 'banca') initBanca();
   if (name === 'fornitori') initFornitori();
@@ -1542,9 +1554,8 @@ function initPrimaNota() {
 }
 
 function _buildPNFornitoriSelects() {
-  if (!fornitoriCache || fornitoriCache.length === 0) return;
   const optsHtml = '<option value="">— Fornitore —</option>' +
-    fornitoriCache.map(f => `<option value="${f.id}">${f.ragione_sociale}</option>`).join('');
+    (fornitoriCache||[]).map(f => `<option value="${f.id}">${f.ragione_sociale}</option>`).join('');
   for (let i = 0; i < 20; i++) {
     const el = document.getElementById('fdesc-' + i);
     if (!el) break;
@@ -3079,10 +3090,12 @@ function switchSettingsTab(tab) {
   document.getElementById('stab-' + tab).classList.add('active');
   document.getElementById('spanel-' + tab).classList.add('active');
   if (tab === 'azienda') loadAzienda();
+  if (tab === 'causali') loadCausaliLista();
 }
 
 async function initImpostazioni() {
   await loadCategorieLista();
+  await loadCausaliCache();
   loadAzienda();
 }
 
@@ -5334,3 +5347,80 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 });
+
+// ============================================
+// CAUSALI PRELIEVI
+// ============================================
+let causaliCache = [];
+
+async function loadCausaliCache() {
+  if (!currentBusiness) return;
+  const { data } = await db.from('causali_prelievo').select('*')
+    .eq('business_id', currentBusiness.id).eq('attivo', true).order('nome');
+  causaliCache = data || [];
+}
+
+function buildPNPrelievoSelects() {
+  const optsHtml = '<option value="">— Causale —</option>' +
+    causaliCache.map(c => `<option value="${c.nome}">${c.nome}</option>`).join('');
+  for (let i = 0; i < 10; i++) {
+    const el = document.getElementById('pdesc-' + i);
+    if (!el) break;
+    if (el.tagName === 'SELECT') {
+      const val = el.value;
+      el.innerHTML = optsHtml;
+      if (val) el.value = val;
+    } else if (el.tagName === 'INPUT') {
+      const sel = document.createElement('select');
+      sel.id = 'pdesc-' + i;
+      sel.className = 'pn-desc-input';
+      sel.innerHTML = optsHtml;
+      if (el.value) sel.value = el.value;
+      el.parentNode.replaceChild(sel, el);
+    }
+  }
+}
+
+async function loadCausaliLista() {
+  if (!currentBusiness) return;
+  await loadCausaliCache();
+  const el = document.getElementById('causali-list');
+  if (!causaliCache.length) {
+    el.innerHTML = '<div class="empty-state">Nessuna causale configurata</div>';
+    return;
+  }
+  el.innerHTML = causaliCache.map(c => `
+    <div class="entry-item">
+      <div class="entry-dot uscita"></div>
+      <div class="entry-info">
+        <div class="entry-desc">💸 ${c.nome}</div>
+      </div>
+      <button class="entry-del" onclick="deleteCausalePrelievo('${c.id}')">✕</button>
+    </div>`).join('');
+}
+
+async function saveCausalePrelievo() {
+  if (!currentBusiness) return;
+  const nome = document.getElementById('nc-causale-nome').value.trim();
+  const msgEl = document.getElementById('nc-causale-msg');
+  if (!nome) { msgEl.textContent = 'Inserisci il nome'; msgEl.className = 'auth-message error'; return; }
+
+  const { error } = await db.from('causali_prelievo').insert({
+    business_id: currentBusiness.id, nome, attivo: true
+  });
+  if (error) { msgEl.textContent = 'Errore: ' + error.message; msgEl.className = 'auth-message error'; return; }
+
+  msgEl.textContent = 'Causale aggiunta ✓';
+  msgEl.className = 'auth-message success';
+  document.getElementById('nc-causale-nome').value = '';
+  setTimeout(() => msgEl.textContent = '', 3000);
+  await loadCausaliLista();
+  buildPNPrelievoSelects(); // aggiorna subito i select in prima nota
+}
+
+async function deleteCausalePrelievo(id) {
+  await db.from('causali_prelievo').update({ attivo: false }).eq('id', id);
+  showToast('Causale eliminata', 'success');
+  await loadCausaliLista();
+  buildPNPrelievoSelects();
+}

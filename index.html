@@ -595,9 +595,9 @@
                     <button class="pn-add-btn" onclick="addPrelievRow()">＋ aggiungi riga</button>
                   </td>
                 </tr>
-                <tr id="prelievi-r0" class="pn-dyn-row"><td class="td-desc"><input type="text" placeholder="Causale..." class="pn-desc-input" id="pdesc-0"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="pm-0" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="pp-0" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="ps-0" oninput="calcPN()"/></td><td class="td-tot" id="ptot-0">€ 0,00</td></tr>
-                <tr id="prelievi-r1" class="pn-dyn-row pn-row-even"><td class="td-desc"><input type="text" placeholder="Causale..." class="pn-desc-input" id="pdesc-1"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="pm-1" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="pp-1" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="ps-1" oninput="calcPN()"/></td><td class="td-tot" id="ptot-1">€ 0,00</td></tr>
-                <tr id="prelievi-r2" class="pn-dyn-row"><td class="td-desc"><input type="text" placeholder="Causale..." class="pn-desc-input" id="pdesc-2"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="pm-2" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="pp-2" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="ps-2" oninput="calcPN()"/></td><td class="td-tot" id="ptot-2">€ 0,00</td></tr>
+                <tr id="prelievi-r0" class="pn-dyn-row"><td class="td-desc"><select class="pn-desc-input" id="pdesc-0"><option value="">— Causale —</option></select></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="pm-0" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="pp-0" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="ps-0" oninput="calcPN()"/></td><td class="td-tot" id="ptot-0">€ 0,00</td></tr>
+                <tr id="prelievi-r1" class="pn-dyn-row pn-row-even"><td class="td-desc"><select class="pn-desc-input" id="pdesc-1"><option value="">— Causale —</option></select></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="pm-1" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="pp-1" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="ps-1" oninput="calcPN()"/></td><td class="td-tot" id="ptot-1">€ 0,00</td></tr>
+                <tr id="prelievi-r2" class="pn-dyn-row"><td class="td-desc"><select class="pn-desc-input" id="pdesc-2"><option value="">— Causale —</option></select></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="pm-2" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="pp-2" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="ps-2" oninput="calcPN()"/></td><td class="td-tot" id="ptot-2">€ 0,00</td></tr>
 
                 <!-- FONDO CHIUSURA -->
                 <tr class="pn-section-row chiusura">
@@ -1116,6 +1116,7 @@
 
         <div class="banca-tabs">
           <button class="banca-tab active" onclick="switchSettingsTab('categorie')" id="stab-categorie">🏷 Categorie</button>
+          <button class="banca-tab" onclick="switchSettingsTab('causali')" id="stab-causali">💸 Causali prelievi</button>
           <button class="banca-tab" onclick="switchSettingsTab('azienda')" id="stab-azienda">🏢 Azienda</button>
         </div>
 
@@ -1176,6 +1177,29 @@
             </div>
             <div id="categorie-list" class="categorie-grid">
               <div class="empty-state">Nessuna categoria</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── CAUSALI PRELIEVI ── -->
+        <div id="spanel-causali" class="banca-panel">
+          <div class="section-card" style="margin-bottom:16px">
+            <h2 style="margin-bottom:16px">Nuova causale prelievo</h2>
+            <div class="form-grid">
+              <div class="field full">
+                <label>Nome causale</label>
+                <input type="text" id="nc-causale-nome" placeholder="Es. Prelievo titolare, Spesa cassa..." />
+              </div>
+            </div>
+            <div class="form-actions">
+              <button class="btn-primary" onclick="saveCausalePrelievo()">Aggiungi causale →</button>
+            </div>
+            <div id="nc-causale-msg" class="auth-message"></div>
+          </div>
+          <div class="section-card">
+            <div class="section-header"><h2>Causali attive</h2></div>
+            <div id="causali-list" class="entries-list">
+              <div class="empty-state">Nessuna causale</div>
             </div>
           </div>
         </div>
