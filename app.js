@@ -4394,11 +4394,37 @@ async function loadDipendentiList() {
 }
 
 async function deleteDipendente(id) {
-  await db.from('dipendenti').update({ attivo: false }).eq('id', id);
+  // Conta dati storici collegati
+  const [{ count: cPresenze }, { count: cAcconti }, { count: cTurni }] = await Promise.all([
+    db.from('presenze').select('id', { count: 'exact', head: true }).eq('dipendente_id', id),
+    db.from('acconti_stipendio').select('id', { count: 'exact', head: true }).eq('dipendente_id', id),
+    db.from('turni_dipendenti').select('id', { count: 'exact', head: true }).eq('dipendente_id', id)
+  ]);
+
+  const totale = (cPresenze||0) + (cAcconti||0) + (cTurni||0);
+
+  if (totale > 0) {
+    // Ha dati storici → solo disattiva
+    const dettaglio = [
+      cPresenze > 0 ? `${cPresenze} presenze` : '',
+      cAcconti  > 0 ? `${cAcconti} acconti` : '',
+      cTurni    > 0 ? `${cTurni} turni` : ''
+    ].filter(Boolean).join(', ');
+
+    if (!confirm(`Questo dipendente ha dati storici (${dettaglio}).\nVerrà disattivato ma non eliminato per conservare lo storico.\nContinuare?`)) return;
+    await db.from('dipendenti').update({ attivo: false }).eq('id', id);
+    showToast('Dipendente disattivato', 'success');
+  } else {
+    // Nessun dato → elimina definitivamente
+    if (!confirm('Eliminare definitivamente questo dipendente?\nL\'operazione è irreversibile.')) return;
+    const { error } = await db.from('dipendenti').delete().eq('id', id);
+    if (error) { showToast('Errore: ' + error.message, 'error'); return; }
+    showToast('Dipendente eliminato', 'success');
+  }
+
   await loadDipendentiCache();
   populateDipendentiSelects();
   loadDipendentiList();
-  showToast('Dipendente rimosso', 'success');
 }
 
 // ── PRESENZE ──────────────────────────────────────────────────────
