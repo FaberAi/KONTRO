@@ -1,4 +1,7 @@
 {
-  "cleanUrls": true,
-  "trailingSlash": false
+  "routes": [
+    { "src": "/landing", "dest": "/landing.html" },
+    { "src": "/app", "dest": "/index.html" },
+    { "src": "/", "dest": "/index.html" }
+  ]
 }
