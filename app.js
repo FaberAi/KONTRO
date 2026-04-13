@@ -4188,7 +4188,8 @@ async function saveDipendente() {
     location_id: document.getElementById('nd-sede').value || null,
     data_assunzione: document.getElementById('nd-assunzione').value || null,
     note: document.getElementById('nd-note').value.trim(),
-    telefono: document.getElementById('nd-telefono').value.trim()
+    telefono: document.getElementById('nd-telefono').value.trim(),
+    colore: document.getElementById('nd-colore')?.value || '#3b82f6'
   });
   if (error) { showToast('Errore: ' + error.message, 'error'); return; }
   showToast('Dipendente salvato ✓', 'success');
@@ -4636,11 +4637,8 @@ function populateSedeDipendente() {
 // ============================================
 // ORGANICO & TURNI
 // ============================================
-const GIORNI = ['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
-const GIORNI_FULL = ['Domenica','Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato'];
-let currentTurnoDipId = null;
-let currentTurnoGiorno = null;
-let turniCache = [];
+// ORGANICO & TURNI — Stile Excel (Planning settimanale)
+// ============================================
 
 async function initOrganico() {
   await loadDipendentiCache();
@@ -4650,95 +4648,599 @@ async function initOrganico() {
 
 async function initTurni() {
   await loadDipendentiCache();
-  // Popola filtro sede
   const sel = document.getElementById('turni-sede-filter');
   if (sel) {
     sel.innerHTML = '<option value="">Tutte le sedi</option>' +
       currentLocations.map(l => `<option value="${l.id}">${l.name}</option>`).join('');
   }
-  await loadTurni();
+  const nav = document.getElementById('planning-data-nav');
+  if (nav && !nav.value) nav.value = new Date().toISOString().split('T')[0];
+  await loadPlanningSettimanale();
 }
 
-async function loadTurni() {
-  if (!currentBusiness) return;
-  const sedeFilter = document.getElementById('turni-sede-filter')?.value;
+function getSettimanaKontro(dataRef) {
+  const d = dataRef ? new Date(dataRef + 'T12:00:00') : new Date();
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  const lun = new Date(d); lun.setDate(diff);
+  const giorni = [];
+  for (let i = 0; i < 7; i++) { const g = new Date(lun); g.setDate(lun.getDate() + i); giorni.push(g.toISOString().split('T')[0]); }
+  return giorni;
+}
 
-  // Carica tutti i turni
+function navSettimana(dir) {
+  const el = document.getElementById('planning-data-nav');
+  const d = new Date((el.value || new Date().toISOString().split('T')[0]) + 'T12:00:00');
+  d.setDate(d.getDate() + dir * 7);
+  el.value = d.toISOString().split('T')[0];
+  loadPlanningSettimanale();
+}
+
+function navSettimanaOggi() {
+  document.getElementById('planning-data-nav').value = new Date().toISOString().split('T')[0];
+  loadPlanningSettimanale();
+}
+
+function dipBadgeHTML(dip, size) {
+  if (!dip) return '';
+  const fs = size === 'sm' ? '10px' : '11px';
+  const pad = size === 'sm' ? '3px 7px' : '4px 9px';
+  const nome = dip.nome.split(' ')[0];
+  return `<span style="background:${dip.colore||'#3b82f6'};color:white;border-radius:5px;padding:${pad};font-size:${fs};font-weight:700;display:inline-block;white-space:nowrap;cursor:pointer">${nome}</span>`;
+}
+
+async function loadPlanningSettimanale() {
+  const el = document.getElementById('turni-grid'); if (!el) return;
+  const dataNav = document.getElementById('planning-data-nav')?.value || new Date().toISOString().split('T')[0];
+  const sedeFilter = document.getElementById('turni-sede-filter')?.value || '';
+  const giorni = getSettimanaKontro(dataNav);
+  const giorniNomi = ['Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato','Domenica'];
+  const oggi = new Date().toISOString().split('T')[0];
+  const fmt = d => `${new Date(d+'T12:00:00').getDate()}/${new Date(d+'T12:00:00').getMonth()+1}`;
+  const anno = new Date(giorni[0]+'T12:00:00').getFullYear();
+
+  // Carica turni dal DB (basati su data, non giorno_settimana)
   const { data: turni } = await db.from('turni_dipendenti')
-    .select('*, dipendenti(id,nome,cognome,ruolo,location_id)')
-    .eq('business_id', currentBusiness.id);
-  turniCache = turni || [];
+    .select('*, dipendenti(id,nome,cognome,colore,location_id)')
+    .eq('business_id', currentBusiness.id)
+    .gte('data', giorni[0]).lte('data', giorni[6]);
 
-  // Filtra dipendenti per sede
-  let dipList = [...dipendentiCache];
-  if (sedeFilter) dipList = dipList.filter(d => d.location_id === sedeFilter);
+  const tMap = {}, rMap = {};
+  (turni||[]).forEach(t => {
+    tMap[`${t.dipendente_id}_${t.data}_${t.location_id}_${t.turno}`] = t;
+    if (t.turno === 'riposo') {
+      rMap[`${t.dipendente_id}_${t.data}_${t.location_id}`] = t;
+      rMap[`${t.dipendente_id}_${t.data}_any`] = t;
+    }
+  });
 
-  const todayDow = new Date().getDay();
-  const el = document.getElementById('turni-grid');
+  // Sedi da mostrare
+  const sedi = sedeFilter
+    ? currentLocations.filter(l => l.id === sedeFilter)
+    : currentLocations;
 
-  if (!dipList.length) {
-    el.innerHTML = '<div class="empty-state">Nessun dipendente in questa sede</div>';
-    return;
+  if (!sedi.length) { el.innerHTML = '<div class="empty-state">Nessuna sede configurata</div>'; return; }
+
+  function getLavoratori(locId, data, turno) {
+    return dipendentiCache.filter(d => {
+      if (d.location_id && d.location_id !== locId) return false;
+      if (rMap[`${d.id}_${data}_any`]) return false;
+      return tMap[`${d.id}_${data}_${locId}_${turno}`];
+    });
+  }
+  function getRiposi(locId, data) {
+    return dipendentiCache.filter(d =>
+      (!d.location_id || d.location_id === locId) && rMap[`${d.id}_${data}_${locId}`]
+    );
   }
 
-  // Costruisci tabella
-  let html = '<table class="turni-table"><thead><tr>';
-  html += '<th class="th-nome">Dipendente</th>';
-  GIORNI.forEach((g, i) => {
-    const isOggi = i === todayDow;
-    html += `<th${isOggi ? ' class="oggi-col"' : ''}>${g}${isOggi ? ' ◉' : ''}</th>`;
+  // Calcola max lavoratori per sede
+  const maxPerSede = {};
+  sedi.forEach(loc => {
+    let m = 2;
+    giorni.forEach(g => {
+      ['mattina','pomeriggio'].forEach(t => {
+        m = Math.max(m, getLavoratori(loc.id, g, t).length + 1);
+      });
+    });
+    maxPerSede[loc.id] = Math.min(m, 4);
   });
-  html += '</tr></thead><tbody>';
 
-  dipList.forEach(dip => {
-    const loc = currentLocations.find(l => l.id === dip.location_id);
-    html += `<tr>
-      <td class="td-nome">
-        <div>${dip.nome} ${dip.cognome}</div>
-        <div style="font-size:11px;color:var(--gray-400);font-family:var(--font-mono)">${dip.ruolo||''}${loc ? ' · '+loc.name : ''}</div>
-      </td>`;
+  // Colori sedi (cicla su palette)
+  const sedePalette = [
+    { hdr:'#7C3AED', sub:'#8B5CF6', rip:'#DDD6FE', ripTxt:'#5B21B6', ser:'#EDE9FE', ripBg:'#FAF5FF' },
+    { hdr:'#059669', sub:'#10B981', rip:'#A7F3D0', ripTxt:'#065F46', ser:'#D1FAE5', ripBg:'#ECFDF5' },
+    { hdr:'#1D4ED8', sub:'#3B82F6', rip:'#BFDBFE', ripTxt:'#1E40AF', ser:'#DBEAFE', ripBg:'#EFF6FF' },
+    { hdr:'#B45309', sub:'#D97706', rip:'#FDE68A', ripTxt:'#92400E', ser:'#FEF3C7', ripBg:'#FFFBEB' }
+  ];
 
-    GIORNI.forEach((g, dow) => {
-      const isOggi = dow === todayDow;
-      const turno = turniCache.find(t => t.dipendente_id === dip.id && t.giorno_settimana === dow);
-      let cellHtml = '';
+  let html = `<div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+    <table style="border-collapse:collapse;font-size:12px;min-width:600px;width:100%">
+      <thead>
+        <tr>
+          <th colspan="2" style="background:white;border:none"></th>`;
 
-      if (!turno) {
-        cellHtml = `<div class="turno-cell vuoto" onclick="openModalTurno('${dip.id}','${dip.nome} ${dip.cognome}',${dow})">
-          <div class="tc-label">+ imposta</div>
-        </div>`;
-      } else if (turno.tipo === 'riposo') {
-        cellHtml = `<div class="turno-cell riposo" onclick="openModalTurno('${dip.id}','${dip.nome} ${dip.cognome}',${dow})">
-          <div class="tc-label">Riposo</div>
-        </div>`;
-      } else {
-        const inizio = turno.ora_inizio ? turno.ora_inizio.substring(0,5) : '';
-        const fine = turno.ora_fine ? turno.ora_fine.substring(0,5) : '';
-        cellHtml = `<div class="turno-cell lavoro" onclick="openModalTurno('${dip.id}','${dip.nome} ${dip.cognome}',${dow})">
-          <div class="tc-ore">${inizio}</div>
-          <div class="tc-ore">${fine}</div>
-        </div>`;
+  sedi.forEach((loc, si) => {
+    const pal = sedePalette[si % sedePalette.length];
+    const cols = maxPerSede[loc.id];
+    html += `<th colspan="${cols}" style="background:${pal.hdr};color:white;padding:7px 10px;text-align:center;font-size:11px;letter-spacing:.06em;text-transform:uppercase">📍 ${loc.name}</th>
+             <th style="background:${pal.rip};color:${pal.ripTxt};padding:7px 6px;font-size:10px;text-align:center;font-weight:700;text-transform:uppercase;letter-spacing:.04em">Riposi</th>`;
+  });
+
+  html += `</tr><tr>
+    <th style="padding:5px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#64748B;text-align:center;background:#EEF2FF">GIORNO</th>
+    <th style="padding:5px 4px;font-size:9px;font-weight:700;text-transform:uppercase;color:#64748B;text-align:center;background:#EEF2FF">T.</th>`;
+
+  sedi.forEach((loc, si) => {
+    const pal = sedePalette[si % sedePalette.length];
+    const cols = maxPerSede[loc.id];
+    for (let c = 0; c < cols; c++) {
+      html += `<th style="padding:5px 6px;font-size:9px;font-weight:700;color:white;text-align:center;background:${pal.sub};text-transform:uppercase;letter-spacing:.04em">IN SERVIZIO</th>`;
+    }
+    html += `<th style="padding:5px 4px;font-size:9px;font-weight:700;text-transform:uppercase;color:${pal.ripTxt};text-align:center;background:${pal.rip}">😴 RIPOSI</th>`;
+  });
+
+  html += `</tr></thead><tbody>`;
+
+  giorni.forEach((g, gi) => {
+    const isOggi = g === oggi;
+    const rowBg = isOggi ? '#EFF6FF' : (gi % 2 === 0 ? 'white' : '#F8FAFC');
+
+    ['mattina','pomeriggio'].forEach((turno, ti) => {
+      const turnoLabel = turno === 'mattina' ? 'MAT' : 'POM';
+      html += `<tr style="background:${rowBg}">`;
+
+      if (ti === 0) {
+        html += `<td rowspan="2" style="padding:8px 10px;border-left:${isOggi?'3px solid #2563EB':'1px solid #E2EAF8'};border-bottom:2px solid #E2EAF8;font-weight:700;color:${isOggi?'#2563EB':'#0F1E3C'};font-size:12px;white-space:nowrap;vertical-align:middle;min-width:80px">
+          ${giorniNomi[gi]}<br><span style="font-size:16px;font-weight:800">${fmt(g)}</span>
+        </td>`;
       }
 
-      html += `<td${isOggi ? ' class="oggi-col"' : ''}>${cellHtml}</td>`;
+      html += `<td style="padding:5px 8px;border-left:1px solid #E2EAF8;border-bottom:1px solid #F1F5F9;font-size:10px;color:#94A3B8;font-weight:600;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;min-width:45px;text-align:center">${turnoLabel}</td>`;
+
+      sedi.forEach((loc, si) => {
+        const pal = sedePalette[si % sedePalette.length];
+        const cols = maxPerSede[loc.id];
+        const lavoratori = getLavoratori(loc.id, g, turno);
+        const riposi = getRiposi(loc.id, g);
+
+        for (let c = 0; c < cols; c++) {
+          const dip = lavoratori[c];
+          html += `<td style="padding:4px 5px;border-left:1px solid ${pal.ser};border-bottom:1px solid #F1F5F9;text-align:center;min-width:70px">
+            ${dip
+              ? `<button onclick="rimuoviTurnoKontro('${dip.id}','${g}','${loc.id}','${turno}')" style="background:none;border:none;cursor:pointer;padding:0">${dipBadgeHTML(dip)}</button>`
+              : `<button onclick="aggiungiTurnoKontro('${g}','${loc.id}','${turno}')" style="background:none;border:1px dashed ${pal.rip};color:${pal.sub};border-radius:5px;padding:4px 10px;cursor:pointer;font-size:13px;width:100%">+</button>`
+            }
+          </td>`;
+        }
+
+        if (ti === 0) {
+          html += `<td rowspan="2" style="padding:5px 6px;border-left:2px solid ${pal.rip};border-bottom:2px solid #E2EAF8;text-align:center;background:${pal.ripBg};vertical-align:middle;min-width:80px">
+            ${riposi.map(d => `<button onclick="rimuoviRiposoKontro('${d.id}','${g}','${loc.id}')" style="background:none;border:none;cursor:pointer;display:block;margin:2px auto">${dipBadgeHTML(d,'sm')}</button>`).join('')}
+            <button onclick="aggiungiRiposoKontro('${g}','${loc.id}')" style="background:none;border:1px dashed ${pal.rip};color:${pal.sub};border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;margin-top:2px">+R</button>
+          </td>`;
+        }
+      });
+
+      html += `</tr>`;
     });
 
-    html += '</tr>';
+    html += `<tr><td colspan="${2 + sedi.reduce((s,l) => s + maxPerSede[l.id] + 1, 0)}" style="padding:0;height:3px;background:#E2EAF8"></td></tr>`;
   });
 
-  html += '</tbody></table>';
+  html += `</tbody></table></div>
+    <div style="margin-top:10px;font-size:11px;color:#64748B">
+      Clicca <b>+</b> per aggiungere un turno · <b>+R</b> per aggiungere riposo · clicca su un nome per rimuoverlo
+    </div>`;
+
   el.innerHTML = html;
 }
 
-// ── ORGANICO PER SEDE ──────────────────────────────────────────────
+// ── AZIONI PLANNING ───────────────────────────────────────────────────────────
+async function aggiungiTurnoKontro(data, locId, turno) {
+  const dipSede = dipendentiCache.filter(d => !d.location_id || d.location_id === locId);
+  if (!dipSede.length) { showToast('Nessun dipendente per questa sede', 'error'); return; }
+
+  const { data: existing } = await db.from('turni_dipendenti')
+    .select('dipendente_id').eq('data', data).eq('location_id', locId).eq('turno', turno);
+  const assegnatiIds = (existing||[]).map(t => t.dipendente_id);
+  const disponibili = dipSede.filter(d => !assegnatiIds.includes(d.id) && !assegnatiIds.includes(d.id));
+
+  // Escludi chi è in riposo quel giorno
+  const { data: riposi } = await db.from('turni_dipendenti')
+    .select('dipendente_id').eq('data', data).eq('turno', 'riposo');
+  const inRiposo = (riposi||[]).map(t => t.dipendente_id);
+  const final = disponibili.filter(d => !inRiposo.includes(d.id));
+
+  if (!final.length) { showToast('Tutti i dipendenti sono già assegnati o in riposo', ''); return; }
+
+  const lista = final.map((d,i) => `${i+1} = ${d.nome} ${d.cognome}`).join('\n');
+  const scelta = prompt(`Chi aggiungere al turno ${turno === 'mattina' ? 'mattina' : 'pomeriggio'}?\n\n${lista}`, '1');
+  if (!scelta) return;
+  const idx = parseInt(scelta.trim()) - 1;
+  if (isNaN(idx) || idx < 0 || idx >= final.length) return;
+  const dip = final[idx];
+
+  await db.from('turni_dipendenti').insert({
+    business_id: currentBusiness.id,
+    dipendente_id: dip.id,
+    location_id: locId,
+    data, turno,
+    giorno_settimana: new Date(data + 'T12:00:00').getDay()
+  });
+  loadPlanningSettimanale();
+}
+
+async function rimuoviTurnoKontro(dipId, data, locId, turno) {
+  await db.from('turni_dipendenti').delete()
+    .eq('dipendente_id', dipId).eq('data', data).eq('location_id', locId).eq('turno', turno);
+  loadPlanningSettimanale();
+}
+
+async function aggiungiRiposoKontro(data, locId) {
+  const dipSede = dipendentiCache.filter(d => !d.location_id || d.location_id === locId);
+  const { data: existing } = await db.from('turni_dipendenti')
+    .select('dipendente_id').eq('data', data).eq('turno', 'riposo');
+  const giàInRiposo = (existing||[]).map(t => t.dipendente_id);
+  const disponibili = dipSede.filter(d => !giàInRiposo.includes(d.id));
+  if (!disponibili.length) { showToast('Nessun dipendente disponibile', ''); return; }
+
+  const lista = disponibili.map((d,i) => `${i+1} = ${d.nome} ${d.cognome}`).join('\n');
+  const scelta = prompt(`Chi è in riposo?\n\n${lista}`, '1');
+  if (!scelta) return;
+  const idx = parseInt(scelta.trim()) - 1;
+  if (isNaN(idx) || idx < 0 || idx >= disponibili.length) return;
+  const dip = disponibili[idx];
+
+  await db.from('turni_dipendenti').insert({
+    business_id: currentBusiness.id,
+    dipendente_id: dip.id,
+    location_id: locId,
+    data, turno: 'riposo',
+    giorno_settimana: new Date(data + 'T12:00:00').getDay()
+  });
+  loadPlanningSettimanale();
+}
+
+async function rimuoviRiposoKontro(dipId, data, locId) {
+  await db.from('turni_dipendenti').delete()
+    .eq('dipendente_id', dipId).eq('data', data).eq('location_id', locId).eq('turno', 'riposo');
+  loadPlanningSettimanale();
+}
+
+// ── EXPORT PDF PLANNING ───────────────────────────────────────────────────────
+async function exportTurniPDF() {
+  const dataNav = document.getElementById('planning-data-nav')?.value || new Date().toISOString().split('T')[0];
+  const giorni = getSettimanaKontro(dataNav);
+  const giorniNomi = ['Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato','Domenica'];
+  const fmt = d => `${new Date(d+'T12:00:00').getDate()}/${new Date(d+'T12:00:00').getMonth()+1}`;
+  const anno = new Date(giorni[0]+'T12:00:00').getFullYear();
+
+  const { data: turni } = await db.from('turni_dipendenti')
+    .select('*, dipendenti(id,nome,cognome,colore,location_id)')
+    .eq('business_id', currentBusiness.id)
+    .gte('data', giorni[0]).lte('data', giorni[6]);
+
+  const tMap = {}, rMap = {};
+  (turni||[]).forEach(t => {
+    tMap[`${t.dipendente_id}_${t.data}_${t.location_id}_${t.turno}`] = t;
+    if (t.turno === 'riposo') {
+      rMap[`${t.dipendente_id}_${t.data}_${t.location_id}`] = t;
+      rMap[`${t.dipendente_id}_${t.data}_any`] = t;
+    }
+  });
+
+  const sedi = currentLocations;
+  const getLav = (locId, data, turno) => dipendentiCache.filter(d =>
+    (!d.location_id || d.location_id === locId) && !rMap[`${d.id}_${data}_any`] && tMap[`${d.id}_${data}_${locId}_${turno}`]
+  );
+  const getRip = (locId, data) => dipendentiCache.filter(d =>
+    (!d.location_id || d.location_id === locId) && rMap[`${d.id}_${data}_${locId}`]
+  );
+
+  const sedePalette = [
+    { hdr:'#7C3AED', rip:'#DDD6FE', ripTxt:'#5B21B6', ripBg:'#FAF5FF' },
+    { hdr:'#059669', rip:'#A7F3D0', ripTxt:'#065F46', ripBg:'#ECFDF5' },
+    { hdr:'#1D4ED8', rip:'#BFDBFE', ripTxt:'#1E40AF', ripBg:'#EFF6FF' },
+    { hdr:'#B45309', rip:'#FDE68A', ripTxt:'#92400E', ripBg:'#FFFBEB' }
+  ];
+
+  const bpdf = dip => dip
+    ? `<span style="background:${dip.colore||'#3b82f6'};color:#fff;border-radius:3px;padding:1px 6px;font-size:9px;font-weight:700;display:inline-block;margin:1px;white-space:nowrap">${dip.nome.split(' ')[0]}</span>`
+    : '';
+
+  let thSedi = '', rows = '';
+
+  thSedi = sedi.map((loc, si) => {
+    const pal = sedePalette[si % sedePalette.length];
+    return `<th class="th-bar" style="background:${pal.hdr}">📍 ${loc.name}</th>
+            <th class="th-rbar" style="background:${pal.rip};color:${pal.ripTxt};width:65px">😴 Riposi</th>`;
+  }).join('');
+
+  giorni.forEach((g, gi) => {
+    const bg = gi % 2 === 0 ? '#fff' : '#F7F9FF';
+    ['mattina','pomeriggio'].forEach((t, ti) => {
+      rows += `<tr style="background:${bg}">`;
+      if (ti === 0) rows += `<td rowspan="2" class="cg">${giorniNomi[gi]}<br><b>${fmt(g)}</b></td>`;
+      rows += `<td class="ct">${t==='mattina'?'MAT':'POM'}</td>`;
+      sedi.forEach((loc, si) => {
+        const pal = sedePalette[si % sedePalette.length];
+        const lb = getLav(loc.id, g, t);
+        const rb = getRip(loc.id, g);
+        rows += `<td class="cn" style="border-left:2px solid ${pal.rip}">${lb.map(bpdf).join('')}&nbsp;</td>`;
+        if (ti === 0) rows += `<td rowspan="2" class="cr" style="background:${pal.ripBg};border-left:2px solid ${pal.rip}">${rb.map(bpdf).join('<br>')}&nbsp;</td>`;
+      });
+      rows += `</tr>`;
+    });
+  });
+
+  const html = `<!DOCTYPE html><html lang="it"><head><meta charset="UTF-8">
+<title>Planning ${currentBusiness?.name} — ${fmt(giorni[0])}–${fmt(giorni[6])}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Helvetica Neue',Arial,sans-serif;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.page{padding:8px 10px}
+.hdr{display:flex;justify-content:space-between;align-items:center;padding-bottom:6px;border-bottom:2px solid #0F1E3C;margin-bottom:6px}
+.logo{font-size:13px;font-weight:800}.logo b{color:#2563EB}
+.sett{font-size:10px;color:#4A6490}
+table{width:100%;border-collapse:collapse;table-layout:fixed}
+.th-bar{color:white;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:5px 4px;text-align:center;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.th-rbar{font-size:8px;font-weight:700;text-align:center;padding:5px 3px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.th-empty{background:#E2EAF8;color:#475569;font-size:8px;font-weight:700;text-transform:uppercase;padding:5px 4px;text-align:center}
+.cg{padding:4px 5px;font-weight:800;font-size:9px;color:#0F1E3C;vertical-align:middle;border-bottom:2px solid #E2EAF8;border-left:2px solid #E2EAF8;width:55px}
+.ct{padding:2px 3px;font-size:7px;color:#94A3B8;font-weight:700;text-transform:uppercase;text-align:center;vertical-align:middle;border-left:1px solid #F1F5F9;border-bottom:1px solid #F1F5F9;width:25px}
+.cn{padding:3px 4px;border-bottom:1px solid #F1F5F9;vertical-align:middle}
+.cr{padding:4px 3px;text-align:center;vertical-align:middle;border-bottom:2px solid #E2EAF8;width:65px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.ftr{margin-top:5px;font-size:7px;color:#94A3B8;text-align:right}
+.no-print{padding:8px 12px;background:#EEF2FF;display:flex;gap:8px;align-items:center}
+.btn-print{background:#2563EB;color:white;border:none;border-radius:6px;padding:7px 16px;font-size:12px;cursor:pointer}
+.btn-close{background:#E2EAF8;color:#0F1E3C;border:none;border-radius:6px;padding:7px 12px;font-size:12px;cursor:pointer}
+.hint{font-size:11px;color:#4A6490}
+@page{size:A4 landscape;margin:0}
+@media print{.no-print{display:none!important}html,body{width:297mm;height:210mm;overflow:hidden}.page{padding:5mm 6mm;height:210mm;display:flex;flex-direction:column}table{flex:1}}
+</style></head><body>
+<div class="no-print">
+  <button class="btn-print" onclick="window.print()">🖨️ Stampa / Salva PDF</button>
+  <button class="btn-close" onclick="window.close()">✕</button>
+  <span class="hint">Seleziona <b>Salva come PDF</b> · layout <b>Orizzontale</b> · margini <b>Nessuno</b></span>
+</div>
+<div class="page">
+  <div class="hdr">
+    <div class="logo">KONTRO — <b>${currentBusiness?.name}</b> · Planning Staff</div>
+    <div class="sett">Settimana ${fmt(giorni[0])} — ${fmt(giorni[6])} ${anno}</div>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th class="th-empty" style="width:55px">Giorno</th>
+        <th class="th-empty" style="width:25px">T.</th>
+        ${thSedi}
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <div class="ftr">KONTRO — www.kontro.cloud · ${new Date().toLocaleDateString('it-IT')}</div>
+</div>
+<script>window.onload=function(){setTimeout(function(){window.print();},500);};<\/script>
+</body></html>`;
+
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `planning_${giorni[0]}.html`;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 3000);
+  showToast('File scaricato — aprilo, si avvia la stampa automaticamente ✓', 'success');
+}
+
+// ── EXPORT PNG WHATSAPP ───────────────────────────────────────────────────────
+async function condividiPlanningWhatsApp() {
+  const dataNav = document.getElementById('planning-data-nav')?.value || new Date().toISOString().split('T')[0];
+  const giorni = getSettimanaKontro(dataNav);
+  const giorniNomi = ['Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato','Domenica'];
+  const fmt = d => `${new Date(d+'T12:00:00').getDate()}/${new Date(d+'T12:00:00').getMonth()+1}`;
+  const oggi = new Date().toISOString().split('T')[0];
+  const anno = new Date(giorni[0]+'T12:00:00').getFullYear();
+
+  const { data: turni } = await db.from('turni_dipendenti')
+    .select('*, dipendenti(id,nome,cognome,colore,location_id)')
+    .eq('business_id', currentBusiness.id)
+    .gte('data', giorni[0]).lte('data', giorni[6]);
+
+  const tMap = {}, rMap = {};
+  (turni||[]).forEach(t => {
+    tMap[`${t.dipendente_id}_${t.data}_${t.location_id}_${t.turno}`] = t;
+    if (t.turno === 'riposo') {
+      rMap[`${t.dipendente_id}_${t.data}_${t.location_id}`] = t;
+      rMap[`${t.dipendente_id}_${t.data}_any`] = t;
+    }
+  });
+
+  const sedi = currentLocations.slice(0, 2); // max 2 sedi per leggibilità
+  const getLav = (locId, data, turno) => dipendentiCache.filter(d =>
+    (!d.location_id || d.location_id === locId) && !rMap[`${d.id}_${data}_any`] && tMap[`${d.id}_${data}_${locId}_${turno}`]
+  );
+  const getRip = (locId, data) => dipendentiCache.filter(d =>
+    (!d.location_id || d.location_id === locId) && rMap[`${d.id}_${data}_${locId}`]
+  );
+
+  const sedePalette = [
+    { hdr:'#7C3AED', sub:'#8B5CF6', rip:'#DDD6FE', ripTxt:'#5B21B6', ripBg:'#FAF5FF' },
+    { hdr:'#059669', sub:'#10B981', rip:'#A7F3D0', ripTxt:'#065F46', ripBg:'#ECFDF5' }
+  ];
+
+  const S = 2, W = 900;
+  const nSedi = sedi.length;
+  const xG = 0, wG = 80, xT = 80, wT = 48;
+  const areaW = W - wG - wT;
+  const sedeW = Math.floor(areaW / nSedi);
+  const isW = Math.floor(sedeW * 0.72);
+  const ripW = sedeW - isW;
+
+  const ROW = 32, SEP = 4, hHDR = 46, hTH1 = 26, hTH2 = 22;
+  const TOTAL = hHDR + hTH1 + hTH2 + 7 * (ROW * 2 + SEP) + 16;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = W * S; canvas.height = TOTAL * S;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(S, S);
+
+  const fill = (x,y,w,h,c) => { ctx.fillStyle=c; ctx.fillRect(x,y,w,h); };
+  const line = (x,y1,y2,c='#E2EAF8') => {
+    ctx.strokeStyle=c; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(x,y1); ctx.lineTo(x,y2); ctx.stroke();
+  };
+  const txt = (t,x,y,font,color,align='left',base='middle') => {
+    ctx.font=font; ctx.fillStyle=color; ctx.textAlign=align; ctx.textBaseline=base; ctx.fillText(t,x,y);
+  };
+  const badge = (x,y,w,h,r,bg,label,fs) => {
+    ctx.beginPath();
+    ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+    ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+    ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+    ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y); ctx.closePath();
+    ctx.fillStyle=bg; ctx.fill();
+    txt(label, x+w/2, y+h/2, `700 ${fs}px 'Helvetica Neue',Arial,sans-serif`, 'white', 'center');
+  };
+
+  fill(0, 0, W, TOTAL, '#F1F5F9');
+  fill(0, 0, W, hHDR, '#0F1E3C');
+  txt('KONTRO — Planning Staff', 16, hHDR/2, "800 14px 'Helvetica Neue',Arial,sans-serif", 'white');
+  txt(`Sett. ${fmt(giorni[0])} – ${fmt(giorni[6])} ${anno}`, W-14, hHDR/2, "400 11px 'Helvetica Neue',Arial,sans-serif", 'rgba(255,255,255,.5)', 'right');
+
+  let ty = hHDR;
+  fill(0, ty, wG+wT, hTH1, '#E2EAF8');
+  sedi.forEach((loc, si) => {
+    const pal = sedePalette[si];
+    const xBase = wG + wT + si * sedeW;
+    fill(xBase, ty, isW + ripW, hTH1, pal.hdr);
+    txt('📍 ' + loc.name, xBase + sedeW/2, ty+hTH1/2, "700 10px 'Helvetica Neue',Arial,sans-serif", 'white', 'center');
+  });
+  ty += hTH1;
+
+  fill(xG, ty, wG, hTH2, '#EEF2FF');
+  fill(xT, ty, wT, hTH2, '#EEF2FF');
+  sedi.forEach((loc, si) => {
+    const pal = sedePalette[si];
+    const xBase = wG + wT + si * sedeW;
+    fill(xBase, ty, isW, hTH2, pal.sub);
+    fill(xBase+isW, ty, ripW, hTH2, pal.rip);
+    txt('IN SERVIZIO', xBase+isW/2, ty+hTH2/2, "600 8px 'Helvetica Neue',Arial,sans-serif", 'white', 'center');
+    txt('😴 RIPOSI', xBase+isW+ripW/2, ty+hTH2/2, "700 8px 'Helvetica Neue',Arial,sans-serif", pal.ripTxt, 'center');
+  });
+  txt('GIORNO', xG+wG/2, ty+hTH2/2, "600 8px 'Helvetica Neue',Arial,sans-serif", '#64748B', 'center');
+  txt('T.', xT+wT/2, ty+hTH2/2, "600 8px 'Helvetica Neue',Arial,sans-serif", '#64748B', 'center');
+  ty += hTH2;
+
+  let y = ty;
+  const fDip = "700 10px 'Helvetica Neue',Arial,sans-serif";
+  const fDipS = "700 9px 'Helvetica Neue',Arial,sans-serif";
+  const fTurno = "600 7px 'Helvetica Neue',Arial,sans-serif";
+
+  giorni.forEach((g, gi) => {
+    const isOggi = g === oggi;
+    const bg = gi%2===0 ? '#FFFFFF' : '#F8FAFC';
+    const dayH = ROW * 2;
+
+    fill(0, y, W, dayH, bg);
+    if (isOggi) { fill(0, y, W, dayH, 'rgba(37,99,235,.05)'); fill(0, y, 3, dayH, '#2563EB'); }
+
+    sedi.forEach((loc, si) => {
+      const pal = sedePalette[si];
+      const xBase = wG + wT + si * sedeW;
+      fill(xBase+isW, y, ripW, dayH, pal.ripBg + '88');
+    });
+
+    const gc = isOggi ? '#2563EB' : '#0F1E3C';
+    txt(giorniNomi[gi], xG+6, y+7, "600 10px 'Helvetica Neue',Arial,sans-serif", gc, 'left', 'top');
+    txt(fmt(g), xG+6, y+19, "800 14px 'Helvetica Neue',Arial,sans-serif", gc, 'left', 'top');
+
+    ['mattina','pomeriggio'].forEach((turno, ti) => {
+      const ry = y + ti * ROW;
+      if (ti === 1) { ctx.strokeStyle='#EEEEEE'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(xT, ry); ctx.lineTo(W, ry); ctx.stroke(); }
+      txt(turno==='mattina'?'MAT':'POM', xT+wT/2, ry+ROW/2, fTurno, '#94A3B8', 'center');
+
+      sedi.forEach((loc, si) => {
+        const xBase = wG + wT + si * sedeW;
+        const lav = getLav(loc.id, g, turno);
+        let bx = xBase + 5;
+        lav.forEach(dip => {
+          const nome = dip.nome.split(' ')[0];
+          ctx.font = fDip;
+          const tw = ctx.measureText(nome).width;
+          const bw = tw + 12, bh = 19, by = ry + (ROW-bh)/2;
+          if (bx + bw < xBase + isW - 4) { badge(bx, by, bw, bh, 4, dip.colore||'#3b82f6', nome, 10); bx += bw+4; }
+        });
+      });
+    });
+
+    sedi.forEach((loc, si) => {
+      const pal = sedePalette[si];
+      const xBase = wG + wT + si * sedeW;
+      const rip = getRip(loc.id, g);
+      let ry2 = y + 5;
+      rip.forEach(dip => {
+        const nome = dip.nome.split(' ')[0];
+        ctx.font = fDipS;
+        const tw = ctx.measureText(nome).width;
+        const bw = Math.min(tw+10, ripW-10), bh = 17;
+        const bx = xBase + isW + (ripW-bw)/2;
+        badge(bx, ry2, bw, bh, 3, dip.colore||'#3b82f6', nome, 9);
+        ry2 += bh+3;
+      });
+    });
+
+    // linee verticali
+    [xT].forEach(lx => line(lx, y, y+dayH));
+    sedi.forEach((loc, si) => {
+      const xBase = wG + wT + si * sedeW;
+      line(xBase, y, y+dayH);
+      line(xBase+isW, y, y+dayH, '#CBD5E1');
+    });
+
+    y += dayH;
+    fill(0, y, W, SEP, '#CBD5E1');
+    y += SEP;
+  });
+
+  txt(`KONTRO · www.kontro.cloud · ${new Date().toLocaleDateString('it-IT')}`, W-12, y+9, "400 8px 'Helvetica Neue',Arial,sans-serif", '#94A3B8', 'right');
+
+  canvas.toBlob(async (blob) => {
+    const fileName = `planning_${giorni[0]}.png`;
+    const file = new File([blob], fileName, { type: 'image/png' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: `Planning ${fmt(giorni[0])}–${fmt(giorni[6])}`, text: '📋 Planning settimanale KONTRO' });
+        showToast('Condiviso ✓', 'success'); return;
+      } catch(e) { if (e.name === 'AbortError') return; }
+    }
+    try {
+      await navigator.clipboard.write([new ClipboardItem({'image/png': blob})]);
+      window.open('https://web.whatsapp.com/', '_blank');
+      showToast('Immagine copiata! Incolla su WhatsApp Web con Ctrl+V / Cmd+V', 'success');
+    } catch(e) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href=url; a.download=fileName;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 3000);
+      showToast('Immagine scaricata — condividila su WhatsApp', 'success');
+    }
+  }, 'image/png', 1.0);
+}
+
+// ── ORGANICO ─────────────────────────────────────────────────────────────────
 async function buildOrganicoBySede() {
   const { data: dips } = await db.from('dipendenti')
-    .select('*, locations(name)')
-    .eq('business_id', currentBusiness.id)
-    .eq('attivo', true);
-
+    .select('*, locations(name)').eq('business_id', currentBusiness.id).eq('attivo', true);
   const el = document.getElementById('org-sedi-grid');
   if (!dips?.length) { el.innerHTML = '<div class="empty-state">Nessun dipendente</div>'; return; }
+
+  const oggi = new Date().toISOString().split('T')[0];
+  const todayDow = new Date().getDay();
+  const { data: turni } = await db.from('turni_dipendenti')
+    .select('dipendente_id,turno,ora_inizio,ora_fine').eq('business_id', currentBusiness.id).eq('data', oggi);
 
   const bySede = {};
   dips.forEach(d => {
@@ -4746,12 +5248,6 @@ async function buildOrganicoBySede() {
     if (!bySede[k]) bySede[k] = [];
     bySede[k].push(d);
   });
-
-  const todayDow = new Date().getDay();
-  const { data: turni } = await db.from('turni_dipendenti')
-    .select('dipendente_id,tipo,ora_inizio,ora_fine')
-    .eq('business_id', currentBusiness.id)
-    .eq('giorno_settimana', todayDow);
 
   el.innerHTML = Object.entries(bySede).map(([sede, dipList]) => `
     <div class="org-sede-card">
@@ -4761,18 +5257,16 @@ async function buildOrganicoBySede() {
       </div>
       <div class="org-sede-body">
         ${dipList.map(d => {
-          const turno = (turni||[]).find(t => t.dipendente_id === d.id);
-          const lavora = turno && turno.tipo === 'lavoro';
-          const riposo = turno && turno.tipo === 'riposo';
-          const orario = turno && lavora ? turno.ora_inizio?.substring(0,5) + ' - ' + turno.ora_fine?.substring(0,5) : '';
+          const turno = (turni||[]).find(t => t.dipendente_id === d.id && t.turno !== 'riposo');
+          const riposo = (turni||[]).find(t => t.dipendente_id === d.id && t.turno === 'riposo');
           return `<div class="org-dip-row">
-            <div class="org-dip-avatar">${d.nome[0]}${d.cognome[0]}</div>
+            <div class="org-dip-avatar" style="background:${d.colore||'#3b82f6'}22;color:${d.colore||'#3b82f6'}">${d.nome[0]}${d.cognome[0]}</div>
             <div style="flex:1">
               <div class="org-dip-nome">${d.nome} ${d.cognome}</div>
               <div class="org-dip-ruolo">${d.ruolo||'—'}${d.telefono ? ' · ' + d.telefono : ''}</div>
             </div>
-            <span class="org-oggi-badge ${lavora?'lavora':riposo?'riposo':''}">
-              ${lavora ? (orario||'Lavora') : riposo ? 'Riposo' : 'N/D'}
+            <span class="org-oggi-badge ${turno?'lavora':riposo?'riposo':''}">
+              ${turno ? (turno.turno==='mattina'?'Mattina':'Pomeriggio') : riposo ? 'Riposo' : 'N/D'}
             </span>
           </div>`;
         }).join('')}
@@ -4781,178 +5275,32 @@ async function buildOrganicoBySede() {
 }
 
 async function buildOggiList() {
-  const todayDow = new Date().getDay();
+  const oggi = new Date().toISOString().split('T')[0];
   const todayStr = new Date().toLocaleDateString('it-IT', { weekday:'long', day:'numeric', month:'long' });
   const oggiEl = document.getElementById('org-oggi-data');
   if (oggiEl) oggiEl.textContent = todayStr.charAt(0).toUpperCase() + todayStr.slice(1);
 
   const { data: turni } = await db.from('turni_dipendenti')
-    .select('*, dipendenti(nome,cognome,ruolo)')
-    .eq('business_id', currentBusiness.id)
-    .eq('giorno_settimana', todayDow)
-    .eq('tipo', 'lavoro');
+    .select('*, dipendenti(nome,cognome,ruolo,colore)')
+    .eq('business_id', currentBusiness.id).eq('data', oggi)
+    .neq('turno', 'riposo');
 
   const el = document.getElementById('org-oggi-list');
-  if (!turni?.length) {
-    el.innerHTML = '<div class="empty-state">Nessun turno configurato per oggi</div>';
-    return;
-  }
+  if (!turni?.length) { el.innerHTML = '<div class="empty-state">Nessun turno configurato per oggi</div>'; return; }
 
-  el.innerHTML = turni.map(t => {
-    const inizio = t.ora_inizio?.substring(0,5) || '';
-    const fine = t.ora_fine?.substring(0,5) || '';
-    return `<div class="entry-item">
-      <div class="entry-dot entrata"></div>
+  el.innerHTML = turni.map(t => `
+    <div class="entry-item">
+      <div class="entry-dot entrata" style="background:${t.dipendenti?.colore||'#3b82f6'}"></div>
       <div class="entry-info">
         <div class="entry-desc">${t.dipendenti?.nome} ${t.dipendenti?.cognome}</div>
-        <div class="entry-meta">${t.dipendenti?.ruolo||'—'}${t.note ? ' · '+t.note : ''}</div>
+        <div class="entry-meta">${t.dipendenti?.ruolo||'—'} · ${t.turno === 'mattina' ? 'Turno mattina' : 'Turno pomeriggio'}</div>
       </div>
-      <div style="font-family:var(--font-mono);font-size:13px;color:var(--green-400);font-weight:600">
-        ${inizio} → ${fine}
+      <div style="font-family:var(--font-mono);font-size:12px;color:var(--green-400);font-weight:600;text-transform:uppercase">
+        ${t.turno}
       </div>
-    </div>`;
-  }).join('');
+    </div>`).join('');
 }
 
-// ── MODAL TURNO ───────────────────────────────────────────────────
-function openModalTurno(dipId, dipNome, dow) {
-  currentTurnoDipId = dipId;
-  currentTurnoGiorno = dow;
-
-  document.getElementById('modal-turno-title').textContent = dipNome + ' — ' + GIORNI_FULL[dow];
-  document.getElementById('modal-turno-info').innerHTML = `
-    <div class="mi-label">Imposta turno per</div>
-    <div class="mi-value" style="font-size:15px">${dipNome}</div>
-    <div class="mi-meta">${GIORNI_FULL[dow]}</div>`;
-
-  // Precompila con turno esistente
-  const existing = turniCache.find(t => t.dipendente_id === dipId && t.giorno_settimana === dow);
-  if (existing) {
-    document.getElementById('turno-tipo').value = existing.tipo;
-    document.getElementById('turno-inizio').value = existing.ora_inizio?.substring(0,5) || '08:00';
-    document.getElementById('turno-fine').value = existing.ora_fine?.substring(0,5) || '16:00';
-    document.getElementById('turno-note').value = existing.note || '';
-  } else {
-    document.getElementById('turno-tipo').value = 'lavoro';
-    document.getElementById('turno-inizio').value = '08:00';
-    document.getElementById('turno-fine').value = '16:00';
-    document.getElementById('turno-note').value = '';
-  }
-  toggleTurnoOrario();
-  document.getElementById('modal-turno').classList.remove('hidden');
-}
-
-function closeModalTurno() {
-  document.getElementById('modal-turno').classList.add('hidden');
-  currentTurnoDipId = null; currentTurnoGiorno = null;
-}
-
-function toggleTurnoOrario() {
-  const tipo = document.getElementById('turno-tipo').value;
-  const show = tipo === 'lavoro';
-  document.getElementById('turno-orario-wrap').style.display = show ? 'block' : 'none';
-  document.getElementById('turno-fine-wrap').style.display = show ? 'block' : 'none';
-}
-
-async function saveTurno() {
-  if (!currentTurnoDipId || currentTurnoGiorno === null || !currentBusiness) return;
-  const tipo = document.getElementById('turno-tipo').value;
-  const { error } = await db.from('turni_dipendenti').upsert({
-    business_id: currentBusiness.id,
-    dipendente_id: currentTurnoDipId,
-    giorno_settimana: currentTurnoGiorno,
-    tipo,
-    ora_inizio: tipo === 'lavoro' ? document.getElementById('turno-inizio').value : null,
-    ora_fine: tipo === 'lavoro' ? document.getElementById('turno-fine').value : null,
-    note: document.getElementById('turno-note').value.trim()
-  }, { onConflict: 'dipendente_id,giorno_settimana' });
-
-  if (error) { showToast('Errore: ' + error.message, 'error'); return; }
-  closeModalTurno();
-  showToast('Turno salvato ✓', 'success');
-  await loadTurni();
-  buildOggiList();
-}
-
-// ── EXPORT PDF TURNI ──────────────────────────────────────────────
-async function exportTurniPDF() {
-  if (!currentBusiness) return;
-  showToast('Generazione PDF turni...', '');
-
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-  const W = 297, H = 210, margin = 12;
-  let y = 0;
-
-  // Header
-  doc.setFillColor(10,15,30); doc.rect(0,0,W,30,'F');
-  doc.setFillColor(37,99,235); doc.roundedRect(margin,8,14,14,2,2,'F');
-  doc.setTextColor(255,255,255); doc.setFontSize(10); doc.setFont('helvetica','bold');
-  doc.text('K', margin+7, 18, {align:'center'});
-  doc.setFontSize(16); doc.text('KONTRO — Piano Turni Settimanale', margin+18, 18);
-  doc.setFontSize(8); doc.setFont('helvetica','normal');
-  doc.setTextColor(156,163,175);
-  doc.text(currentBusiness?.name + ' · ' + new Date().toLocaleDateString('it-IT'), W-margin, 18, {align:'right'});
-  y = 38;
-
-  // Tabella
-  const colW = (W - margin*2 - 50) / 7;
-  const todayDow = new Date().getDay();
-
-  // Header tabella
-  doc.setFillColor(10,15,30); doc.rect(margin, y, W-margin*2, 8, 'F');
-  doc.setTextColor(255,255,255); doc.setFontSize(8); doc.setFont('helvetica','bold');
-  doc.text('Dipendente', margin+2, y+5.5);
-  GIORNI_FULL.forEach((g, i) => {
-    const x = margin + 50 + i * colW;
-    if (i === todayDow) { doc.setFillColor(37,99,235); doc.rect(x, y, colW, 8, 'F'); }
-    doc.setTextColor(i === todayDow ? 255 : 200, i === todayDow ? 255 : 200, i === todayDow ? 255 : 200);
-    doc.text(g, x + colW/2, y+5.5, {align:'center'});
-  });
-  y += 10;
-
-  // Righe dipendenti
-  dipendentiCache.forEach((dip, di) => {
-    if (y > H - 20) { doc.addPage(); y = 20; }
-    if (di % 2 === 0) { doc.setFillColor(248,250,252); doc.rect(margin, y-2, W-margin*2, 14, 'F'); }
-
-    doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(10,15,30);
-    doc.text(dip.nome + ' ' + dip.cognome, margin+2, y+4);
-    doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(107,114,128);
-    doc.text(dip.ruolo||'', margin+2, y+9);
-
-    GIORNI_FULL.forEach((g, dow) => {
-      const x = margin + 50 + dow * colW;
-      const turno = turniCache.find(t => t.dipendente_id === dip.id && t.giorno_settimana === dow);
-
-      if (!turno) {
-        doc.setTextColor(200,200,200); doc.setFontSize(7);
-        doc.text('—', x + colW/2, y+6, {align:'center'});
-      } else if (turno.tipo === 'riposo') {
-        doc.setFillColor(240,240,240); doc.roundedRect(x+2, y, colW-4, 12, 2, 2, 'F');
-        doc.setTextColor(150,150,150); doc.setFont('helvetica','italic'); doc.setFontSize(7);
-        doc.text('Riposo', x + colW/2, y+7, {align:'center'});
-      } else {
-        doc.setFillColor(236,253,245); doc.roundedRect(x+2, y, colW-4, 12, 2, 2, 'F');
-        doc.setTextColor(5,150,105); doc.setFont('helvetica','bold'); doc.setFontSize(7.5);
-        const inizio = turno.ora_inizio?.substring(0,5)||'';
-        const fine = turno.ora_fine?.substring(0,5)||'';
-        doc.text(inizio, x + colW/2, y+5, {align:'center'});
-        doc.text(fine, x + colW/2, y+10, {align:'center'});
-      }
-    });
-    y += 14;
-  });
-
-  // Footer
-  doc.setFontSize(7); doc.setTextColor(156,163,175); doc.setFont('helvetica','normal');
-  doc.text('KONTRO · Piano turni generato il ' + new Date().toLocaleDateString('it-IT'), margin, H-5);
-
-  doc.save('KONTRO_Turni_' + currentBusiness.name.replace(/\s/g,'_') + '.pdf');
-  showToast('PDF turni scaricato ✓', 'success');
-}
-
-// ============================================
 // MOBILE MENU
 // ============================================
 function toggleMobileMenu() {
