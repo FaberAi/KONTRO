@@ -1547,8 +1547,8 @@ function initPrimaNota() {
     sel.innerHTML = '<option value="">Sede principale</option>' +
       currentLocations.map(l => `<option value="${l.id}">${l.name}</option>`).join('');
   }
-  // Popola i select fornitori nelle righe statiche
   _buildPNFornitoriSelects();
+  populatePNBetSelect();
   calcPN2();
   loadNotaGiorno2();
 }
@@ -1585,6 +1585,12 @@ function calcPN2() {
     const tot = getV(k+'-m') + getV(k+'-p') + getV(k+'-s');
     const el = document.getElementById('tot-'+k);
     if (el) el.textContent = fmtPN(tot);
+  });
+
+  // Totali grattavinci e conto bet (non inclusi in voci standard)
+  ['grattavinci','conto-bet','sisal'].forEach(k => {
+    const el = document.getElementById('tot-'+k);
+    if (el) el.textContent = fmtPN(getV(k+'-m') + getV(k+'-p') + getV(k+'-s'));
   });
 
   // Totali voci uscita fisse
@@ -1662,41 +1668,53 @@ function calcPN() { calcPN2(); }
 
 function addFornitoreRow() {
   const idx = pnFornitoriCount;
-  const tbody = document.getElementById('pn-tbody');
-  const chiusura = document.querySelector('.pn-section-row.chiusura');
   const tr = document.createElement('tr');
   tr.className = 'pn-dyn-row' + (idx%2===0?' pn-row-even':'');
   tr.id = 'fornitori-r'+idx;
+
+  // Select fornitore dall'anagrafica
+  const optsHtml = '<option value="">— Fornitore —</option>' +
+    (fornitoriCache||[]).map(f => `<option value="${f.id}">${f.ragione_sociale}</option>`).join('');
+
   tr.innerHTML = `
     <td class="td-desc" style="display:flex;align-items:center;gap:4px">
-      <input type="text" placeholder="Fornitore..." class="pn-desc-input" id="fdesc-${idx}"/>
+      <select class="pn-desc-input" id="fdesc-${idx}">${optsHtml}</select>
       <button class="pn-remove-btn" onclick="removeRow(this,'f',${idx})">×</button>
     </td>
     <td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fm-${idx}" oninput="calcPN()"/></td>
     <td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fp-${idx}" oninput="calcPN()"/></td>
     <td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fs-${idx}" oninput="calcPN()"/></td>
     <td class="td-tot" id="ftot-${idx}">€ 0,00</td>`;
-  tbody.insertBefore(tr, chiusura);
+
+  // Inserisce prima della sezione prelievi (non chiusura)
+  const prelieviHeader = document.getElementById('prelievi-header');
+  if (prelieviHeader) prelieviHeader.parentNode.insertBefore(tr, prelieviHeader);
   pnFornitoriCount++;
 }
 
 function addPrelievRow() {
   const idx = pnPrelieviCount;
-  const tbody = document.getElementById('pn-tbody');
-  const chiusura = document.querySelector('.pn-section-row.chiusura');
   const tr = document.createElement('tr');
   tr.className = 'pn-dyn-row' + (idx%2===0?' pn-row-even':'');
   tr.id = 'prelievi-r'+idx;
+
+  // Select causale
+  const optsHtml = '<option value="">— Causale —</option>' +
+    (causaliCache||[]).map(c => `<option value="${c.nome}">${c.nome}</option>`).join('');
+
   tr.innerHTML = `
     <td class="td-desc" style="display:flex;align-items:center;gap:4px">
-      <input type="text" placeholder="Causale..." class="pn-desc-input" id="pdesc-${idx}"/>
+      <select class="pn-desc-input" id="pdesc-${idx}">${optsHtml}</select>
       <button class="pn-remove-btn" onclick="removeRow(this,'p',${idx})">×</button>
     </td>
     <td><input type="number" step="0.01" placeholder="—" class="pn-input" id="pm-${idx}" oninput="calcPN()"/></td>
     <td><input type="number" step="0.01" placeholder="—" class="pn-input" id="pp-${idx}" oninput="calcPN()"/></td>
     <td><input type="number" step="0.01" placeholder="—" class="pn-input" id="ps-${idx}" oninput="calcPN()"/></td>
     <td class="td-tot" id="ptot-${idx}">€ 0,00</td>`;
-  tbody.insertBefore(tr, chiusura);
+
+  // Inserisce prima della sezione chiusura
+  const chiusura = document.querySelector('.pn-section-row.chiusura');
+  if (chiusura) chiusura.parentNode.insertBefore(tr, chiusura);
   pnPrelieviCount++;
 }
 
@@ -4102,28 +4120,9 @@ function populatePNBetSelect() {
     betBanche.map(b => `<option value="${b.id}">${b.nome}</option>`).join('');
 }
 
-// Chiama populatePNBetSelect dentro initPrimaNota
-const _origInitPN2 = initPrimaNota;
-function initPrimaNota() {
-  _origInitPN2();
-  populatePNBetSelect();
-}
+// populatePNBetSelect chiamata direttamente da showView
 
-// Aggiorna calcPN2 per includere grattavinci e conto_bet nei totali
-const _origCalcPN2 = calcPN2;
-function calcPN2() {
-  _origCalcPN2();
 
-  // Calcola totali grattavinci
-  const gv = getV('grattavinci-m') + getV('grattavinci-p') + getV('grattavinci-s');
-  const gvEl = document.getElementById('tot-grattavinci');
-  if (gvEl) gvEl.textContent = fmtPN(gv);
-
-  // Calcola totali conto bet
-  const cb = getV('conto-bet-m') + getV('conto-bet-p') + getV('conto-bet-s');
-  const cbEl = document.getElementById('tot-conto-bet');
-  if (cbEl) cbEl.textContent = fmtPN(cb);
-}
 
 // Aggiorna salvaNotaGiorno per scalare automaticamente dal conto bet
 async function scalaCcontoBet(betBancaId, totBet, data) {
