@@ -1528,12 +1528,13 @@ function calcPN2() {
   const fcUscEl = document.getElementById('tot-fc-usc');
   if (fcUscEl) fcUscEl.textContent = fmtPN(fcUscM+fcUscP+fcUscS);
 
-  // Totali entrate per turno — TUTTE le voci entrata incluso conto-bet
-  const entM = vociFisse.reduce((s,k) => s + getV(k+'-m'), 0);
-  const entP = vociFisse.reduce((s,k) => s + getV(k+'-p'), 0);
-  const entS = vociFisse.reduce((s,k) => s + getV(k+'-s'), 0);
-  // Fondo cassa iniziale sommato al totale generale
-  const entTot = fc + entM + entP + entS;
+  // Totali entrate per turno
+  // Il fondo cassa si somma ad ogni turno per la chiusura parziale
+  const entM = fc + vociFisse.reduce((s,k) => s + getV(k+'-m'), 0);
+  const entP = fc + vociFisse.reduce((s,k) => s + getV(k+'-p'), 0);
+  const entS = fc + vociFisse.reduce((s,k) => s + getV(k+'-s'), 0);
+  // Nel totale giornaliero il fondo cassa si conta una sola volta
+  const entTot = fc + vociFisse.reduce((s,k) => s + getV(k+'-m') + getV(k+'-p') + getV(k+'-s'), 0);
 
   const setT = (id, v) => { const el = document.getElementById(id); if(el) el.textContent = fmtPN(v); };
   setT('tot-ent-m', entM); setT('tot-ent-p', entP);
