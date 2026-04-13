@@ -482,35 +482,31 @@
 
                 <!-- ENTRATE -->
                 <tr class="pn-section-row entrate">
-                  <td colspan="4">▲ ENTRATE</td>
+                  <td colspan="3">▲ ENTRATE</td>
                 </tr>
                 <tr class="pn-row-even">
                   <td class="td-desc">Incasso cassa</td>
                   <td><input type="number" id="incasso-m" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
                   <td><input type="number" id="incasso-p" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
                   <td><input type="number" id="incasso-s" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
-                  <td class="td-tot" id="tot-incasso">€ 0,00</td>
                 </tr>
                 <tr>
                   <td class="td-desc">Servizi, Ricariche e Pagamenti</td>
                   <td><input type="number" id="money-m" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
                   <td><input type="number" id="money-p" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
                   <td><input type="number" id="money-s" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
-                  <td class="td-tot" id="tot-money">€ 0,00</td>
                 </tr>
                 <tr class="pn-row-even">
                   <td class="td-desc">Gratta e Vinci</td>
                   <td><input type="number" id="grattavinci-m" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
                   <td><input type="number" id="grattavinci-p" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
                   <td><input type="number" id="grattavinci-s" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
-                  <td class="td-tot" id="tot-grattavinci">€ 0,00</td>
                 </tr>
                 <tr>
                   <td class="td-desc">Sisal</td>
                   <td><input type="number" id="sisal-m" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
                   <td><input type="number" id="sisal-p" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
                   <td><input type="number" id="sisal-s" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
-                  <td class="td-tot" id="tot-sisal">€ 0,00</td>
                 </tr>
                 <tr>
                   <td class="td-desc">
@@ -524,101 +520,85 @@
                   <td><input type="number" id="conto-bet-m" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
                   <td><input type="number" id="conto-bet-p" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
                   <td><input type="number" id="conto-bet-s" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
-                  <td class="td-tot" id="tot-conto-bet">€ 0,00</td>
                 </tr>
                 <tr>
                   <td class="td-desc">Fatture Clienti</td>
                   <td><input type="number" id="fatture-m" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
                   <td><input type="number" id="fatture-p" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
                   <td><input type="number" id="fatture-s" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
-                  <td class="td-tot" id="tot-fatture">€ 0,00</td>
                 </tr>
                 <tr class="pn-row-even">
                   <td class="td-desc">Edicola</td>
                   <td><input type="number" id="giornali-m" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
                   <td><input type="number" id="giornali-p" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
                   <td><input type="number" id="giornali-s" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
-                  <td class="td-tot" id="tot-giornali">€ 0,00</td>
                 </tr>
                 <tr class="pn-subtot-row">
                   <td class="td-desc">TOT. ENTRATE</td>
-                  <td class="td-tot" id="tot-ent-m">€ 0,00</td>
-                  <td class="td-tot" id="tot-ent-p">€ 0,00</td>
-                  <td class="td-tot" id="tot-ent-s">€ 0,00</td>
                 </tr>
 
                 <!-- USCITE -->
                 <tr class="pn-section-row uscite">
-                  <td colspan="4">▼ USCITE</td>
+                  <td colspan="3">▼ USCITE</td>
                 </tr>
                 <tr class="pn-row-even">
                   <td class="td-desc">POS</td>
                   <td><input type="number" id="pos-m" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
                   <td><input type="number" id="pos-p" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
                   <td><input type="number" id="pos-s" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
-                  <td class="td-tot" id="tot-pos">€ 0,00</td>
                 </tr>
                 <tr>
                   <td class="td-desc">Carte di credito</td>
                   <td><input type="number" id="carte-m" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
                   <td><input type="number" id="carte-p" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
                   <td><input type="number" id="carte-s" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
-                  <td class="td-tot" id="tot-carte">€ 0,00</td>
                 </tr>
                 <tr class="pn-row-even">
                   <td class="td-desc">Bonifici bancari</td>
                   <td><input type="number" id="bonifici-m" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
                   <td><input type="number" id="bonifici-p" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
                   <td><input type="number" id="bonifici-s" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
-                  <td class="td-tot" id="tot-bonifici">€ 0,00</td>
                 </tr>
 
                 <!-- FORNITORI -->
                 <tr class="pn-section-row fornitori" id="fornitori-header">
-                  <td colspan="4">
+                  <td colspan="3">
                     📦 FORNITORI
                     <button class="pn-add-btn" onclick="addFornitoreRow()">＋ aggiungi riga</button>
                   </td>
                 </tr>
-                <tr id="fornitori-r0" class="pn-dyn-row"><td class="td-desc"><input type="text" placeholder="Fornitore..." class="pn-desc-input" id="fdesc-0"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fm-0" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fp-0" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fs-0" oninput="calcPN()"/></td><td class="td-tot" id="ftot-0">€ 0,00</td></tr>
-                <tr id="fornitori-r1" class="pn-dyn-row pn-row-even"><td class="td-desc"><input type="text" placeholder="Fornitore..." class="pn-desc-input" id="fdesc-1"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fm-1" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fp-1" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fs-1" oninput="calcPN()"/></td><td class="td-tot" id="ftot-1">€ 0,00</td></tr>
-                <tr id="fornitori-r2" class="pn-dyn-row"><td class="td-desc"><input type="text" placeholder="Fornitore..." class="pn-desc-input" id="fdesc-2"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fm-2" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fp-2" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fs-2" oninput="calcPN()"/></td><td class="td-tot" id="ftot-2">€ 0,00</td></tr>
-                <tr id="fornitori-r3" class="pn-dyn-row pn-row-even"><td class="td-desc"><input type="text" placeholder="Fornitore..." class="pn-desc-input" id="fdesc-3"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fm-3" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fp-3" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fs-3" oninput="calcPN()"/></td><td class="td-tot" id="ftot-3">€ 0,00</td></tr>
-                <tr id="fornitori-r4" class="pn-dyn-row"><td class="td-desc"><input type="text" placeholder="Fornitore..." class="pn-desc-input" id="fdesc-4"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fm-4" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fp-4" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fs-4" oninput="calcPN()"/></td><td class="td-tot" id="ftot-4">€ 0,00</td></tr>
+                <tr id="fornitori-r0" class="pn-dyn-row"><td class="td-desc"><input type="text" placeholder="Fornitore..." class="pn-desc-input" id="fdesc-0"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fm-0" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fp-0" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fs-0" oninput="calcPN()"/></td></tr>
+                <tr id="fornitori-r1" class="pn-dyn-row pn-row-even"><td class="td-desc"><input type="text" placeholder="Fornitore..." class="pn-desc-input" id="fdesc-1"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fm-1" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fp-1" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fs-1" oninput="calcPN()"/></td></tr>
+                <tr id="fornitori-r2" class="pn-dyn-row"><td class="td-desc"><input type="text" placeholder="Fornitore..." class="pn-desc-input" id="fdesc-2"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fm-2" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fp-2" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fs-2" oninput="calcPN()"/></td></tr>
+                <tr id="fornitori-r3" class="pn-dyn-row pn-row-even"><td class="td-desc"><input type="text" placeholder="Fornitore..." class="pn-desc-input" id="fdesc-3"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fm-3" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fp-3" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fs-3" oninput="calcPN()"/></td></tr>
+                <tr id="fornitori-r4" class="pn-dyn-row"><td class="td-desc"><input type="text" placeholder="Fornitore..." class="pn-desc-input" id="fdesc-4"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fm-4" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fp-4" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fs-4" oninput="calcPN()"/></td></tr>
 
                 <!-- PRELIEVI -->
                 <tr class="pn-section-row prelievi" id="prelievi-header">
-                  <td colspan="4">
+                  <td colspan="3">
                     💸 PRELIEVI / VARIE
                     <button class="pn-add-btn" onclick="addPrelievRow()">＋ aggiungi riga</button>
                   </td>
                 </tr>
-                <tr id="prelievi-r0" class="pn-dyn-row"><td class="td-desc"><select class="pn-desc-input" id="pdesc-0"><option value="">— Causale —</option></select></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="pm-0" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="pp-0" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="ps-0" oninput="calcPN()"/></td><td class="td-tot" id="ptot-0">€ 0,00</td></tr>
-                <tr id="prelievi-r1" class="pn-dyn-row pn-row-even"><td class="td-desc"><select class="pn-desc-input" id="pdesc-1"><option value="">— Causale —</option></select></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="pm-1" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="pp-1" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="ps-1" oninput="calcPN()"/></td><td class="td-tot" id="ptot-1">€ 0,00</td></tr>
-                <tr id="prelievi-r2" class="pn-dyn-row"><td class="td-desc"><select class="pn-desc-input" id="pdesc-2"><option value="">— Causale —</option></select></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="pm-2" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="pp-2" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="ps-2" oninput="calcPN()"/></td><td class="td-tot" id="ptot-2">€ 0,00</td></tr>
+                <tr id="prelievi-r0" class="pn-dyn-row"><td class="td-desc"><select class="pn-desc-input" id="pdesc-0"><option value="">— Causale —</option></select></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="pm-0" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="pp-0" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="ps-0" oninput="calcPN()"/></td></tr>
+                <tr id="prelievi-r1" class="pn-dyn-row pn-row-even"><td class="td-desc"><select class="pn-desc-input" id="pdesc-1"><option value="">— Causale —</option></select></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="pm-1" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="pp-1" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="ps-1" oninput="calcPN()"/></td></tr>
+                <tr id="prelievi-r2" class="pn-dyn-row"><td class="td-desc"><select class="pn-desc-input" id="pdesc-2"><option value="">— Causale —</option></select></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="pm-2" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="pp-2" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="ps-2" oninput="calcPN()"/></td></tr>
 
                 <!-- FONDO CHIUSURA -->
                 <tr class="pn-section-row chiusura">
-                  <td colspan="4">◎ FONDO CASSA CHIUSURA</td>
+                  <td colspan="3">◎ FONDO CASSA CHIUSURA</td>
                 </tr>
                 <tr class="pn-row-even">
                   <td class="td-desc">Fondo chiusura</td>
                   <td><input type="number" id="fc-usc-m" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
                   <td><input type="number" id="fc-usc-p" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
                   <td><input type="number" id="fc-usc-s" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
-                  <td class="td-tot" id="tot-fc-usc">€ 0,00</td>
                 </tr>
                 <tr class="pn-subtot-row uscite">
                   <td class="td-desc">TOT. USCITE</td>
-                  <td class="td-tot" id="tot-usc-m">€ 0,00</td>
-                  <td class="td-tot" id="tot-usc-p">€ 0,00</td>
-                  <td class="td-tot" id="tot-usc-s">€ 0,00</td>
                 </tr>
                 <tr class="pn-diff-row">
                   <td class="td-desc">DIFFERENZA</td>
-                  <td class="td-tot" id="diff-m">+ € 0,00</td>
-                  <td class="td-tot" id="diff-p">+ € 0,00</td>
-                  <td class="td-tot" id="diff-s">+ € 0,00</td>
                 </tr>
 
               </tbody>

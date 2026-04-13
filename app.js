@@ -1595,8 +1595,7 @@ function addFornitoreRow() {
     </td>
     <td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fm-${idx}" oninput="calcPN()"/></td>
     <td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fp-${idx}" oninput="calcPN()"/></td>
-    <td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fs-${idx}" oninput="calcPN()"/></td>
-    <td class="td-tot" id="ftot-${idx}">€ 0,00</td>`;
+    <td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fs-${idx}" oninput="calcPN()"/></td>`;
 
   // Inserisce prima della sezione prelievi (non chiusura)
   const prelieviHeader = document.getElementById('prelievi-header');
@@ -1621,8 +1620,7 @@ function addPrelievRow() {
     </td>
     <td><input type="number" step="0.01" placeholder="—" class="pn-input" id="pm-${idx}" oninput="calcPN()"/></td>
     <td><input type="number" step="0.01" placeholder="—" class="pn-input" id="pp-${idx}" oninput="calcPN()"/></td>
-    <td><input type="number" step="0.01" placeholder="—" class="pn-input" id="ps-${idx}" oninput="calcPN()"/></td>
-    <td class="td-tot" id="ptot-${idx}">€ 0,00</td>`;
+    <td><input type="number" step="0.01" placeholder="—" class="pn-input" id="ps-${idx}" oninput="calcPN()"/></td>`;
 
   // Inserisce prima della sezione chiusura
   const chiusura = document.querySelector('.pn-section-row.chiusura');
