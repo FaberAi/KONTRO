@@ -1541,8 +1541,7 @@ function calcPN2() {
   const entTot = entS; // la sera è la chiusura finale
 
   const setT = (id, v) => { const el = document.getElementById(id); if(el) el.textContent = fmtPN(v); };
-  setT('tot-ent-m', entM); setT('tot-ent-p', entP);
-  setT('tot-ent-s', entS); setT('tot-ent', entTot);
+  setT('tot-ent-m', entM); setT('tot-ent-p', entP); setT('tot-ent-s', entS);
 
   // Totali uscite cumulativi per chiusura parziale
   const uscRawM = uscVoci.reduce((s,k)=>s+getV(k+'-m'),0) + fM + pM + fcUscM;
@@ -1553,12 +1552,11 @@ function calcPN2() {
   const uscS   = uscRawM + uscRawP + uscRawS;
   const uscTot = uscS;
 
-  setT('tot-usc-m', uscM); setT('tot-usc-p', uscP);
-  setT('tot-usc-s', uscS); setT('tot-usc', uscTot);
+  setT('tot-usc-m', uscM); setT('tot-usc-p', uscP); setT('tot-usc-s', uscS);
 
   // Differenze
-  const dM = entM-uscM, dP = entP-uscP, dS = entS-uscS, dTot = entTot-uscTot;
-  [['diff-m',dM],['diff-p',dP],['diff-s',dS],['diff-tot',dTot]].forEach(([id,d]) => {
+  const dM = entM-uscM, dP = entP-uscP, dS = entS-uscS, dTot = dS;
+  [['diff-m',dM],['diff-p',dP],['diff-s',dS]].forEach(([id,d]) => {
     const el = document.getElementById(id);
     if (el) {
       el.textContent = (d>=0?'+ ':'- ') + fmtPN(d);
