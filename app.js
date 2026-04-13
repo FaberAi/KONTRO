@@ -5445,15 +5445,12 @@ async function eseguiReset() {
     return;
   }
 
-  // Verifica password tramite re-autenticazione Supabase
-  msgEl.textContent = 'Verifica in corso...';
+  msgEl.textContent = 'Verifica password...';
   msgEl.className = 'auth-message';
 
   const { error: authError } = await db.auth.signInWithPassword({
-    email: currentUser.email,
-    password: pwd
+    email: currentUser.email, password: pwd
   });
-
   if (authError) {
     msgEl.textContent = 'Password errata';
     msgEl.className = 'auth-message error';
@@ -5461,33 +5458,33 @@ async function eseguiReset() {
   }
 
   msgEl.textContent = 'Reset in corso...';
+  const bid = currentBusiness.id;
 
-  // Tabelle contabili da cancellare (in ordine per rispettare le FK)
-  const tabelle = [
-    'daily_note_rows',
-    'daily_notes',
-    'fatture_fornitori',
-    'fatture',
-    'assegni',
-    'versamenti',
-    'movimenti_banca',
-    'rid_bancari',
-    'cash_entries',
-    'acconti_stipendio',
-    'presenze',
-    'turni_dipendenti'
+  // Cancella prima le tabelle figlie (FK), poi le madri
+  const steps = [
+    // Figlie
+    () => db.from('daily_note_rows').delete().eq('business_id', bid),
+    () => db.from('acconti_stipendio').delete().eq('business_id', bid),
+    () => db.from('presenze').delete().eq('business_id', bid),
+    () => db.from('turni_dipendenti').delete().eq('business_id', bid),
+    // Madri
+    () => db.from('daily_notes').delete().eq('business_id', bid),
+    () => db.from('fatture_fornitori').delete().eq('business_id', bid),
+    () => db.from('assegni').delete().eq('business_id', bid),
+    () => db.from('versamenti').delete().eq('business_id', bid),
+    () => db.from('movimenti_banca').delete().eq('business_id', bid),
+    () => db.from('rid_bancari').delete().eq('business_id', bid),
+    () => db.from('cash_entries').delete().eq('business_id', bid),
   ];
 
-  for (const tabella of tabelle) {
-    const { error } = await db.from(tabella)
-      .delete()
-      .eq('business_id', currentBusiness.id);
-    if (error) console.warn(`Errore reset ${tabella}:`, error.message);
+  for (const step of steps) {
+    const { error } = await step();
+    if (error) console.warn('Reset errore:', error.message);
   }
 
   hideResetModal();
-  showToast('Reset completato — tutti i dati contabili eliminati', 'success');
-
-  // Ricarica la vista corrente
-  showView('primanota');
+  showToast('✅ Reset completato — dati contabili eliminati', 'success');
+  // Ricarica tutto
+  await loadDashboard();
+  showView('dashboard');
 }
