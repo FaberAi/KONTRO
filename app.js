@@ -69,6 +69,7 @@ async function initApp() {
   await loadDashboard();
   if (currentRole === 'cashier') await loadCurrentUserPermissions();
   updateUserUI();
+  checkStripeReturn();
 }
 
 // ============================================
@@ -3112,6 +3113,7 @@ function switchSettingsTab(tab) {
   document.getElementById('spanel-' + tab).classList.add('active');
   if (tab === 'azienda') loadAzienda();
   if (tab === 'causali') loadCausaliLista();
+  if (tab === 'abbonamento') loadAbbonamento();
 }
 
 async function initImpostazioni() {
@@ -5672,4 +5674,115 @@ async function eseguiReset() {
   // Ricarica tutto
   await loadDashboard();
   showView('dashboard');
+}
+
+// ============================================
+// ABBONAMENTI STRIPE
+// ============================================
+
+const PIANI_INFO = {
+  free:     { nome: 'Free',     prezzo: '€ 0',    colore: '#64748b', features: ['1 sede','1 utente','30 giorni storico'] },
+  pro:      { nome: 'Pro',      prezzo: '€ 29/mese', colore: '#6366f1', features: ['3 sedi','5 utenti','Storico illimitato','Export PDF'] },
+  business: { nome: 'Business', prezzo: '€ 59/mese', colore: '#f59e0b', features: ['Sedi illimitate','Utenti illimitati','Storico illimitato','Export PDF','Supporto prioritario'] }
+};
+
+async function loadAbbonamento() {
+  const el = document.getElementById('abbonamento-content');
+  if (!el || !currentBusiness) return;
+
+  const { data: biz } = await db.from('businesses')
+    .select('piano,stripe_customer_id,piano_scadenza').eq('id', currentBusiness.id).single();
+
+  const piano = biz?.piano || 'free';
+  const info  = PIANI_INFO[piano];
+  const scad  = biz?.piano_scadenza ? new Date(biz.piano_scadenza).toLocaleDateString('it-IT') : null;
+
+  const pianiHtml = Object.entries(PIANI_INFO).map(([key, p]) => {
+    const isAttivo = key === piano;
+    return `
+      <div class="section-card" style="border:2px solid ${isAttivo ? p.colore : 'var(--border)'};margin-bottom:12px;position:relative">
+        ${isAttivo ? `<div style="position:absolute;top:12px;right:12px;background:${p.colore};color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px">ATTIVO</div>` : ''}
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+          <div style="font-size:20px;font-weight:800;color:${p.colore}">${p.nome}</div>
+          <div style="font-size:16px;font-weight:700">${p.prezzo}</div>
+        </div>
+        <ul style="list-style:none;padding:0;margin:0 0 14px;font-size:13px;color:var(--gray-300)">
+          ${p.features.map(f => `<li style="padding:3px 0">✓ ${f}</li>`).join('')}
+        </ul>
+        ${!isAttivo && key !== 'free'
+          ? `<button class="btn-primary" style="background:${p.colore};border-color:${p.colore};width:100%" onclick="avviaCheckout('${key}')">Passa a ${p.nome} →</button>`
+          : isAttivo && key !== 'free'
+          ? `<button class="btn-secondary" style="width:100%" onclick="apriPortale()">Gestisci abbonamento</button>`
+          : ''
+        }
+      </div>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div style="margin-bottom:20px">
+      <h2 style="margin-bottom:4px">Piano attuale: <span style="color:${info.colore}">${info.nome}</span></h2>
+      ${scad ? `<div style="font-size:13px;color:var(--gray-400)">Rinnovo il ${scad}</div>` : ''}
+    </div>
+    ${pianiHtml}
+    <div style="font-size:12px;color:var(--gray-500);margin-top:8px;text-align:center">
+      Pagamento sicuro via Stripe · Cancella in qualsiasi momento
+    </div>`;
+}
+
+async function avviaCheckout(piano) {
+  if (!currentBusiness || !currentUser) return;
+  showToast('Reindirizzamento a Stripe...', 'success');
+  try {
+    const res = await fetch('/api/create-checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        piano,
+        businessId: currentBusiness.id,
+        userEmail: currentUser.email,
+        returnUrl: window.location.origin
+      })
+    });
+    const { url, error } = await res.json();
+    if (error) { showToast('Errore: ' + error, 'error'); return; }
+    window.location.href = url;
+  } catch (err) {
+    showToast('Errore di connessione', 'error');
+  }
+}
+
+async function apriPortale() {
+  if (!currentBusiness) return;
+  showToast('Apertura portale...', 'success');
+  try {
+    const res = await fetch('/api/portal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        businessId: currentBusiness.id,
+        returnUrl: window.location.origin
+      })
+    });
+    const { url, error } = await res.json();
+    if (error) { showToast('Errore: ' + error, 'error'); return; }
+    window.location.href = url;
+  } catch (err) {
+    showToast('Errore di connessione', 'error');
+  }
+}
+
+// Controlla se si ritorna da checkout Stripe
+function checkStripeReturn() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('checkout') === 'success') {
+    const piano = params.get('piano');
+    showToast(`🎉 Abbonamento ${PIANI_INFO[piano]?.nome || piano} attivato!`, 'success');
+    window.history.replaceState({}, '', window.location.pathname);
+    // Ricarica dati business
+    loadBusiness().then(() => loadAbbonamento());
+  }
+  if (params.get('checkout') === 'cancel') {
+    showToast('Checkout annullato', 'error');
+    window.history.replaceState({}, '', window.location.pathname);
+  }
 }
