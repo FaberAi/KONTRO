@@ -7,8 +7,9 @@ const sb = createClient(
 );
 
 const PIANI = {
-  pro:      { priceId: process.env.STRIPE_PRICE_PRO,      nome: 'Pro' },
-  business: { priceId: process.env.STRIPE_PRICE_BUSINESS, nome: 'Business' }
+  pro:        { priceId: process.env.STRIPE_PRICE_PRO,        nome: 'Pro' },
+  business:   { priceId: process.env.STRIPE_PRICE_BUSINESS,   nome: 'Business' },
+  enterprise: { priceId: process.env.STRIPE_PRICE_ENTERPRISE, nome: 'Enterprise' }
 };
 
 module.exports = async (req, res) => {
