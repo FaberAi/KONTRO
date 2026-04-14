@@ -6728,3 +6728,55 @@ function scrollToTurno(turno) {
   const scrollMap = { m: 0, p: descW, s: descW + colW };
   wrap.scrollTo({ left: scrollMap[turno], behavior: 'smooth' });
 }
+
+// ============================================
+// SISTEMA AIUTO
+// ============================================
+function toggleHelp() {
+  const drawer = document.getElementById('help-drawer');
+  const overlay = document.getElementById('help-overlay');
+  const isOpen = drawer.classList.contains('open');
+  if (isOpen) {
+    closeHelp();
+  } else {
+    drawer.classList.add('open');
+    overlay.classList.add('open');
+    document.getElementById('help-search').focus();
+  }
+}
+
+function closeHelp() {
+  document.getElementById('help-drawer').classList.remove('open');
+  document.getElementById('help-overlay').classList.remove('open');
+}
+
+function filterHelp(query) {
+  const q = query.toLowerCase().trim();
+  document.querySelectorAll('.help-section').forEach(section => {
+    const tags = section.dataset.tags || '';
+    const text = section.textContent.toLowerCase();
+    const match = !q || text.includes(q) || tags.includes(q);
+    section.style.display = match ? 'block' : 'none';
+
+    if (q) {
+      // Apri automaticamente le FAQ che corrispondono
+      section.querySelectorAll('.help-item').forEach(item => {
+        const itemText = item.textContent.toLowerCase();
+        if (itemText.includes(q)) {
+          item.querySelector('.help-q').classList.add('open');
+          item.querySelector('.help-a').classList.add('open');
+        }
+      });
+    }
+  });
+}
+
+// Toggle singola FAQ
+document.addEventListener('click', e => {
+  const q = e.target.closest('.help-q');
+  if (!q) return;
+  const a = q.nextElementSibling;
+  const isOpen = q.classList.contains('open');
+  q.classList.toggle('open', !isOpen);
+  a.classList.toggle('open', !isOpen);
+});

@@ -618,7 +618,13 @@
                   <td colspan="3">◎ FONDO CASSA CHIUSURA</td>
                 </tr>
                 <tr class="pn-row-even">
-                  <td class="td-desc">Fondo chiusura</td>
+                  <td class="td-desc">
+                    Fondo chiusura
+                    <span class="tooltip-wrap">
+                      <span class="tooltip-icon">?</span>
+                      <span class="tooltip-text">Soldi lasciati in cassa per il giorno dopo. Vengono aggiunti all'incasso calcolato.</span>
+                    </span>
+                  </td>
                   <td><input type="number" id="fc-usc-m" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
                   <td><input type="number" id="fc-usc-p" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
                   <td><input type="number" id="fc-usc-s" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
@@ -630,7 +636,13 @@
                   <td class="td-tot" id="tot-usc-s">€ 0,00</td>
                 </tr>
                 <tr class="pn-diff-row">
-                  <td class="td-desc">DIFFERENZA</td>
+                  <td class="td-desc">
+                    DIFFERENZA
+                    <span class="tooltip-wrap">
+                      <span class="tooltip-icon">?</span>
+                      <span class="tooltip-text">Entrate − Uscite. Se è positiva (rosso) le uscite superano le entrate — da verificare.</span>
+                    </span>
+                  </td>
                   <td class="td-tot" id="diff-m">+ € 0,00</td>
                   <td class="td-tot" id="diff-p">+ € 0,00</td>
                   <td class="td-tot" id="diff-s">+ € 0,00</td>
@@ -1686,5 +1698,122 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
   <script src="app.js"></script>
+  <!-- ====== BOTTONE AIUTO ====== -->
+  <button id="help-fab" onclick="toggleHelp()" title="Aiuto">?</button>
+
+  <!-- ====== DRAWER AIUTO ====== -->
+  <div id="help-overlay" onclick="closeHelp()"></div>
+  <div id="help-drawer">
+    <div class="help-header">
+      <div>
+        <div style="font-size:18px;font-weight:800;color:var(--text-primary)">Centro assistenza</div>
+        <div style="font-size:12px;color:var(--gray-400);margin-top:2px">Come possiamo aiutarti?</div>
+      </div>
+      <button onclick="closeHelp()" class="help-close">✕</button>
+    </div>
+
+    <!-- Ricerca -->
+    <div class="help-search-wrap">
+      <input type="text" id="help-search" placeholder="🔍 Cerca nelle guide..." class="help-search" oninput="filterHelp(this.value)" />
+    </div>
+
+    <!-- Sezioni -->
+    <div id="help-content" class="help-content">
+
+      <div class="help-section" data-tags="iniziare account registrazione setup">
+        <div class="help-section-title">🚀 Come iniziare</div>
+        <div class="help-item">
+          <div class="help-q">Come configuro la mia attività?</div>
+          <div class="help-a">Vai su <strong>Impostazioni → Azienda</strong> e inserisci il nome dell'attività. Poi aggiungi le sedi in <strong>Sedi</strong> e configura le banche in <strong>Banca & Finanza → Banche</strong>.</div>
+        </div>
+        <div class="help-item">
+          <div class="help-q">Come invito i miei collaboratori?</div>
+          <div class="help-a">Vai su <strong>Team</strong> nel menu, inserisci l'email del collaboratore e scegli il ruolo: Admin (accesso completo) o Cassiere (solo Prima Nota).</div>
+        </div>
+        <div class="help-item">
+          <div class="help-q">Quanti utenti posso invitare?</div>
+          <div class="help-a">Il piano Free include 1 utente. Con il piano Pro puoi invitare fino a 5 collaboratori, con Business utenti illimitati.</div>
+        </div>
+      </div>
+
+      <div class="help-section" data-tags="prima nota incasso turni mattina pomeriggio sera cassa">
+        <div class="help-section-title">📒 Prima Nota</div>
+        <div class="help-item">
+          <div class="help-q">Come funziona la logica dei 3 turni?</div>
+          <div class="help-a">La Prima Nota ha 3 colonne: Mattina, Pomeriggio e Sera. Ogni turno aggiorna il precedente — il valore della colonna più avanzata compilata è quello definitivo. Non si sommano tra loro.</div>
+        </div>
+        <div class="help-item">
+          <div class="help-q">Cos'è il fondo cassa?</div>
+          <div class="help-a">Il fondo cassa è la somma lasciata in cassa per il giorno successivo. Va inserito nelle USCITE del turno di chiusura e viene aggiunto all'incasso calcolato.</div>
+        </div>
+        <div class="help-item">
+          <div class="help-q">Cos'è la differenza?</div>
+          <div class="help-a">La differenza è il risultato di Entrate − Uscite. Se è positiva (in rosso) significa che le uscite superano le entrate dichiarate — da verificare.</div>
+        </div>
+        <div class="help-item">
+          <div class="help-q">Come aggiungo un fornitore alla prima nota?</div>
+          <div class="help-a">I fornitori nella Prima Nota si selezionano dal menu a tendina nella sezione FORNITORI. Per aggiungerne di nuovi vai su <strong>Fornitori → Anagrafica</strong>.</div>
+        </div>
+        <div class="help-item">
+          <div class="help-q">Come aggiungo causali di prelievo?</div>
+          <div class="help-a">Vai su <strong>Impostazioni → Causali prelievi</strong> e aggiungi le causali che vuoi (es. Stipendio, Spese personali, Affitto...).</div>
+        </div>
+      </div>
+
+      <div class="help-section" data-tags="banca finanza versamento assegno rid">
+        <div class="help-section-title">🏦 Banca & Finanza</div>
+        <div class="help-item">
+          <div class="help-q">Come registro un versamento in banca?</div>
+          <div class="help-a">Vai su <strong>Banca & Finanza → Versamenti</strong>, inserisci data, importo e banca. Il versamento aggiorna automaticamente il saldo della banca selezionata.</div>
+        </div>
+        <div class="help-item">
+          <div class="help-q">Come funziona la conciliazione fiscale?</div>
+          <div class="help-a">La conciliazione confronta il totale degli incassi dichiarati in Prima Nota con i versamenti effettivi in banca. Una differenza positiva indica denaro non ancora versato.</div>
+        </div>
+        <div class="help-item">
+          <div class="help-q">Cos'è il fabbisogno finanziario?</div>
+          <div class="help-a">È la previsione delle uscite fisse nei prossimi 30 giorni (RID, assegni in scadenza, fornitori) confrontata con la liquidità disponibile in banca.</div>
+        </div>
+      </div>
+
+      <div class="help-section" data-tags="dipendenti turni planning presenze">
+        <div class="help-section-title">👥 Dipendenti</div>
+        <div class="help-item">
+          <div class="help-q">Come creo il planning settimanale?</div>
+          <div class="help-a">Vai su <strong>Dipendenti → Turni</strong>, naviga alla settimana e clicca <strong>+</strong> per aggiungere un dipendente al turno, <strong>+R</strong> per segnare un riposo.</div>
+        </div>
+        <div class="help-item">
+          <div class="help-q">Come funziona il generatore automatico?</div>
+          <div class="help-a">Clicca <strong>⚡ Genera settimana</strong> — il sistema analizza le ultime 8 settimane e ripropone i turni in base al pattern storico. Puoi inserire le assenze prima di generare.</div>
+        </div>
+        <div class="help-item">
+          <div class="help-q">Come esporto il planning?</div>
+          <div class="help-a">Nella griglia turni trovi i bottoni <strong>PDF</strong> (stampa A4 orizzontale) e <strong>PNG</strong> (immagine per WhatsApp).</div>
+        </div>
+      </div>
+
+      <div class="help-section" data-tags="abbonamento piano upgrade stripe pagamento">
+        <div class="help-section-title">💳 Abbonamento</div>
+        <div class="help-item">
+          <div class="help-q">Come passo al piano Pro?</div>
+          <div class="help-a">Vai su <strong>Impostazioni → Abbonamento</strong> e clicca su <strong>Passa a Pro</strong>. Il pagamento è gestito da Stripe in modo sicuro.</div>
+        </div>
+        <div class="help-item">
+          <div class="help-q">Come cancello l'abbonamento?</div>
+          <div class="help-a">Vai su <strong>Impostazioni → Abbonamento → Gestisci abbonamento</strong>. Puoi cancellare in qualsiasi momento — resti attivo fino alla fine del periodo pagato.</div>
+        </div>
+      </div>
+
+      <div class="help-section" data-tags="supporto contatto email problema">
+        <div class="help-section-title">📧 Supporto</div>
+        <div class="help-item">
+          <div class="help-q">Come contatto il supporto?</div>
+          <div class="help-a">Scrivi a <a href="mailto:info@kontro.cloud" style="color:var(--blue-300)">info@kontro.cloud</a> — rispondiamo entro 24 ore nei giorni lavorativi.</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
 </body>
 </html>
