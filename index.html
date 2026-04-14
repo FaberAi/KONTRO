@@ -1340,11 +1340,12 @@
               </div>
             </div>
             <!-- Navigazione settimana -->
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap">
               <button class="btn-secondary sm" onclick="navSettimana(-1)">← Prec.</button>
               <input type="date" id="planning-data-nav" class="filter-input" onchange="loadPlanningSettimanale()" style="flex:1;max-width:180px" />
               <button class="btn-secondary sm" onclick="navSettimanaOggi()">Oggi</button>
               <button class="btn-secondary sm" onclick="navSettimana(1)">Succ. →</button>
+              <button class="btn-primary sm" onclick="apriGeneraSettimana()" style="margin-left:auto">⚡ Genera settimana</button>
             </div>
             <div id="turni-grid" class="turni-grid-wrap">
               <div class="empty-state">Caricamento...</div>

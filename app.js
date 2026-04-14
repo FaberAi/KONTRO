@@ -5974,3 +5974,275 @@ async function exportPrimaNota() {
 
   doc.save('PrimaNota_' + data + '.pdf');
 }
+
+// ============================================
+// GENERATORE PLANNING AUTOMATICO
+// ============================================
+
+async function apriGeneraSettimana() {
+  const dataNav = document.getElementById('planning-data-nav')?.value || new Date().toISOString().split('T')[0];
+  const giorni  = getSettimanaKontro(dataNav);
+  const giorniNomi = ['Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato','Domenica'];
+  const fmt = d => `${new Date(d+'T12:00:00').getDate()}/${new Date(d+'T12:00:00').getMonth()+1}`;
+
+  const old = document.getElementById('modal-genera');
+  if (old) old.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'modal-genera';
+  modal.style.cssText = `position:fixed;top:0;left:0;right:0;bottom:0;
+    background:rgba(0,0,0,.6);z-index:9999;
+    display:flex;align-items:flex-start;justify-content:center;
+    overflow-y:auto;padding:20px 12px`;
+
+  const dipOptions = dipendentiCache.map(d =>
+    `<option value="${d.id}">${d.nome} ${d.cognome}</option>`
+  ).join('');
+
+  modal.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px;width:100%;max-width:540px;box-shadow:0 20px 60px rgba(0,0,0,.5)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div>
+          <div style="font-size:16px;font-weight:800;color:var(--text-primary)">⚡ Genera settimana automatica</div>
+          <div style="font-size:12px;color:var(--gray-400);margin-top:2px">
+            ${fmt(giorni[0])} – ${fmt(giorni[6])} · basato sulle ultime 8 settimane
+          </div>
+        </div>
+        <button onclick="chiudiGeneraModal()" class="btn-secondary sm">✕</button>
+      </div>
+
+      <div style="margin-bottom:16px">
+        <div style="font-size:13px;font-weight:700;color:var(--text-primary);margin-bottom:8px">
+          Assenze / permessi già noti questa settimana
+        </div>
+        <div id="assenze-list" style="display:flex;flex-direction:column;gap:8px"></div>
+        <button onclick="aggiungiRigaAssenza()" class="btn-secondary" style="margin-top:8px;width:100%;border-style:dashed">
+          + Aggiungi assenza
+        </button>
+      </div>
+
+      <div class="section-card" style="margin-bottom:16px;padding:12px">
+        <div style="font-size:12px;font-weight:700;color:var(--gray-400);margin-bottom:8px">OPZIONI</div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:8px">
+          <input type="checkbox" id="gen-svuota-prima" checked style="width:16px;height:16px">
+          Svuota prima la settimana corrente
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+          <input type="checkbox" id="gen-solo-pattern" style="width:16px;height:16px">
+          Solo pattern forti (≥ 60% presenze storiche)
+        </label>
+      </div>
+
+      <div style="display:flex;gap:8px">
+        <button onclick="eseguiGenerazione()" class="btn-primary" style="flex:1">⚡ Genera planning</button>
+        <button onclick="chiudiGeneraModal()" class="btn-secondary">Annulla</button>
+      </div>
+      <div id="genera-msg" style="display:none;margin-top:10px;padding:10px 14px;border-radius:8px;font-size:13px"></div>
+    </div>`;
+
+  document.body.appendChild(modal);
+  aggiungiRigaAssenza();
+}
+
+function chiudiGeneraModal() {
+  const m = document.getElementById('modal-genera');
+  if (m) m.remove();
+}
+
+function aggiungiRigaAssenza() {
+  const lista = document.getElementById('assenze-list');
+  if (!lista) return;
+
+  const id = Date.now();
+  const dipOptions = dipendentiCache.map(d =>
+    `<option value="${d.id}">${d.nome} ${d.cognome}</option>`
+  ).join('');
+
+  const dataNav = document.getElementById('planning-data-nav')?.value || new Date().toISOString().split('T')[0];
+  const giorni  = getSettimanaKontro(dataNav);
+  const giorniNomi = ['Lun','Mar','Mer','Gio','Ven','Sab','Dom'];
+  const fmt = d => `${new Date(d+'T12:00:00').getDate()}/${new Date(d+'T12:00:00').getMonth()+1}`;
+
+  const row = document.createElement('div');
+  row.id = 'riga-assenza-'+id;
+  row.style.cssText = 'background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 12px';
+  row.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <select id="ass-dip-${id}" class="pn-desc-input" style="flex:1">
+        <option value="">— dipendente —</option>
+        ${dipOptions}
+      </select>
+      <button onclick="document.getElementById('riga-assenza-${id}').remove()"
+        style="background:none;border:none;cursor:pointer;font-size:16px;color:var(--gray-400)">✕</button>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px">
+      ${giorni.map((g,i) => `
+        <label style="display:flex;align-items:center;gap:4px;font-size:11px;
+          background:var(--surface);border:1px solid var(--border);border-radius:6px;
+          padding:4px 8px;cursor:pointer;color:var(--text-primary)">
+          <input type="checkbox" class="ass-giorno-${id}" value="${g}">
+          ${giorniNomi[i]} ${fmt(g)}
+        </label>`).join('')}
+    </div>
+    <div style="margin-top:8px">
+      <select id="ass-tipo-${id}" class="pn-desc-input" style="font-size:12px">
+        <option value="riposo">😴 Riposo</option>
+        <option value="permesso">🙋 Permesso</option>
+        <option value="ferie">🌴 Ferie</option>
+        <option value="malattia">🤒 Malattia</option>
+      </select>
+    </div>`;
+  lista.appendChild(row);
+}
+
+function raccogliAssenze() {
+  const assenze = [];
+  document.querySelectorAll('[id^="riga-assenza-"]').forEach(riga => {
+    const id = riga.id.replace('riga-assenza-','');
+    const dipId = document.getElementById('ass-dip-'+id)?.value;
+    const tipo  = document.getElementById('ass-tipo-'+id)?.value || 'riposo';
+    if (!dipId) return;
+    document.querySelectorAll(`.ass-giorno-${id}:checked`).forEach(cb => {
+      assenze.push({ dipId, data: cb.value, tipo });
+    });
+  });
+  return assenze;
+}
+
+async function eseguiGenerazione() {
+  const msgEl = document.getElementById('genera-msg');
+  msgEl.style.display='block';
+  msgEl.style.background='rgba(99,102,241,0.1)';
+  msgEl.style.color='var(--blue-300)';
+  msgEl.textContent='⏳ Analisi storico in corso...';
+
+  const dataNav     = document.getElementById('planning-data-nav')?.value || new Date().toISOString().split('T')[0];
+  const giorni      = getSettimanaKontro(dataNav);
+  const svuotaPrima = document.getElementById('gen-svuota-prima')?.checked ?? true;
+  const soloPattern = document.getElementById('gen-solo-pattern')?.checked ?? false;
+  const soglia      = soloPattern ? 0.6 : 0.35;
+
+  const assenze = raccogliAssenze();
+
+  // Storico ultime 8 settimane
+  const otto = new Date(giorni[0]+'T12:00:00');
+  otto.setDate(otto.getDate() - 56);
+  const dataFrom = otto.toISOString().split('T')[0];
+
+  const { data: storicoTurni } = await db.from('turni_dipendenti')
+    .select('dipendente_id, data, turno, location_id')
+    .eq('business_id', currentBusiness.id)
+    .gte('data', dataFrom)
+    .lt('data', giorni[0])
+    .neq('turno', 'riposo');
+
+  if (!storicoTurni || !storicoTurni.length) {
+    msgEl.style.background='rgba(234,179,8,0.1)';
+    msgEl.style.color='#ca8a04';
+    msgEl.textContent='⚠️ Storico insufficiente — inserisci almeno 1-2 settimane manualmente prima di usare la generazione automatica.';
+    return;
+  }
+
+  // Costruisci pattern per dipendente
+  const pattern = {};
+  const weekCount = {};
+
+  storicoTurni.forEach(t => {
+    const dow = new Date(t.data+'T12:00:00').getDay();
+    const dow2 = dow === 0 ? 6 : dow - 1; // 0=lun
+    if (!pattern[t.dipendente_id]) pattern[t.dipendente_id] = {};
+    if (!pattern[t.dipendente_id][dow2]) pattern[t.dipendente_id][dow2] = {};
+    const locKey = t.location_id || 'principale';
+    if (!pattern[t.dipendente_id][dow2][locKey]) pattern[t.dipendente_id][dow2][locKey] = {};
+    const p = pattern[t.dipendente_id][dow2][locKey];
+    p[t.turno] = (p[t.turno]||0) + 1;
+    // Conta settimane
+    if (!weekCount[t.dipendente_id]) weekCount[t.dipendente_id] = new Set();
+    const d = new Date(t.data+'T12:00:00');
+    const diff = d.getDate() - d.getDay() + (d.getDay()===0 ? -6 : 1);
+    const lun = new Date(d); lun.setDate(diff);
+    weekCount[t.dipendente_id].add(lun.toISOString().split('T')[0]);
+  });
+
+  // Svuota settimana se richiesto
+  if (svuotaPrima) {
+    msgEl.textContent='⏳ Pulizia settimana corrente...';
+    await db.from('turni_dipendenti')
+      .delete()
+      .eq('business_id', currentBusiness.id)
+      .gte('data', giorni[0])
+      .lte('data', giorni[6]);
+  }
+
+  // Inserisci assenze/riposi
+  const assenzeMappa = {};
+  const assenzeInserts = assenze.map(a => {
+    assenzeMappa[`${a.dipId}_${a.data}`] = true;
+    const dip = dipendentiCache.find(d => d.id === a.dipId);
+    return {
+      business_id: currentBusiness.id,
+      dipendente_id: a.dipId,
+      data: a.data,
+      location_id: dip?.location_id || null,
+      turno: 'riposo',
+      nota: a.tipo
+    };
+  });
+  if (assenzeInserts.length) {
+    await db.from('turni_dipendenti').insert(assenzeInserts);
+  }
+
+  // Genera turni dal pattern
+  msgEl.textContent='⏳ Generazione turni in corso...';
+  const turniDaInserire = [];
+
+  dipendentiCache.forEach(dip => {
+    const pat = pattern[dip.id];
+    if (!pat) return;
+    const nWeeks = weekCount[dip.id]?.size || 1;
+    const locKey = dip.location_id || 'principale';
+
+    giorni.forEach((g, gi) => {
+      if (assenzeMappa[`${dip.id}_${g}`]) return;
+      const dowPat = pat[gi];
+      if (!dowPat) return;
+      const locPat = dowPat[locKey] || dowPat[Object.keys(dowPat)[0]];
+      if (!locPat) return;
+
+      let bestTurno = null, bestCount = 0;
+      Object.entries(locPat).forEach(([turno, count]) => {
+        if (count > bestCount) { bestCount = count; bestTurno = turno; }
+      });
+
+      if (!bestTurno) return;
+      if (bestCount / nWeeks < soglia) return;
+
+      turniDaInserire.push({
+        business_id: currentBusiness.id,
+        dipendente_id: dip.id,
+        data: g,
+        location_id: dip.location_id || null,
+        turno: bestTurno
+      });
+    });
+  });
+
+  if (turniDaInserire.length) {
+    const batchSize = 50;
+    for (let i = 0; i < turniDaInserire.length; i += batchSize) {
+      await db.from('turni_dipendenti').upsert(
+        turniDaInserire.slice(i, i+batchSize),
+        { onConflict: 'dipendente_id,data,turno' }
+      );
+    }
+  }
+
+  msgEl.style.background='rgba(34,197,94,0.1)';
+  msgEl.style.color='var(--green-400)';
+  msgEl.textContent=`✅ Generati ${turniDaInserire.length} turni + ${assenzeInserts.length} assenze inserite`;
+
+  setTimeout(() => {
+    chiudiGeneraModal();
+    loadPlanningSettimanale();
+  }, 2000);
+}
