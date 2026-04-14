@@ -7,6 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
 
@@ -665,6 +666,7 @@
 
             <div class="form-actions">
               <button class="btn-secondary" onclick="resetPN()">Reset</button>
+              <button class="btn-secondary" onclick="exportPrimaNota()">📄 PDF</button>
               <button class="btn-danger" id="btn-elimina-nota" onclick="eliminaNotaGiorno()" style="display:none">🗑 Elimina nota</button>
               <button class="btn-primary" onclick="salvaNotaGiorno()">Salva prima nota →</button>
             </div>

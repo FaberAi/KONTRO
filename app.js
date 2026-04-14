@@ -5791,3 +5791,186 @@ function checkStripeReturn() {
     window.history.replaceState({}, '', window.location.pathname);
   }
 }
+
+// ============================================
+// EXPORT PDF PRIMA NOTA
+// ============================================
+async function exportPrimaNota() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+  const data = document.getElementById('pn-data')?.value || '';
+  const locNome = document.getElementById('pn-location')?.selectedOptions[0]?.text || 'Sede principale';
+  const bizNome = currentBusiness?.nome || 'KONTRO';
+  const dataFmt = data ? new Date(data + 'T12:00:00').toLocaleDateString('it-IT', { weekday:'long', day:'2-digit', month:'long', year:'numeric' }) : '';
+
+  const W = 210, margin = 14;
+  let y = 14;
+
+  // Header
+  doc.setFillColor(15, 23, 42);
+  doc.rect(0, 0, W, 28, 'F');
+  doc.setTextColor(255,255,255);
+  doc.setFontSize(18); doc.setFont('helvetica','bold');
+  doc.text('PRIMA NOTA', margin, 12);
+  doc.setFontSize(10); doc.setFont('helvetica','normal');
+  doc.text(bizNome + ' — ' + locNome, margin, 19);
+  doc.text(dataFmt, W - margin, 19, { align: 'right' });
+  doc.setTextColor(100, 149, 237);
+  doc.setFontSize(8);
+  doc.text('KONTRO — kontro.cloud', margin, 26);
+
+  y = 36;
+  doc.setTextColor(30,30,30);
+
+  // Funzione riga tabella
+  const row = (label, m, p, s, bold=false) => {
+    if (bold) { doc.setFont('helvetica','bold'); doc.setFillColor(235,240,255); doc.rect(margin, y-4, W-margin*2, 7, 'F'); }
+    else { doc.setFont('helvetica','normal'); }
+    doc.setFontSize(9);
+    doc.text(label, margin+1, y);
+    doc.text(m||'—', 120, y, { align:'right' });
+    doc.text(p||'—', 152, y, { align:'right' });
+    doc.text(s||'—', 184, y, { align:'right' });
+    y += 6.5;
+  };
+
+  const fmtV = (id) => {
+    const el = document.getElementById(id);
+    if (!el || !el.value) return '—';
+    return '€ ' + parseFloat(el.value).toFixed(2).replace('.',',');
+  };
+  const fmtD = (id) => {
+    const el = document.getElementById(id);
+    return el?.textContent?.trim() || '—';
+  };
+
+  // Intestazione colonne
+  doc.setFillColor(30, 41, 59);
+  doc.rect(margin, y-4, W-margin*2, 7, 'F');
+  doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(9);
+  doc.text('VOCE', margin+1, y);
+  doc.text('☀ MATTINA', 120, y, { align:'right' });
+  doc.text('🌤 POMERIGGIO', 152, y, { align:'right' });
+  doc.text('🌙 SERA', 184, y, { align:'right' });
+  y += 7;
+  doc.setTextColor(30,30,30);
+
+  // Sezione ENTRATE
+  doc.setFillColor(34, 197, 94); doc.setTextColor(255,255,255);
+  doc.rect(margin, y-4, W-margin*2, 6, 'F');
+  doc.setFontSize(8); doc.setFont('helvetica','bold');
+  doc.text('▲ ENTRATE', margin+1, y); y += 6;
+  doc.setTextColor(30,30,30);
+
+  row('Incasso cassa',   fmtV('incasso-m'),    fmtV('incasso-p'),    fmtV('incasso-s'));
+  row('Ricariche/Money', fmtV('money-m'),       fmtV('money-p'),       fmtV('money-s'));
+  row('Gratta e Vinci',  fmtV('grattavinci-m'), fmtV('grattavinci-p'), fmtV('grattavinci-s'));
+  row('Sisal',           fmtV('sisal-m'),       fmtV('sisal-p'),       fmtV('sisal-s'));
+  row('Scommesse/Bet',   fmtV('conto-bet-m'),   fmtV('conto-bet-p'),   fmtV('conto-bet-s'));
+  row('Fatture clienti', fmtV('fatture-m'),     fmtV('fatture-p'),     fmtV('fatture-s'));
+  row('Edicola',         fmtV('giornali-m'),    fmtV('giornali-p'),    fmtV('giornali-s'));
+  row('TOT. ENTRATE',    fmtD('tot-ent-m'),     fmtD('tot-ent-p'),     fmtD('tot-ent-s'), true);
+
+  y += 2;
+
+  // Sezione USCITE
+  doc.setFillColor(239, 68, 68); doc.setTextColor(255,255,255);
+  doc.rect(margin, y-4, W-margin*2, 6, 'F');
+  doc.setFontSize(8); doc.setFont('helvetica','bold');
+  doc.text('▼ USCITE', margin+1, y); y += 6;
+  doc.setTextColor(30,30,30);
+
+  row('POS',             fmtV('pos-m'),      fmtV('pos-p'),      fmtV('pos-s'));
+  row('Carte credito',   fmtV('carte-m'),    fmtV('carte-p'),    fmtV('carte-s'));
+  row('Bonifici',        fmtV('bonifici-m'), fmtV('bonifici-p'), fmtV('bonifici-s'));
+
+  // Fornitori
+  for (let i = 0; i < pnFornitoriCount; i++) {
+    const desc = document.getElementById('fdesc-'+i);
+    const m = document.getElementById('fm-'+i);
+    const p = document.getElementById('fp-'+i);
+    const s = document.getElementById('fs-'+i);
+    if (!m?.value && !p?.value && !s?.value) continue;
+    const nome = desc?.tagName === 'SELECT' ? desc.selectedOptions[0]?.text : (desc?.value || 'Fornitore');
+    if (nome === '— Fornitore —') continue;
+    row(nome.substring(0,30),
+      m?.value ? '€ '+parseFloat(m.value).toFixed(2).replace('.',',') : '—',
+      p?.value ? '€ '+parseFloat(p.value).toFixed(2).replace('.',',') : '—',
+      s?.value ? '€ '+parseFloat(s.value).toFixed(2).replace('.',',') : '—'
+    );
+  }
+
+  // Prelievi
+  for (let i = 0; i < pnPrelieviCount; i++) {
+    const desc = document.getElementById('pdesc-'+i);
+    const m = document.getElementById('pm-'+i);
+    const p = document.getElementById('pp-'+i);
+    const s = document.getElementById('ps-'+i);
+    if (!m?.value && !p?.value && !s?.value) continue;
+    const nome = desc?.tagName === 'SELECT' ? desc.selectedOptions[0]?.text : (desc?.value || 'Prelievo');
+    if (!nome || nome === '— Causale —') continue;
+    row(nome.substring(0,30),
+      m?.value ? '€ '+parseFloat(m.value).toFixed(2).replace('.',',') : '—',
+      p?.value ? '€ '+parseFloat(p.value).toFixed(2).replace('.',',') : '—',
+      s?.value ? '€ '+parseFloat(s.value).toFixed(2).replace('.',',') : '—'
+    );
+  }
+
+  row('Fondo chiusura',  fmtV('fc-usc-m'),   fmtV('fc-usc-p'),   fmtV('fc-usc-s'));
+  row('TOT. USCITE',     fmtD('tot-usc-m'),  fmtD('tot-usc-p'),  fmtD('tot-usc-s'), true);
+
+  y += 2;
+
+  // Differenza
+  doc.setFillColor(51, 65, 85); doc.setTextColor(255,255,255);
+  doc.rect(margin, y-4, W-margin*2, 6, 'F');
+  doc.setFontSize(8); doc.setFont('helvetica','bold');
+  doc.text('DIFFERENZA', margin+1, y);
+  doc.text(fmtD('diff-m'), 120, y, { align:'right' });
+  doc.text(fmtD('diff-p'), 152, y, { align:'right' });
+  doc.text(fmtD('diff-s'), 184, y, { align:'right' });
+  y += 8;
+  doc.setTextColor(30,30,30);
+
+  // Riepilogo incassi
+  doc.setFillColor(245, 248, 255);
+  doc.rect(margin, y-4, W-margin*2, 28, 'F');
+  doc.setFont('helvetica','bold'); doc.setFontSize(9);
+  doc.text('RIEPILOGO INCASSI', margin+1, y); y += 6;
+  doc.setFont('helvetica','normal');
+
+  const incM = fmtD('r-inc-m'), incP = fmtD('r-inc-p'), incS = fmtD('r-inc-s'), incTot = fmtD('r-inc-tot');
+  doc.text('Incasso Mattina:', margin+2, y); doc.setFont('helvetica','bold'); doc.text(incM, 100, y); doc.setFont('helvetica','normal'); y += 5;
+  doc.text('Incasso Pomeriggio:', margin+2, y); doc.setFont('helvetica','bold'); doc.text(incP, 100, y); doc.setFont('helvetica','normal'); y += 5;
+  doc.text('Incasso Sera:', margin+2, y); doc.setFont('helvetica','bold'); doc.text(incS, 100, y); doc.setFont('helvetica','normal'); y += 5;
+
+  doc.setFontSize(11); doc.setFont('helvetica','bold');
+  doc.text('INCASSO GIORNALIERO:', margin+2, y);
+  doc.setTextColor(99, 102, 241);
+  doc.text(incTot, W-margin, y, { align:'right' });
+  doc.setTextColor(30,30,30);
+  y += 8;
+
+  // Compilatori
+  const cm = document.getElementById('cm')?.value;
+  const cp = document.getElementById('cp')?.value;
+  const cs = document.getElementById('cs')?.value;
+  const note = document.getElementById('pn-note')?.value;
+
+  if (cm || cp || cs) {
+    doc.setFontSize(8); doc.setFont('helvetica','normal');
+    doc.text('Compilatori: ' + [cm,cp,cs].filter(Boolean).join(' · '), margin, y); y += 5;
+  }
+  if (note) {
+    doc.text('Note: ' + note.substring(0,100), margin, y); y += 5;
+  }
+
+  // Footer
+  doc.setFillColor(15, 23, 42);
+  doc.rect(0, 287, W, 10, 'F');
+  doc.setTextColor(150,150,170); doc.setFontSize(7);
+  doc.text('Generato da KONTRO — kontro.cloud — ' + new Date().toLocaleString('it-IT'), margin, 293);
+
+  doc.save('PrimaNota_' + data + '.pdf');
+}
