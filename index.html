@@ -1400,6 +1400,98 @@
                 </div>
               </div>
 
+              <!-- Accordo contrattuale -->
+              <div style="margin-top:16px;padding:14px;background:var(--bg);border-radius:10px;border:1px solid var(--border)">
+                <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);margin-bottom:14px">📋 Accordo contrattuale</div>
+
+                <!-- Tipo contratto -->
+                <div style="display:flex;gap:10px;margin-bottom:16px">
+                  <label style="flex:1;display:flex;align-items:center;gap:8px;padding:12px;border:1.5px solid var(--border);border-radius:10px;cursor:pointer;transition:all .2s" id="lbl-forfettario">
+                    <input type="radio" name="tipo-contratto" value="forfettario" id="tc-forfettario" onchange="toggleTipoContratto()" checked style="width:16px;height:16px;accent-color:#2563eb">
+                    <div>
+                      <div style="font-size:13px;font-weight:700;color:var(--text-primary)">💰 Forfettario</div>
+                      <div style="font-size:11px;color:var(--gray-400)">Importo fisso mensile</div>
+                    </div>
+                  </label>
+                  <label style="flex:1;display:flex;align-items:center;gap:8px;padding:12px;border:1.5px solid var(--border);border-radius:10px;cursor:pointer;transition:all .2s" id="lbl-ccnl">
+                    <input type="radio" name="tipo-contratto" value="ccnl" id="tc-ccnl" onchange="toggleTipoContratto()" style="width:16px;height:16px;accent-color:#2563eb">
+                    <div>
+                      <div style="font-size:13px;font-weight:700;color:var(--text-primary)">📊 CCNL Commercio</div>
+                      <div style="font-size:11px;color:var(--gray-400)">Paga oraria + maggiorazioni</div>
+                    </div>
+                  </label>
+                </div>
+
+                <!-- Forfettario -->
+                <div id="campo-forfettario">
+                  <div class="field">
+                    <label>Importo fisso mensile (€)</label>
+                    <input type="number" id="nd-importo-fisso" placeholder="Es. 1400" step="0.01" />
+                  </div>
+                </div>
+
+                <!-- CCNL -->
+                <div id="campo-ccnl" style="display:none">
+                  <div class="form-grid">
+                    <div class="field">
+                      <label>Paga oraria base (€)</label>
+                      <input type="number" id="nd-paga-oraria" placeholder="Es. 8.50" step="0.01" />
+                    </div>
+                    <div class="field">
+                      <label>Ore settimanali contrattuali</label>
+                      <input type="number" id="nd-ore-settimanali" placeholder="40" value="40" />
+                    </div>
+                  </div>
+
+                  <div style="font-size:12px;font-weight:700;color:var(--gray-400);margin:14px 0 10px;text-transform:uppercase;letter-spacing:.06em">Maggiorazioni previste</div>
+                  <div style="display:flex;flex-direction:column;gap:10px">
+
+                    <label style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;cursor:pointer">
+                      <div style="display:flex;align-items:center;gap:10px">
+                        <input type="checkbox" id="nd-straord-attivo" style="width:16px;height:16px;accent-color:#2563eb">
+                        <div>
+                          <div style="font-size:13px;font-weight:600;color:var(--text-primary)">Straordinario feriale</div>
+                          <div style="font-size:11px;color:var(--gray-400)">Ore oltre le 40 settimanali</div>
+                        </div>
+                      </div>
+                      <div style="display:flex;align-items:center;gap:6px">
+                        <input type="number" id="nd-magg-straord" value="15" min="0" max="100" style="width:60px;padding:4px 8px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-size:13px;text-align:center">
+                        <span style="font-size:12px;color:var(--gray-400)">%</span>
+                      </div>
+                    </label>
+
+                    <label style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;cursor:pointer">
+                      <div style="display:flex;align-items:center;gap:10px">
+                        <input type="checkbox" id="nd-festivo-attivo" style="width:16px;height:16px;accent-color:#2563eb">
+                        <div>
+                          <div style="font-size:13px;font-weight:600;color:var(--text-primary)">Festivo / domenicale</div>
+                          <div style="font-size:11px;color:var(--gray-400)">Lavoro nei giorni festivi e domeniche</div>
+                        </div>
+                      </div>
+                      <div style="display:flex;align-items:center;gap:6px">
+                        <input type="number" id="nd-magg-festivo" value="30" min="0" max="100" style="width:60px;padding:4px 8px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-size:13px;text-align:center">
+                        <span style="font-size:12px;color:var(--gray-400)">%</span>
+                      </div>
+                    </label>
+
+                    <label style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;cursor:pointer">
+                      <div style="display:flex;align-items:center;gap:10px">
+                        <input type="checkbox" id="nd-notturno-attivo" style="width:16px;height:16px;accent-color:#2563eb">
+                        <div>
+                          <div style="font-size:13px;font-weight:600;color:var(--text-primary)">Notturno</div>
+                          <div style="font-size:11px;color:var(--gray-400)">Ore tra le 22:00 e le 06:00</div>
+                        </div>
+                      </div>
+                      <div style="display:flex;align-items:center;gap:6px">
+                        <input type="number" id="nd-magg-notturno" value="50" min="0" max="100" style="width:60px;padding:4px 8px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-size:13px;text-align:center">
+                        <span style="font-size:12px;color:var(--gray-400)">%</span>
+                      </div>
+                    </label>
+
+                  </div>
+                </div>
+              </div>
+
               <div class="form-actions">
                 <button class="btn-secondary" onclick="hideAddDipendente()">Annulla</button>
                 <button class="btn-primary" onclick="saveDipendente()">Salva dipendente</button>
@@ -1801,6 +1893,26 @@
         <div class="help-item">
           <div class="help-q">Come cancello l'abbonamento?</div>
           <div class="help-a">Vai su <strong>Impostazioni → Abbonamento → Gestisci abbonamento</strong>. Puoi cancellare in qualsiasi momento — resti attivo fino alla fine del periodo pagato.</div>
+        </div>
+      </div>
+
+      <div class="help-section" data-tags="dipendenti contratto forfettario ccnl straordinario festivo notturno paga oraria">
+        <div class="help-section-title">📋 Contratto dipendenti</div>
+        <div class="help-item">
+          <div class="help-q">Qual è la differenza tra Forfettario e CCNL?</div>
+          <div class="help-a">Con <strong>Forfettario</strong> il dipendente riceve un importo fisso mensile indipendentemente dalle ore lavorate o dagli straordinari. Con <strong>CCNL Commercio</strong> si calcola la paga in base alle ore lavorate con le maggiorazioni previste dal contratto nazionale.</div>
+        </div>
+        <div class="help-item">
+          <div class="help-q">Come configuro le maggiorazioni CCNL?</div>
+          <div class="help-a">Nella scheda dipendente seleziona CCNL, inserisci la paga oraria base e le ore settimanali contrattuali (di solito 40). Poi attiva le spunte per le maggiorazioni: straordinario feriale (default 15%), festivo/domenicale (30%), notturno (50%). Puoi modificare le percentuali per accordi individuali.</div>
+        </div>
+        <div class="help-item">
+          <div class="help-q">Cosa sono gli straordinari nel CCNL Commercio?</div>
+          <div class="help-a">Secondo il CCNL Commercio Confcommercio: straordinario feriale +15% (41ª–48ª ora) o +20% (oltre 48 ore), festivo/domenicale +30%, notturno (22:00–06:00) +50%. Le percentuali sono personalizzabili in base all'accordo individuale.</div>
+        </div>
+        <div class="help-item">
+          <div class="help-q">Posso usare un importo forfettario anche con straordinari occasionali?</div>
+          <div class="help-a">Sì — scegli Forfettario e inserisci l'importo fisso base. Gli eventuali straordinari li gestirai manualmente tramite gli Acconti nella scheda dipendente.</div>
         </div>
       </div>
 

@@ -4382,7 +4382,17 @@ async function saveDipendente() {
     pom_start: document.getElementById('nd-pom-start')?.value || null,
     pom_end:   document.getElementById('nd-pom-end')?.value || null,
     ser_start: document.getElementById('nd-ser-start')?.value || null,
-    ser_end:   document.getElementById('nd-ser-end')?.value || null
+    ser_end:   document.getElementById('nd-ser-end')?.value || null,
+    tipo_contratto: document.querySelector('input[name="tipo-contratto"]:checked')?.value || 'forfettario',
+    importo_fisso:  parseFloat(document.getElementById('nd-importo-fisso')?.value) || 0,
+    paga_oraria:    parseFloat(document.getElementById('nd-paga-oraria')?.value) || 0,
+    ore_settimanali: parseInt(document.getElementById('nd-ore-settimanali')?.value) || 40,
+    straordinario_attivo: document.getElementById('nd-straord-attivo')?.checked || false,
+    festivo_attivo:       document.getElementById('nd-festivo-attivo')?.checked || false,
+    notturno_attivo:      document.getElementById('nd-notturno-attivo')?.checked || false,
+    magg_straordinario_feriale: parseFloat(document.getElementById('nd-magg-straord')?.value) || 15,
+    magg_straordinario_festivo: parseFloat(document.getElementById('nd-magg-festivo')?.value) || 30,
+    magg_notturno: parseFloat(document.getElementById('nd-magg-notturno')?.value) || 50
   });
   if (error) { showToast('Errore: ' + error.message, 'error'); return; }
   showToast('Dipendente salvato ✓', 'success');
@@ -4422,6 +4432,11 @@ async function loadDipendentiList() {
               ${d.pom_start ? ` · 🌤 ${d.pom_start}–${d.pom_end||'?'}` : ''}
               ${d.ser_start ? ` · 🌙 ${d.ser_start}–${d.ser_end||'?'}` : ''}
             </div>` : ''}
+            <div style="font-size:11px;color:var(--gray-400);margin-top:3px">
+              ${d.tipo_contratto === 'ccnl'
+                ? `📊 CCNL · €${d.paga_oraria||0}/h · ${d.ore_settimanali||40}h/sett`
+                : `💰 Forfettario${d.importo_fisso ? ' · €' + d.importo_fisso + '/mese' : ''}`}
+            </div>
           </div>
           <button class="btn-secondary sm" onclick="switchHRTab('presenze');document.getElementById('pres-dipendente').value='${d.id}';loadPresenzeMese()">Presenze</button>
           <button class="btn-secondary sm" onclick="switchHRTab('acconti');document.getElementById('acc-dipendente').value='${d.id}'">Acconti</button>
@@ -6780,3 +6795,15 @@ document.addEventListener('click', e => {
   q.classList.toggle('open', !isOpen);
   a.classList.toggle('open', !isOpen);
 });
+
+// ============================================
+// TIPO CONTRATTO DIPENDENTE
+// ============================================
+function toggleTipoContratto() {
+  const tipo = document.querySelector('input[name="tipo-contratto"]:checked')?.value || 'forfettario';
+  document.getElementById('campo-forfettario').style.display = tipo === 'forfettario' ? 'block' : 'none';
+  document.getElementById('campo-ccnl').style.display = tipo === 'ccnl' ? 'block' : 'none';
+  // Highlight label selezionata
+  document.getElementById('lbl-forfettario').style.borderColor = tipo === 'forfettario' ? '#2563eb' : 'var(--border)';
+  document.getElementById('lbl-ccnl').style.borderColor = tipo === 'ccnl' ? '#2563eb' : 'var(--border)';
+}
