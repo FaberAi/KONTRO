@@ -70,6 +70,8 @@ async function initApp() {
   if (currentRole === 'cashier') await loadCurrentUserPermissions();
   updateUserUI();
   checkStripeReturn();
+  checkScadenze();
+  setInterval(checkScadenze, 5 * 60 * 1000); // aggiorna ogni 5 minuti
 }
 
 // ============================================
@@ -6643,4 +6645,63 @@ function checkLimiteStoico(data) {
     return false;
   }
   return true;
+}
+
+// ============================================
+// NOTIFICHE SCADENZE
+// ============================================
+async function checkScadenze() {
+  if (!currentBusiness) return;
+
+  const oggi = new Date().toISOString().split('T')[0];
+  const fra7 = new Date(); fra7.setDate(fra7.getDate() + 7);
+  const fra7str = fra7.toISOString().split('T')[0];
+
+  // Assegni in scadenza nei prossimi 7 giorni
+  const { count: assegni } = await db.from('assegni')
+    .select('id', { count: 'exact', head: true })
+    .eq('business_id', currentBusiness.id)
+    .eq('stato', 'emesso')
+    .gte('data_scadenza', oggi)
+    .lte('data_scadenza', fra7str);
+
+  // RID in scadenza nei prossimi 7 giorni
+  const { count: rid } = await db.from('rid_bancari')
+    .select('id', { count: 'exact', head: true })
+    .eq('business_id', currentBusiness.id)
+    .eq('attivo', true)
+    .gte('prossimo_addebito', oggi)
+    .lte('prossimo_addebito', fra7str);
+
+  // Fatture fornitori scadute o in scadenza
+  const { count: fatture } = await db.from('fatture_fornitori')
+    .select('id', { count: 'exact', head: true })
+    .eq('business_id', currentBusiness.id)
+    .in('stato', ['aperta', 'pagata_parziale'])
+    .lte('data_scadenza', fra7str);
+
+  // Badge Banca & Finanza (assegni + RID)
+  const totBanca = (assegni || 0) + (rid || 0);
+  const badgeBanca = document.getElementById('badge-scadenze');
+  if (badgeBanca) {
+    if (totBanca > 0) {
+      badgeBanca.textContent = totBanca;
+      badgeBanca.style.display = 'inline-flex';
+      badgeBanca.title = `${assegni||0} assegni + ${rid||0} RID in scadenza entro 7 giorni`;
+    } else {
+      badgeBanca.style.display = 'none';
+    }
+  }
+
+  // Badge Fornitori (fatture)
+  const badgeFatture = document.getElementById('badge-fatture');
+  if (badgeFatture) {
+    if (fatture > 0) {
+      badgeFatture.textContent = fatture;
+      badgeFatture.style.display = 'inline-flex';
+      badgeFatture.title = `${fatture} fatture in scadenza entro 7 giorni`;
+    } else {
+      badgeFatture.style.display = 'none';
+    }
+  }
 }
