@@ -6336,9 +6336,11 @@ async function exportReportMensile() {
 
   if (!from || !to) { showToast('Seleziona il periodo nei filtri', 'error'); return; }
 
+  // Verifica jsPDF
+  if (!window.jspdf) { showToast('Libreria PDF non caricata, ricarica la pagina', 'error'); return; }
+
   showToast('Generazione report in corso...', 'success');
 
-  // Carica note del periodo
   let query = db.from('daily_notes')
     .select('*, daily_note_rows(*)')
     .eq('business_id', currentBusiness.id)
@@ -6348,6 +6350,33 @@ async function exportReportMensile() {
   const { data: notes } = await query;
   const list = notes || [];
 
+  // Calcola totali anche se non pre-salvati
+  const vociFisse = ['incasso','money','grattavinci','sisal','conto_bet','fatture','giornali'];
+  const uscVoci   = ['pos','carte','bonifici'];
+
+  function calcTotali(n) {
+    function eff3(campo) {
+      const s = parseFloat(n[campo+'_s'])||0;
+      const p = parseFloat(n[campo+'_p'])||0;
+      const m = parseFloat(n[campo+'_m'])||0;
+      if (s > 0) return s; if (p > 0) return p; return m;
+    }
+    const fc = parseFloat(n.fondo_cassa)||0;
+    const entrate = fc + vociFisse.reduce((sum,k) => sum + eff3(k), 0);
+    let uscite = uscVoci.reduce((sum,k) => sum + eff3(k), 0);
+    uscite += (n.daily_note_rows||[]).filter(r=>r.categoria==='fornitore').reduce((s,r)=>s+(parseFloat(r.importo_s||r.importo_p||r.importo_m)||0),0);
+    uscite += (n.daily_note_rows||[]).filter(r=>r.categoria==='prelievo').reduce((s,r)=>s+(parseFloat(r.importo_s||r.importo_p||r.importo_m)||0),0);
+    uscite += eff3('fondo_chiusura');
+    const diff = entrate - uscite;
+    const inc  = parseFloat(n.incasso_giornaliero) || (eff3('incasso') + Math.abs(diff));
+    return {
+      entrate: parseFloat(n.totale_entrate) || entrate,
+      uscite:  parseFloat(n.totale_uscite)  || uscite,
+      diff:    parseFloat(n.differenza)     || diff,
+      inc:     inc
+    };
+  }
+
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const W = 210, M = 14;
@@ -6355,6 +6384,9 @@ async function exportReportMensile() {
   const fmtDate = d => d ? new Date(d+'T12:00:00').toLocaleDateString('it-IT', { weekday:'short', day:'2-digit', month:'short', year:'numeric' }) : '—';
   const fmtE = v => '€ ' + (parseFloat(v)||0).toFixed(2).replace('.',',');
   const fromFmt = new Date(from+'T12:00:00').toLocaleDateString('it-IT', { month:'long', year:'numeric' });
+
+  // Calcola totali per ogni giorno
+  const rows = list.map(n => ({ ...n, _t: calcTotali(n) }));
 
   // ── HEADER ──
   doc.setFillColor(15,23,42);
@@ -6365,19 +6397,18 @@ async function exportReportMensile() {
   doc.setFontSize(10); doc.setFont('helvetica','normal');
   doc.text(currentBusiness.nome || 'KONTRO', M, 21);
   doc.text('Periodo: ' + fromFmt + (locId ? ' · ' + (currentLocations.find(l=>l.id===locId)?.name||'') : ''), M, 27);
-  doc.setTextColor(100,149,237);
-  doc.setFontSize(8);
+  doc.setTextColor(100,149,237); doc.setFontSize(8);
   doc.text('KONTRO — kontro.cloud', W-M, 27, { align:'right' });
 
   let y = 42;
   doc.setTextColor(30,30,30);
 
-  // ── RIEPILOGO MENSILE ──
-  const totEnt  = list.reduce((s,n) => s + (parseFloat(n.totale_entrate)||0), 0);
-  const totUsc  = list.reduce((s,n) => s + (parseFloat(n.totale_uscite)||0), 0);
-  const totInc  = list.reduce((s,n) => s + (parseFloat(n.incasso_giornaliero)||0), 0);
-  const totDiff = list.reduce((s,n) => s + (parseFloat(n.differenza)||0), 0);
-  const mediaInc = list.length ? totInc / list.length : 0;
+  // ── RIEPILOGO ──
+  const totEnt  = rows.reduce((s,n) => s + n._t.entrate, 0);
+  const totUsc  = rows.reduce((s,n) => s + n._t.uscite, 0);
+  const totInc  = rows.reduce((s,n) => s + n._t.inc, 0);
+  const totDiff = rows.reduce((s,n) => s + n._t.diff, 0);
+  const mediaInc = rows.length ? totInc / rows.length : 0;
 
   doc.setFillColor(235,240,255);
   doc.rect(M, y-4, W-M*2, 36, 'F');
@@ -6426,7 +6457,7 @@ async function exportReportMensile() {
   doc.text('INCASSO', W-M-2, y+5, { align:'right' });
   y += 8;
 
-  list.forEach((n, i) => {
+  rows.forEach((n, i) => {
     // Nuova pagina se necessario
     if (y > 270) {
       doc.addPage();
@@ -6449,14 +6480,14 @@ async function exportReportMensile() {
     doc.rect(M, y, W-M*2, 8, 'F');
 
     const compilatori = [n.compilatore_m, n.compilatore_p, n.compilatore_s].filter(Boolean).join(', ') || '—';
-    const diff = parseFloat(n.differenza) || 0;
-    const inc  = parseFloat(n.incasso_giornaliero) || 0;
+    const diff = n._t.diff;
+    const inc  = n._t.inc;
 
     doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(30,30,30);
     doc.text(fmtDate(n.data), M+2, y+5.5);
     doc.text(compilatori.substring(0,22), M+42, y+5.5);
-    doc.text(fmtE(n.totale_entrate||0), M+90, y+5.5, { align:'right' });
-    doc.text(fmtE(n.totale_uscite||0), M+118, y+5.5, { align:'right' });
+    doc.text(fmtE(n._t.entrate), M+90, y+5.5, { align:'right' });
+    doc.text(fmtE(n._t.uscite), M+118, y+5.5, { align:'right' });
 
     // Differenza colorata
     if (diff > 0) doc.setTextColor(220,50,50);
@@ -6485,7 +6516,7 @@ async function exportReportMensile() {
   if (y < 240) {
     // Raggruppa fornitori per nome dal periodo
     const fornitoriMap = {};
-    list.forEach(n => {
+    rows.forEach(n => {
       (n.daily_note_rows||[]).filter(r=>r.categoria==='fornitore').forEach(r => {
         const nome = r.descrizione || 'N/D';
         const v = parseFloat(r.importo_s || r.importo_p || r.importo_m) || 0;
