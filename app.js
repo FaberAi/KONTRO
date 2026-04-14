@@ -6323,3 +6323,214 @@ function getOrarioLabel(turno) {
   if (turno === 'sera')       return `${o.ser.start}–${o.ser.end}`;
   return '';
 }
+
+// ============================================
+// REPORT PDF MENSILE
+// ============================================
+async function exportReportMensile() {
+  if (!currentBusiness) return;
+
+  const from  = document.getElementById('storico-from')?.value;
+  const to    = document.getElementById('storico-to')?.value;
+  const locId = document.getElementById('storico-location')?.value;
+
+  if (!from || !to) { showToast('Seleziona il periodo nei filtri', 'error'); return; }
+
+  showToast('Generazione report in corso...', 'success');
+
+  // Carica note del periodo
+  let query = db.from('daily_notes')
+    .select('*, daily_note_rows(*)')
+    .eq('business_id', currentBusiness.id)
+    .gte('data', from).lte('data', to)
+    .order('data', { ascending: true });
+  if (locId) query = query.eq('location_id', locId);
+  const { data: notes } = await query;
+  const list = notes || [];
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const W = 210, M = 14;
+
+  const fmtDate = d => d ? new Date(d+'T12:00:00').toLocaleDateString('it-IT', { weekday:'short', day:'2-digit', month:'short', year:'numeric' }) : '—';
+  const fmtE = v => '€ ' + (parseFloat(v)||0).toFixed(2).replace('.',',');
+  const fromFmt = new Date(from+'T12:00:00').toLocaleDateString('it-IT', { month:'long', year:'numeric' });
+
+  // ── HEADER ──
+  doc.setFillColor(15,23,42);
+  doc.rect(0, 0, W, 32, 'F');
+  doc.setTextColor(255,255,255);
+  doc.setFontSize(20); doc.setFont('helvetica','bold');
+  doc.text('REPORT MENSILE', M, 14);
+  doc.setFontSize(10); doc.setFont('helvetica','normal');
+  doc.text(currentBusiness.nome || 'KONTRO', M, 21);
+  doc.text('Periodo: ' + fromFmt + (locId ? ' · ' + (currentLocations.find(l=>l.id===locId)?.name||'') : ''), M, 27);
+  doc.setTextColor(100,149,237);
+  doc.setFontSize(8);
+  doc.text('KONTRO — kontro.cloud', W-M, 27, { align:'right' });
+
+  let y = 42;
+  doc.setTextColor(30,30,30);
+
+  // ── RIEPILOGO MENSILE ──
+  const totEnt  = list.reduce((s,n) => s + (parseFloat(n.totale_entrate)||0), 0);
+  const totUsc  = list.reduce((s,n) => s + (parseFloat(n.totale_uscite)||0), 0);
+  const totInc  = list.reduce((s,n) => s + (parseFloat(n.incasso_giornaliero)||0), 0);
+  const totDiff = list.reduce((s,n) => s + (parseFloat(n.differenza)||0), 0);
+  const mediaInc = list.length ? totInc / list.length : 0;
+
+  doc.setFillColor(235,240,255);
+  doc.rect(M, y-4, W-M*2, 36, 'F');
+  doc.setFont('helvetica','bold'); doc.setFontSize(11);
+  doc.setTextColor(37,99,235);
+  doc.text('RIEPILOGO PERIODO', M+3, y+1);
+  doc.setTextColor(30,30,30);
+  doc.setFontSize(9); doc.setFont('helvetica','normal');
+
+  const kpis = [
+    ['Giorni registrati', list.length + ' giorni'],
+    ['Totale entrate', fmtE(totEnt)],
+    ['Totale uscite', fmtE(totUsc)],
+    ['Differenza tot.', fmtE(totDiff)],
+    ['Incasso totale', fmtE(totInc)],
+    ['Media giornaliera', fmtE(mediaInc)],
+  ];
+
+  const colW = (W - M*2) / 3;
+  kpis.forEach((k, i) => {
+    const col = i % 3, row = Math.floor(i/3);
+    const x = M + col * colW + 3;
+    const ky = y + 10 + row * 14;
+    doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(100,100,100);
+    doc.text(k[0], x, ky);
+    doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(30,30,30);
+    doc.text(k[1], x, ky+6);
+  });
+
+  y += 44;
+
+  // ── DETTAGLIO GIORNALIERO ──
+  doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(37,99,235);
+  doc.text('DETTAGLIO GIORNALIERO', M, y);
+  y += 6;
+
+  // Header tabella
+  doc.setFillColor(30,41,59);
+  doc.rect(M, y, W-M*2, 7, 'F');
+  doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(8);
+  doc.text('DATA', M+2, y+5);
+  doc.text('COMPILATORI', M+42, y+5);
+  doc.text('ENTRATE', M+90, y+5, { align:'right' });
+  doc.text('USCITE', M+118, y+5, { align:'right' });
+  doc.text('DIFFERENZA', M+146, y+5, { align:'right' });
+  doc.text('INCASSO', W-M-2, y+5, { align:'right' });
+  y += 8;
+
+  list.forEach((n, i) => {
+    // Nuova pagina se necessario
+    if (y > 270) {
+      doc.addPage();
+      y = 20;
+      // Header ripetuto
+      doc.setFillColor(30,41,59);
+      doc.rect(M, y, W-M*2, 7, 'F');
+      doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(8);
+      doc.text('DATA', M+2, y+5);
+      doc.text('COMPILATORI', M+42, y+5);
+      doc.text('ENTRATE', M+90, y+5, { align:'right' });
+      doc.text('USCITE', M+118, y+5, { align:'right' });
+      doc.text('DIFFERENZA', M+146, y+5, { align:'right' });
+      doc.text('INCASSO', W-M-2, y+5, { align:'right' });
+      y += 8;
+    }
+
+    const rowBg = i % 2 === 0 ? [255,255,255] : [248,250,252];
+    doc.setFillColor(...rowBg);
+    doc.rect(M, y, W-M*2, 8, 'F');
+
+    const compilatori = [n.compilatore_m, n.compilatore_p, n.compilatore_s].filter(Boolean).join(', ') || '—';
+    const diff = parseFloat(n.differenza) || 0;
+    const inc  = parseFloat(n.incasso_giornaliero) || 0;
+
+    doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(30,30,30);
+    doc.text(fmtDate(n.data), M+2, y+5.5);
+    doc.text(compilatori.substring(0,22), M+42, y+5.5);
+    doc.text(fmtE(n.totale_entrate||0), M+90, y+5.5, { align:'right' });
+    doc.text(fmtE(n.totale_uscite||0), M+118, y+5.5, { align:'right' });
+
+    // Differenza colorata
+    if (diff > 0) doc.setTextColor(220,50,50);
+    else doc.setTextColor(30,30,30);
+    doc.text(fmtE(diff), M+146, y+5.5, { align:'right' });
+    doc.setTextColor(30,30,30);
+
+    doc.setFont('helvetica','bold');
+    doc.text(fmtE(inc), W-M-2, y+5.5, { align:'right' });
+    y += 8;
+  });
+
+  // ── RIGA TOTALE ──
+  y += 2;
+  doc.setFillColor(30,41,59);
+  doc.rect(M, y, W-M*2, 9, 'F');
+  doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(9);
+  doc.text('TOTALE PERIODO', M+2, y+6);
+  doc.text(fmtE(totEnt), M+90, y+6, { align:'right' });
+  doc.text(fmtE(totUsc), M+118, y+6, { align:'right' });
+  doc.text(fmtE(totDiff), M+146, y+6, { align:'right' });
+  doc.text(fmtE(totInc), W-M-2, y+6, { align:'right' });
+  y += 16;
+
+  // ── DETTAGLIO FORNITORI DEL PERIODO ──
+  if (y < 240) {
+    // Raggruppa fornitori per nome dal periodo
+    const fornitoriMap = {};
+    list.forEach(n => {
+      (n.daily_note_rows||[]).filter(r=>r.categoria==='fornitore').forEach(r => {
+        const nome = r.descrizione || 'N/D';
+        const v = parseFloat(r.importo_s || r.importo_p || r.importo_m) || 0;
+        fornitoriMap[nome] = (fornitoriMap[nome]||0) + v;
+      });
+    });
+    const fornList = Object.entries(fornitoriMap).sort((a,b) => b[1]-a[1]).slice(0,10);
+
+    if (fornList.length) {
+      doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(37,99,235);
+      doc.text('TOP FORNITORI DEL PERIODO', M, y);
+      y += 6;
+
+      doc.setFillColor(30,41,59);
+      doc.rect(M, y, W-M*2, 7, 'F');
+      doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(8);
+      doc.text('FORNITORE', M+2, y+5);
+      doc.text('TOTALE PERIODO', W-M-2, y+5, { align:'right' });
+      y += 8;
+
+      fornList.forEach((f, i) => {
+        const rowBg = i%2===0 ? [255,255,255] : [248,250,252];
+        doc.setFillColor(...rowBg);
+        doc.rect(M, y, W-M*2, 7, 'F');
+        doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(30,30,30);
+        doc.text(f[0].substring(0,50), M+2, y+4.5);
+        doc.setFont('helvetica','bold');
+        doc.text(fmtE(f[1]), W-M-2, y+4.5, { align:'right' });
+        y += 7;
+      });
+    }
+  }
+
+  // ── FOOTER ──
+  const pageCount = doc.getNumberOfPages();
+  for (let p = 1; p <= pageCount; p++) {
+    doc.setPage(p);
+    doc.setFillColor(15,23,42);
+    doc.rect(0, 287, W, 10, 'F');
+    doc.setTextColor(150,150,170); doc.setFontSize(7);
+    doc.text('KONTRO — kontro.cloud · Report generato il ' + new Date().toLocaleString('it-IT'), M, 293);
+    doc.text('Pag. ' + p + '/' + pageCount, W-M, 293, { align:'right' });
+  }
+
+  const filename = 'Report_' + from.replace(/-/g,'') + '_' + to.replace(/-/g,'') + '.pdf';
+  doc.save(filename);
+  showToast('Report PDF generato ✓', 'success');
+}
