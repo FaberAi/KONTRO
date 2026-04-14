@@ -6809,3 +6809,248 @@ function toggleTipoContratto() {
   document.getElementById('lbl-forfettario').style.borderColor = tipo === 'forfettario' ? '#2563eb' : 'var(--border)';
   document.getElementById('lbl-ccnl').style.borderColor = tipo === 'ccnl' ? '#2563eb' : 'var(--border)';
 }
+
+// ============================================
+// PDF PRESENZE MENSILE DIPENDENTE
+// ============================================
+async function exportPresenzePDF() {
+  const dipId = document.getElementById('pres-dipendente')?.value;
+  const mese  = document.getElementById('pres-mese')?.value;
+  const anno  = document.getElementById('pres-anno')?.value;
+
+  if (!dipId || !mese || !anno) { showToast('Seleziona dipendente, mese e anno', 'error'); return; }
+
+  showToast('Generazione PDF in corso...', 'success');
+
+  // Carica dati dipendente
+  const { data: dip } = await db.from('dipendenti').select('*').eq('id', dipId).single();
+  if (!dip) { showToast('Dipendente non trovato', 'error'); return; }
+
+  // Calcola range mese
+  const meseNum = parseInt(mese);
+  const annoNum = parseInt(anno);
+  const primoGiorno = new Date(annoNum, meseNum - 1, 1);
+  const ultimoGiorno = new Date(annoNum, meseNum, 0);
+  const from = primoGiorno.toISOString().split('T')[0];
+  const to   = ultimoGiorno.toISOString().split('T')[0];
+
+  // Carica presenze del mese
+  const { data: presenze } = await db.from('presenze')
+    .select('*').eq('dipendente_id', dipId)
+    .gte('data', from).lte('data', to).order('data');
+
+  // Carica turni del mese (per giorni lavorati)
+  const { data: turni } = await db.from('turni_dipendenti')
+    .select('data, turno').eq('dipendente_id', dipId)
+    .gte('data', from).lte('data', to).order('data');
+
+  // Carica acconti del mese
+  const { data: acconti } = await db.from('acconti_stipendio')
+    .select('*').eq('dipendente_id', dipId)
+    .gte('data', from).lte('data', to).order('data');
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const W = 210, M = 14;
+  const mesiNomi = ['','Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+  const giorniNomi = ['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
+
+  const fmtE = v => '€ ' + (parseFloat(v)||0).toFixed(2).replace('.',',');
+  const fmtD = d => d ? new Date(d+'T12:00:00').toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit'}) : '—';
+
+  // ── HEADER ──
+  doc.setFillColor(15,23,42);
+  doc.rect(0,0,W,32,'F');
+  doc.setTextColor(255,255,255);
+  doc.setFontSize(18); doc.setFont('helvetica','bold');
+  doc.text('BUSTA PRESENZE MENSILE', M, 13);
+  doc.setFontSize(10); doc.setFont('helvetica','normal');
+  doc.text(`${dip.nome} ${dip.cognome} — ${mesiNomi[meseNum]} ${annoNum}`, M, 21);
+  doc.text(currentBusiness?.nome || 'KONTRO', W-M, 21, { align:'right' });
+  doc.setTextColor(100,149,237); doc.setFontSize(8);
+  doc.text('KONTRO — kontro.cloud', M, 28);
+
+  let y = 42;
+  doc.setTextColor(30,30,30);
+
+  // ── DATI DIPENDENTE ──
+  doc.setFillColor(235,240,255);
+  doc.rect(M, y-4, W-M*2, 22, 'F');
+  doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(37,99,235);
+  doc.text('DATI DIPENDENTE', M+3, y+1);
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(30,30,30);
+  doc.text(`Ruolo: ${dip.ruolo||'—'}`, M+3, y+8);
+  doc.text(`Tipo contratto: ${dip.tipo_contratto === 'ccnl' ? 'CCNL Commercio' : 'Forfettario'}`, M+3, y+14);
+  if (dip.tipo_contratto === 'ccnl') {
+    doc.text(`Paga oraria: €${dip.paga_oraria||0}/h · Ore sett.: ${dip.ore_settimanali||40}h`, W/2, y+8);
+    const magg = [];
+    if (dip.straordinario_attivo) magg.push(`Straord. ${dip.magg_straordinario_feriale||15}%`);
+    if (dip.festivo_attivo) magg.push(`Festivo ${dip.magg_straordinario_festivo||30}%`);
+    if (dip.notturno_attivo) magg.push(`Notturno ${dip.magg_notturno||50}%`);
+    if (magg.length) doc.text(`Maggiorazioni: ${magg.join(' · ')}`, W/2, y+14);
+  } else {
+    doc.text(`Importo fisso: ${fmtE(dip.importo_fisso)}/mese`, W/2, y+8);
+  }
+  y += 28;
+
+  // ── KPI RIEPILOGO ──
+  const presenzeMap = {};
+  (presenze||[]).forEach(p => { presenzeMap[p.data] = p; });
+  const turniSet = new Set((turni||[]).filter(t=>t.turno!=='riposo').map(t=>t.data));
+  const riposiSet = new Set((turni||[]).filter(t=>t.turno==='riposo').map(t=>t.data));
+
+  let nLavoro = 0, nAssenze = 0, nFerie = 0, nPermessi = 0, nFestivi = 0;
+  let oreStrao = 0, oreFestive = 0, oreNotturne = 0;
+
+  // Conta giorni dal calendario turni
+  turniSet.forEach(d => nLavoro++);
+  riposiSet.forEach(d => nAssenze++);
+
+  // Conta dal registro presenze
+  (presenze||[]).forEach(p => {
+    if (p.tipo === 'ferie') nFerie++;
+    else if (p.tipo === 'permesso') nPermessi++;
+    else if (p.tipo === 'assenza') nAssenze++;
+    else if (p.tipo === 'straordinario') oreStrao += parseFloat(p.ore||0);
+    else if (p.tipo === 'festivo') { nFestivi++; oreFestive += parseFloat(p.ore||0); }
+  });
+
+  // Calcolo compenso stimato
+  let compensoBase = 0, compensoExtra = 0;
+  if (dip.tipo_contratto === 'ccnl' && dip.paga_oraria) {
+    const oreGiornaliere = (dip.ore_settimanali||40) / 5;
+    compensoBase = nLavoro * oreGiornaliere * dip.paga_oraria;
+    if (dip.straordinario_attivo) compensoExtra += oreStrao * dip.paga_oraria * (1 + (dip.magg_straordinario_feriale||15)/100);
+    if (dip.festivo_attivo) compensoExtra += oreFestive * dip.paga_oraria * (1 + (dip.magg_straordinario_festivo||30)/100);
+    if (dip.notturno_attivo) compensoExtra += oreNotturne * dip.paga_oraria * (1 + (dip.magg_notturno||50)/100);
+  } else if (dip.tipo_contratto === 'forfettario') {
+    compensoBase = parseFloat(dip.importo_fisso||0);
+  }
+
+  const totAcconti = (acconti||[]).reduce((s,a) => s + parseFloat(a.importo||0), 0);
+  const saldoDovuto = compensoBase + compensoExtra - totAcconti;
+
+  // Box KPI
+  const kpis = [
+    ['Giorni lavorati', nLavoro+'g', '#34d399'],
+    ['Assenze/Riposi', nAssenze+'g', '#f87171'],
+    ['Ferie', nFerie+'g', '#fbbf24'],
+    ['Permessi', nPermessi+'g', '#a78bfa'],
+    ['Straord. (ore)', oreStrao+'h', '#60a5fa'],
+    ['Festivi', nFestivi+'g', '#f59e0b'],
+  ];
+  const colW = (W-M*2)/3;
+  kpis.forEach((k,i) => {
+    const col = i%3, row = Math.floor(i/3);
+    const x = M + col*colW;
+    const ky = y + row*18;
+    doc.setFillColor(245,248,255);
+    doc.rect(x, ky-4, colW-2, 16, 'F');
+    doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(100,100,100);
+    doc.text(k[0], x+3, ky+2);
+    doc.setFont('helvetica','bold'); doc.setFontSize(13);
+    doc.setTextColor(...hexToRgb(k[2]));
+    doc.text(k[1], x+3, ky+10);
+  });
+  y += 44;
+
+  // ── COMPENSO STIMATO ──
+  doc.setFillColor(30,41,59);
+  doc.rect(M, y, W-M*2, 9, 'F');
+  doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(9);
+  doc.text('COMPENSO STIMATO', M+2, y+6);
+  y += 10;
+
+  const righeCompenso = [
+    ['Compenso base', fmtE(compensoBase)],
+    ...(compensoExtra > 0 ? [['Maggiorazioni (straord./festivo/notturno)', fmtE(compensoExtra)]] : []),
+    ['Acconti ricevuti nel mese', '− ' + fmtE(totAcconti)],
+  ];
+  righeCompenso.forEach((r,i) => {
+    doc.setFillColor(i%2===0?255:248,i%2===0?255:250,i%2===0?255:252);
+    doc.rect(M, y, W-M*2, 8, 'F');
+    doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(30,30,30);
+    doc.text(r[0], M+2, y+5.5);
+    doc.text(r[1], W-M-2, y+5.5, { align:'right' });
+    y += 8;
+  });
+
+  // Saldo dovuto
+  y += 2;
+  doc.setFillColor(37,99,235);
+  doc.rect(M, y, W-M*2, 10, 'F');
+  doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(11);
+  doc.text('SALDO DA CORRISPONDERE', M+2, y+7);
+  doc.text(fmtE(saldoDovuto), W-M-2, y+7, { align:'right' });
+  y += 16;
+
+  // ── DETTAGLIO PRESENZE ──
+  if (presenze?.length) {
+    doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(37,99,235);
+    doc.text('DETTAGLIO PRESENZE', M, y); y += 6;
+
+    doc.setFillColor(30,41,59);
+    doc.rect(M, y, W-M*2, 7, 'F');
+    doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(8);
+    doc.text('DATA', M+2, y+5);
+    doc.text('TIPO', M+35, y+5);
+    doc.text('ORE', M+90, y+5);
+    doc.text('NOTE', M+110, y+5);
+    y += 8;
+
+    const tipiLabel = { assenza:'Assenza', ferie:'Ferie', permesso:'Permesso', straordinario:'Straordinario', festivo:'Festivo lavorato' };
+    presenze.forEach((p,i) => {
+      if (y > 270) { doc.addPage(); y = 20; }
+      doc.setFillColor(i%2===0?255:248, i%2===0?255:250, i%2===0?255:252);
+      doc.rect(M, y, W-M*2, 7, 'F');
+      doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(30,30,30);
+      const dow = giorniNomi[new Date(p.data+'T12:00:00').getDay()];
+      doc.text(`${fmtD(p.data)} ${dow}`, M+2, y+4.5);
+      doc.text(tipiLabel[p.tipo]||p.tipo, M+35, y+4.5);
+      doc.text(p.ore ? p.ore+'h' : '—', M+90, y+4.5);
+      doc.text((p.motivazione||'').substring(0,30), M+110, y+4.5);
+      y += 7;
+    });
+    y += 4;
+  }
+
+  // ── ACCONTI ──
+  if (acconti?.length) {
+    if (y > 250) { doc.addPage(); y = 20; }
+    doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(37,99,235);
+    doc.text('ACCONTI RICEVUTI', M, y); y += 6;
+
+    acconti.forEach((a,i) => {
+      if (y > 270) { doc.addPage(); y = 20; }
+      doc.setFillColor(i%2===0?255:248, i%2===0?255:250, i%2===0?255:252);
+      doc.rect(M, y, W-M*2, 7, 'F');
+      doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(30,30,30);
+      doc.text(fmtD(a.data), M+2, y+4.5);
+      doc.text(a.tipo_pagamento||'—', M+35, y+4.5);
+      doc.setFont('helvetica','bold');
+      doc.text(fmtE(a.importo), W-M-2, y+4.5, { align:'right' });
+      y += 7;
+    });
+  }
+
+  // ── FOOTER ──
+  const pageCount = doc.getNumberOfPages();
+  for (let p=1; p<=pageCount; p++) {
+    doc.setPage(p);
+    doc.setFillColor(15,23,42);
+    doc.rect(0,287,W,10,'F');
+    doc.setTextColor(150,150,170); doc.setFontSize(7);
+    doc.text(`KONTRO — Presenze ${dip.nome} ${dip.cognome} · ${mesiNomi[meseNum]} ${annoNum} · Generato il ${new Date().toLocaleString('it-IT')}`, M, 293);
+    doc.text(`${p}/${pageCount}`, W-M, 293, { align:'right' });
+  }
+
+  doc.save(`Presenze_${dip.cognome}_${mesiNomi[meseNum]}_${annoNum}.pdf`);
+  showToast('PDF presenze generato ✓', 'success');
+}
+
+function hexToRgb(hex) {
+  const r = parseInt(hex.slice(1,3),16);
+  const g = parseInt(hex.slice(3,5),16);
+  const b = parseInt(hex.slice(5,7),16);
+  return [r,g,b];
+}

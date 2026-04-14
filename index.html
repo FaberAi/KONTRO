@@ -1594,7 +1594,10 @@
           <div class="section-card">
             <div class="section-header">
               <h2>Calendario</h2>
-              <button class="btn-primary sm" onclick="showAddPresenza()">＋ Aggiungi</button>
+              <div style="display:flex;gap:8px">
+                <button class="btn-secondary sm" onclick="exportPresenzePDF()">📄 PDF</button>
+                <button class="btn-primary sm" onclick="showAddPresenza()">＋ Aggiungi</button>
+              </div>
             </div>
             <div id="add-presenza-form" class="add-form hidden">
               <div class="form-grid">
@@ -1879,8 +1882,12 @@
           <div class="help-a">Clicca <strong>⚡ Genera settimana</strong> — il sistema analizza le ultime 8 settimane e ripropone i turni in base al pattern storico. Puoi inserire le assenze prima di generare.</div>
         </div>
         <div class="help-item">
-          <div class="help-q">Come esporto il planning?</div>
-          <div class="help-a">Nella griglia turni trovi i bottoni <strong>PDF</strong> (stampa A4 orizzontale) e <strong>PNG</strong> (immagine per WhatsApp).</div>
+          <div class="help-q">Come esporto il PDF presenze mensile?</div>
+          <div class="help-a">Vai su <strong>Dipendenti → Presenze</strong>, seleziona il dipendente, mese e anno, poi clicca <strong>📄 PDF</strong>. Il documento include riepilogo giorni lavorati, compenso stimato con maggiorazioni, acconti ricevuti e saldo da corrispondere.</div>
+        </div>
+        <div class="help-item">
+          <div class="help-q">Come viene calcolato il compenso nel PDF?</div>
+          <div class="help-a">Per i dipendenti <strong>CCNL</strong>: giorni lavorati × ore giornaliere × paga oraria, più le maggiorazioni per straordinari, festivi e notturni configurate nella scheda. Per i dipendenti <strong>Forfettari</strong>: importo fisso mensile. In entrambi i casi vengono detratti gli acconti del mese.</div>
         </div>
       </div>
 
