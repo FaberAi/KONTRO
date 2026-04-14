@@ -2990,6 +2990,11 @@ async function salvaNotaGiorno() {
     grattavinci_eff: e3('grattavinci-m','grattavinci-p','grattavinci-s'),
     sisal_eff:       e3('sisal-m','sisal-p','sisal-s'),
     conto_bet_eff:   e3('conto-bet-m','conto-bet-p','conto-bet-s'),
+    // Totali calcolati per storico e dashboard
+    totale_entrate:      parseFloat(document.getElementById('tot-ent-s')?.textContent?.replace(/[€\s\.]/g,'').replace(',','.')) || 0,
+    totale_uscite:       parseFloat(document.getElementById('tot-usc-s')?.textContent?.replace(/[€\s\.]/g,'').replace(',','.')) || 0,
+    differenza:          parseFloat(document.getElementById('diff-s')?.textContent?.replace(/[€\s\+\-\.]/g,'').replace(',','.')) || 0,
+    incasso_giornaliero: parseFloat(document.getElementById('r-inc-tot')?.textContent?.replace(/[€\s\.]/g,'').replace(',','.')) || 0,
     created_by: currentUser.id, updated_at: new Date().toISOString()
   };
 
