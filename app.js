@@ -241,12 +241,17 @@ function showScreen(name) {
 
 async function showView(name) {
   // Controllo accessi
-  const ownerOnly = ['impostazioni', 'team', 'hr'];
-  const adminOnly = ['storico', 'report', 'banca', 'fornitori'];
+  const ownerOnly = ['impostazioni', 'team'];
+  const adminOnly = ['storico', 'report', 'banca'];
+  const managerAllowed = ['primanota', 'storico', 'hr', 'fornitori', 'dashboard'];
+
   if (ownerOnly.includes(name) && currentRole !== 'owner') {
     showToast('Accesso non autorizzato', 'error'); return;
   }
   if (adminOnly.includes(name) && currentRole === 'cashier') {
+    showToast('Accesso non autorizzato', 'error'); return;
+  }
+  if (currentRole === 'manager' && !managerAllowed.includes(name)) {
     showToast('Accesso non autorizzato', 'error'); return;
   }
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
@@ -289,8 +294,9 @@ function updateUserUI() {
   document.getElementById('business-name-sidebar').textContent = currentBusiness?.name || '—';
 
   // Controllo accessi per ruolo
-  const isOwner = currentRole === 'owner';
-  const isAdmin = currentRole === 'admin' || isOwner;
+  const isOwner   = currentRole === 'owner';
+  const isAdmin   = currentRole === 'admin' || isOwner;
+  const isManager = currentRole === 'manager';
   const isCashier = currentRole === 'cashier';
 
   // Per i cassieri usa i permessi personalizzati
@@ -303,11 +309,13 @@ function updateUserUI() {
     let visible = true;
 
     if (isOwner) {
-      visible = true; // owner vede tutto
+      visible = true;
     } else if (isAdmin) {
       visible = !['team','impostazioni'].includes(view);
+    } else if (isManager) {
+      // Manager: Prima Nota, Storico, HR (turni+acconti), Fornitori (solo fatture), Dashboard
+      visible = ['dashboard','primanota','storico','hr','fornitori'].includes(view);
     } else if (isCashier) {
-      // Cassiere vede solo quello che gli è stato abilitato
       const permMap = {
         dashboard: true,
         primanota: true,
@@ -326,8 +334,8 @@ function updateUserUI() {
     btn.style.display = visible ? 'flex' : 'none';
   });
 
-  // Mostra badge ruolo nella sidebar
-  const roleLabels = { owner: 'Owner', admin: 'Admin', cashier: 'Cassiere' };
+  // Badge ruolo nella sidebar
+  const roleLabels = { owner: 'Owner', admin: 'Admin', manager: 'Responsabile sede', cashier: 'Cassiere' };
   document.getElementById('business-name-sidebar').textContent =
     (currentBusiness?.name || '—') + ' · ' + (roleLabels[currentRole] || '');
 }
@@ -701,6 +709,7 @@ async function loadTeam() {
       const p = r.profiles;
       const initial = (p?.full_name || p?.email || '?')[0].toUpperCase();
       const isCashier = r.role === 'cashier';
+      const isManager = r.role === 'manager';
       return `
         <div class="member-item">
           <div class="member-avatar">${initial}</div>
@@ -742,7 +751,7 @@ async function loadTeam() {
 }
 
 function roleLabel(role) {
-  return { owner: 'Owner', admin: 'Admin', cashier: 'Cassiere' }[role] || role;
+  return { owner: 'Owner', admin: 'Admin', manager: 'Responsabile sede', cashier: 'Cassiere' }[role] || role;
 }
 
 async function sendInvite() {
@@ -2293,6 +2302,12 @@ async function initFornitori() {
   await loadFornitoriCache();
   populateFornitoriSelects();
   loadFornitoriList();
+  // Popola select sedi nel form fattura
+  const nftSede = document.getElementById('nft-sede');
+  if (nftSede) {
+    nftSede.innerHTML = '<option value="">Sede principale</option>' +
+      currentLocations.map(l => `<option value="${l.id}">${l.name}</option>`).join('');
+  }
   // Date default estratto
   const today = new Date().toISOString().split('T')[0];
   const firstDay = new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0];
@@ -2464,12 +2479,14 @@ async function saveFattura() {
     importo_iva: parseFloat(document.getElementById('nft-iva').value) || 0,
     importo_totale: totale,
     metodo_pagamento: document.getElementById('nft-metodo').value || null,
+    sede_id: document.getElementById('nft-sede')?.value || null,
+    controllata_da_nome: document.getElementById('nft-controllata')?.value.trim() || null,
     note: document.getElementById('nft-note').value,
     created_by: currentUser.id
   });
   if (error) { showToast('Errore: ' + error.message, 'error'); return; }
   showToast('Fattura registrata ✓', 'success');
-  ['nft-numero','nft-netto','nft-iva','nft-totale','nft-note'].forEach(id => {
+  ['nft-numero','nft-netto','nft-iva','nft-totale','nft-note','nft-controllata'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
   });
   loadFatture();
@@ -2483,7 +2500,7 @@ async function loadFatture() {
   const firstMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
   const firstYear = new Date().getFullYear() + '-01-01';
 
-  let query = db.from('fatture_fornitori').select('*, fornitori(ragione_sociale)')
+  let query = db.from('fatture_fornitori').select('*, fornitori(ragione_sociale), locations(name)')
     .eq('business_id', currentBusiness.id).order('data_fattura', { ascending: false });
   if (stato) query = query.eq('stato', stato);
   if (fornitore) query = query.eq('fornitore_id', fornitore);
@@ -2513,6 +2530,7 @@ async function loadFatture() {
     const scaduta = f.stato !== 'pagata' && f.data_scadenza && f.data_scadenza < today;
     const statoEff = scaduta ? 'scaduta' : f.stato;
     const statoLabel = { aperta:'Aperta', pagata_parziale:'Parz. pagata', pagata:'Pagata', scaduta:'Scaduta' }[statoEff] || f.stato;
+    const sedeNome = f.locations?.name || (f.sede_id ? '—' : '');
     return `<div class="fattura-item ${statoEff}">
       <div class="ft-info">
         <div class="ft-numero">${f.numero ? 'N° ' + f.numero : 'Senza numero'}</div>
@@ -2521,6 +2539,8 @@ async function loadFatture() {
           Emessa: ${formatDate(f.data_fattura)}
           ${f.data_scadenza ? ' · Scadenza: ' + formatDate(f.data_scadenza) : ''}
           ${f.metodo_pagamento ? ' · ' + f.metodo_pagamento : ''}
+          ${sedeNome ? ' · 📍 ' + sedeNome : ''}
+          ${f.controllata_da_nome ? ' · ✅ ' + f.controllata_da_nome : ''}
         </div>
       </div>
       <span class="ft-badge ${statoEff}">${statoLabel}</span>
@@ -2816,7 +2836,7 @@ async function loadEstratto() {
   const to = document.getElementById('ec-to').value;
 
   const [{ data: fatture }, { data: assegni }] = await Promise.all([
-    db.from('fatture_fornitori').select('*')
+    db.from('fatture_fornitori').select('*, locations(name)')
       .eq('business_id', currentBusiness.id)
       .eq('fornitore_id', fornitoreId)
       .gte('data_fattura', from).lte('data_fattura', to)
@@ -2855,7 +2875,7 @@ async function loadEstratto() {
         sortData: f.data_fattura,
         tipo: 'fattura', icon: '🧾',
         desc: 'Fattura ' + (f.numero || ''),
-        meta: 'Emessa: ' + formatDate(f.data_fattura) + (f.data_scadenza ? ' · Scad: ' + formatDate(f.data_scadenza) : '') + ' · ' + ({aperta:'Aperta',pagata:'Pagata',pagata_parziale:'Parz. pagata'}[f.stato]||f.stato),
+        meta: 'Emessa: ' + formatDate(f.data_fattura) + (f.data_scadenza ? ' · Scad: ' + formatDate(f.data_scadenza) : '') + ' · ' + ({aperta:'Aperta',pagata:'Pagata',pagata_parziale:'Parz. pagata'}[f.stato]||f.stato) + (f.locations?.name ? ' · 📍 ' + f.locations.name : '') + (f.controllata_da_nome ? ' · ✅ ' + f.controllata_da_nome : ''),
         importo: Number(f.importo_totale),
         effetto: 'debito'
       };

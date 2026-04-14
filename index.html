@@ -453,6 +453,7 @@
                 <label>Ruolo</label>
                 <select id="invite-role">
                   <option value="cashier">Cassiere — solo Prima Nota</option>
+                  <option value="manager">Responsabile sede — Prima Nota, turni, acconti, fatture</option>
                   <option value="admin">Admin — accesso completo</option>
                 </select>
               </div>
@@ -1075,6 +1076,14 @@
                   <option value="assegno">Assegno</option>
                   <option value="rid">RID/SDD</option>
                 </select>
+              </div>
+              <div class="field"><label>📍 Sede di scarico</label>
+                <select id="nft-sede">
+                  <option value="">Sede principale</option>
+                </select>
+              </div>
+              <div class="field"><label>✅ Controllata da</label>
+                <input type="text" id="nft-controllata" placeholder="Nome di chi ha verificato la fattura" />
               </div>
               <div class="field full"><label>Note</label><input type="text" id="nft-note" placeholder="Note..." /></div>
             </div>
@@ -1843,6 +1852,14 @@
         <div class="help-item">
           <div class="help-q">Qual è la differenza tra Cassiere e Admin?</div>
           <div class="help-a">Il <strong>Cassiere</strong> può accedere solo alla Prima Nota per compilare i turni. L'<strong>Admin</strong> ha accesso completo all'app: banca, fornitori, dipendenti, impostazioni.</div>
+        </div>
+        <div class="help-item">
+          <div class="help-q">Cos'è il Responsabile sede?</div>
+          <div class="help-a">Il <strong>Responsabile sede</strong> (Manager) ha accesso a: Prima Nota, Storico, Dipendenti (turni e acconti), Fornitori (registrazione fatture) e Dashboard. Non può accedere a Banca & Finanza, Impostazioni o Team.</div>
+        </div>
+        <div class="help-item">
+          <div class="help-q">Come registro la sede e il responsabile su una fattura?</div>
+          <div class="help-a">Nel form Registra fattura trovi il campo <strong>Sede di scarico</strong> (in quale locale è arrivata la merce) e <strong>Controllata da</strong> (chi ha verificato la fattura). Queste info appaiono nell'estratto conto del fornitore.</div>
         </div>
         <div class="help-item">
           <div class="help-q">Quanti utenti posso invitare?</div>
