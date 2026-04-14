@@ -2508,3 +2508,125 @@ html, body {
 .charts-grid .section-card {
   border-top: 2px solid rgba(59,130,246,0.3);
 }
+
+/* ============================================
+   PRIMA NOTA — MOBILE OTTIMIZZATO
+   ============================================ */
+@media (max-width: 768px) {
+
+  /* Tabella prima nota scrollabile orizzontalmente */
+  .pn-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 0 -16px;
+    padding: 0 16px;
+  }
+
+  .pn-table {
+    min-width: 520px;
+  }
+
+  /* Colonne più strette su mobile */
+  .pn-table th.th-turno { width: 90px; }
+  .pn-input {
+    font-size: 14px !important;
+    padding: 6px 8px !important;
+    min-width: 70px !important;
+  }
+
+  /* Header turni con icone più grandi */
+  .pn-table th.th-turno {
+    font-size: 10px !important;
+    padding: 8px 6px !important;
+  }
+
+  /* Select fornitori e causali */
+  .pn-desc-input {
+    font-size: 12px !important;
+    min-width: 120px !important;
+  }
+
+  /* Riepilogo incassi in colonna su mobile */
+  .pn-kpi-row {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 10px !important;
+  }
+
+  .pn-kpi-card {
+    padding: 14px !important;
+  }
+
+  .pn-kpi-val {
+    font-size: 20px !important;
+  }
+
+  /* Hint scroll */
+  .pn-table-wrap::after {
+    content: '← scorri →';
+    display: block;
+    text-align: center;
+    font-size: 11px;
+    color: #4a6080;
+    padding: 6px 0 2px;
+    font-style: italic;
+  }
+
+  /* Bottoni azioni prima nota */
+  .form-actions {
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+  .form-actions button {
+    flex: 1 !important;
+    min-width: 120px !important;
+  }
+
+  /* Fondo cassa box */
+  .pn-fc-box {
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+
+  /* Compilatori in colonna */
+  .pn-compilatori-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Scroll indicator per tabella */
+.pn-table-wrap {
+  position: relative;
+}
+
+@media (min-width: 769px) {
+  .pn-table-wrap::after { display: none; }
+}
+
+/* Tab turni mobile */
+.pn-mobile-tabs {
+  display: none;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.pn-mobile-tab {
+  flex: 1;
+  padding: 8px 6px;
+  border: 1px solid rgba(99,130,200,0.2);
+  border-radius: 8px;
+  background: transparent;
+  color: #7a8fb5;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: var(--font-display);
+}
+.pn-mobile-tab.active {
+  background: linear-gradient(135deg, #2563eb, #3b82f6);
+  color: white;
+  border-color: transparent;
+  box-shadow: 0 4px 12px rgba(59,130,246,0.3);
+}
+@media (max-width: 768px) {
+  .pn-mobile-tabs { display: flex; }
+}

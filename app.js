@@ -6705,3 +6705,26 @@ async function checkScadenze() {
     }
   }
 }
+
+// ============================================
+// PRIMA NOTA — MOBILE TAB SWITCHER
+// ============================================
+function scrollToTurno(turno) {
+  const wrap = document.getElementById('pn-table-wrap');
+  if (!wrap) return;
+
+  // Aggiorna tab attiva
+  document.querySelectorAll('.pn-mobile-tab').forEach((t,i) => {
+    t.classList.toggle('active', ['m','p','s'][i] === turno);
+  });
+
+  // Scroll alla colonna del turno
+  const table = wrap.querySelector('.pn-table');
+  if (!table) return;
+  const th = table.querySelector('.th-desc');
+  const descW = th ? th.offsetWidth : 160;
+  const colW = 110; // larghezza colonna turno
+
+  const scrollMap = { m: 0, p: descW, s: descW + colW };
+  wrap.scrollTo({ left: scrollMap[turno], behavior: 'smooth' });
+}

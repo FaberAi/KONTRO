@@ -488,7 +488,13 @@
 
         <!-- Tabella Prima Nota -->
         <div class="section-card pn-card">
-          <div class="pn-table-wrap">
+          <!-- Tab turni solo su mobile -->
+          <div class="pn-mobile-tabs" id="pn-mobile-tabs">
+            <button class="pn-mobile-tab active" onclick="scrollToTurno('m')">☀ Mattina</button>
+            <button class="pn-mobile-tab" onclick="scrollToTurno('p')">🌤 Pomeriggio</button>
+            <button class="pn-mobile-tab" onclick="scrollToTurno('s')">🌙 Sera</button>
+          </div>
+          <div class="pn-table-wrap" id="pn-table-wrap">
             <table class="pn-table">
               <thead>
                 <tr>
