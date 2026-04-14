@@ -5763,9 +5763,10 @@ async function eseguiReset() {
 // ============================================
 
 const PIANI_INFO = {
-  free:     { nome: 'Free',     prezzo: '€ 0',    colore: '#64748b', features: ['1 sede','1 utente','30 giorni storico'] },
-  pro:      { nome: 'Pro',      prezzo: '€ 29/mese', colore: '#6366f1', features: ['3 sedi','5 utenti','Storico illimitato','Export PDF'] },
-  business: { nome: 'Business', prezzo: '€ 59/mese', colore: '#f59e0b', features: ['Sedi illimitate','Utenti illimitati','Storico illimitato','Export PDF','Supporto prioritario'] }
+  free:       { nome: 'Free',       prezzo: '€ 0',       colore: '#64748b', features: ['1 sede','1 utente','30 giorni storico','Prima nota 3 turni'] },
+  pro:        { nome: 'Pro',        prezzo: '€ 29/mese', colore: '#6366f1', features: ['1 sede','Utenti illimitati','Storico illimitato','Export PDF','Planning turni','Conciliazione fiscale'] },
+  business:   { nome: 'Business',   prezzo: '€ 59/mese', colore: '#f59e0b', features: ['Fino a 3 sedi','Utenti illimitati','Storico illimitato','Tutto il piano Pro','Report mensile PDF'] },
+  enterprise: { nome: 'Enterprise', prezzo: '€ 79/mese', colore: '#f97316', features: ['Sedi illimitate','Utenti illimitati','Storico illimitato','Tutto il piano Business','Supporto prioritario','Onboarding dedicato'] }
 };
 
 async function loadAbbonamento() {
@@ -6652,7 +6653,7 @@ async function checkLimiteSedi() {
   if (!isPianoFree()) return true;
   const count = currentLocations.length;
   if (count >= 1) {
-    showUpgradeModal('Il piano Free include solo 1 sede. Passa a Pro per aggiungere fino a 3 sedi.');
+    showUpgradeModal('Il piano Free include solo 1 sede. Passa a Pro per 1 sede completa, Business per 3 sedi o Enterprise per sedi illimitate.');
     return false;
   }
   return true;
@@ -6665,7 +6666,7 @@ async function checkLimiteUtenti() {
     .select('id', { count: 'exact', head: true })
     .eq('business_id', currentBusiness.id);
   if (count >= 1) {
-    showUpgradeModal('Il piano Free include solo 1 utente. Passa a Pro per invitare fino a 5 collaboratori.');
+    showUpgradeModal('Il piano Free include solo 1 utente. Passa a Pro, Business o Enterprise per utenti illimitati.');
     return false;
   }
   return true;
