@@ -4,1042 +4,308 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>KONTRO — Prima nota digitale per bar e ristoranti</title>
-  <meta name="description" content="KONTRO è il gestionale pensato per bar, ristoranti e attività commerciali italiane. Prima nota digitale, gestione dipendenti, banche, fornitori e molto altro." />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+  <meta name="description" content="KONTRO è la prima nota digitale per bar, ristoranti e pubblici esercizi. Gestisci incassi, dipendenti e fornitori da un'unica piattaforma." />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <style>
-    :root {
-      --navy: #050810;
-      --navy-2: #0a0f1e;
-      --navy-3: #0f1629;
-      --blue: #2563eb;
-      --blue-light: #3b82f6;
-      --blue-glow: rgba(37,99,235,0.25);
-      --green: #10b981;
-      --gold: #f59e0b;
-      --white: #ffffff;
-      --gray-1: #f9fafb;
-      --gray-4: #9ca3af;
-      --gray-6: #4b5563;
-      --font-display: 'Syne', sans-serif;
-      --font-serif: 'Instrument Serif', serif;
-      --font-mono: 'DM Mono', monospace;
-    }
-
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    html { scroll-behavior: smooth; }
-
-    body {
-      background: var(--navy);
-      color: var(--white);
-      font-family: var(--font-display);
-      -webkit-font-smoothing: antialiased;
-      overflow-x: hidden;
-    }
-
-    /* ── NOISE TEXTURE ── */
-    body::before {
-      content: '';
-      position: fixed;
-      inset: 0;
-      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
-      pointer-events: none;
-      z-index: 0;
-      opacity: 0.4;
-    }
-
-    /* ── NAV ── */
-    nav {
-      position: fixed;
-      top: 0; left: 0; right: 0;
-      z-index: 100;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 20px 40px;
-      background: rgba(5,8,16,0.8);
-      backdrop-filter: blur(20px);
-      border-bottom: 1px solid rgba(255,255,255,0.05);
-    }
-
-    .nav-logo {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      text-decoration: none;
-    }
-
-    .nav-logo-icon {
-      width: 36px; height: 36px;
-      background: var(--blue);
-      border-radius: 8px;
-      display: flex; align-items: center; justify-content: center;
-      font-weight: 800; font-size: 18px;
-      color: white;
-      box-shadow: 0 0 20px var(--blue-glow);
-    }
-
-    .nav-logo-text {
-      font-weight: 800;
-      font-size: 20px;
-      letter-spacing: 0.1em;
-      color: white;
-    }
-
-    .nav-links {
-      display: flex;
-      align-items: center;
-      gap: 32px;
-      list-style: none;
-    }
-
-    .nav-links a {
-      color: var(--gray-4);
-      text-decoration: none;
-      font-size: 14px;
-      font-weight: 600;
-      transition: color 0.2s;
-    }
-
-    .nav-links a:hover { color: white; }
-
-    .nav-cta {
-      background: var(--blue);
-      color: white !important;
-      padding: 10px 22px;
-      border-radius: 8px;
-      font-size: 14px !important;
-      font-weight: 700 !important;
-      transition: all 0.2s !important;
-      box-shadow: 0 4px 16px var(--blue-glow);
-    }
-
-    .nav-cta:hover { background: var(--blue-light) !important; transform: translateY(-1px); }
-
-    /* ── HERO ── */
-    .hero {
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      padding: 120px 24px 80px;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .hero-grid {
-      position: absolute;
-      inset: 0;
-      background-image:
-        linear-gradient(rgba(37,99,235,0.04) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(37,99,235,0.04) 1px, transparent 1px);
-      background-size: 60px 60px;
-      mask-image: radial-gradient(ellipse at center, black 30%, transparent 80%);
-    }
-
-    .hero-glow {
-      position: absolute;
-      top: 20%;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 800px;
-      height: 400px;
-      background: radial-gradient(ellipse, rgba(37,99,235,0.12) 0%, transparent 70%);
-      pointer-events: none;
-    }
-
-    .hero-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      background: rgba(37,99,235,0.1);
-      border: 1px solid rgba(37,99,235,0.3);
-      border-radius: 100px;
-      padding: 6px 16px;
-      font-family: var(--font-mono);
-      font-size: 12px;
-      color: var(--blue-light);
-      margin-bottom: 32px;
-      animation: fadeUp 0.6s ease both;
-    }
-
-    .hero-badge::before {
-      content: '';
-      width: 6px; height: 6px;
-      border-radius: 50%;
-      background: var(--green);
-      animation: pulse 2s infinite;
-    }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.4; }
-    }
-
-    .hero h1 {
-      font-size: clamp(42px, 8vw, 88px);
-      font-weight: 800;
-      line-height: 1.0;
-      letter-spacing: -0.03em;
-      margin-bottom: 8px;
-      animation: fadeUp 0.6s 0.1s ease both;
-    }
-
-    .hero h1 em {
-      font-family: var(--font-serif);
-      font-style: italic;
-      color: transparent;
-      -webkit-text-stroke: 1px rgba(255,255,255,0.6);
-      font-weight: 400;
-    }
-
-    .hero-sub {
-      font-size: clamp(36px, 6vw, 72px);
-      font-weight: 800;
-      line-height: 1.0;
-      letter-spacing: -0.03em;
-      color: var(--blue-light);
-      margin-bottom: 28px;
-      animation: fadeUp 0.6s 0.15s ease both;
-    }
-
-    .hero p {
-      max-width: 560px;
-      font-size: 18px;
-      line-height: 1.6;
-      color: var(--gray-4);
-      margin-bottom: 48px;
-      font-weight: 400;
-      animation: fadeUp 0.6s 0.2s ease both;
-    }
-
-    .hero-actions {
-      display: flex;
-      gap: 16px;
-      align-items: center;
-      flex-wrap: wrap;
-      justify-content: center;
-      animation: fadeUp 0.6s 0.25s ease both;
-    }
-
-    .btn-primary {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      background: var(--blue);
-      color: white;
-      padding: 16px 32px;
-      border-radius: 12px;
-      font-family: var(--font-display);
-      font-weight: 700;
-      font-size: 16px;
-      text-decoration: none;
-      box-shadow: 0 8px 32px var(--blue-glow);
-      transition: all 0.2s;
-    }
-
-    .btn-primary:hover { background: var(--blue-light); transform: translateY(-2px); box-shadow: 0 12px 40px var(--blue-glow); }
-
-    .btn-secondary {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      color: var(--gray-4);
-      padding: 16px 24px;
-      border-radius: 12px;
-      font-family: var(--font-display);
-      font-weight: 600;
-      font-size: 16px;
-      text-decoration: none;
-      border: 1px solid rgba(255,255,255,0.1);
-      transition: all 0.2s;
-    }
-
-    .btn-secondary:hover { color: white; border-color: rgba(255,255,255,0.3); }
-
-    .hero-stats {
-      display: flex;
-      gap: 48px;
-      margin-top: 72px;
-      padding-top: 48px;
-      border-top: 1px solid rgba(255,255,255,0.06);
-      animation: fadeUp 0.6s 0.35s ease both;
-    }
-
-    .stat { text-align: center; }
-    .stat-val { font-family: var(--font-mono); font-size: 32px; font-weight: 500; color: white; }
-    .stat-label { font-size: 12px; color: var(--gray-4); font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; margin-top: 4px; }
-
-    /* ── APP PREVIEW ── */
-    .preview-section {
-      padding: 0 24px 120px;
-      position: relative;
-    }
-
-    .preview-wrap {
-      max-width: 1100px;
-      margin: 0 auto;
-      background: var(--navy-2);
-      border-radius: 20px;
-      border: 1px solid rgba(255,255,255,0.08);
-      overflow: hidden;
-      box-shadow: 0 40px 120px rgba(0,0,0,0.6), 0 0 0 1px rgba(37,99,235,0.1);
-    }
-
-    .preview-bar {
-      background: var(--navy-3);
-      padding: 14px 20px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      border-bottom: 1px solid rgba(255,255,255,0.05);
-    }
-
-    .preview-dot { width: 10px; height: 10px; border-radius: 50%; }
-    .preview-dot.r { background: #ff5f57; }
-    .preview-dot.y { background: #febc2e; }
-    .preview-dot.g { background: #28c840; }
-
-    .preview-url {
-      flex: 1;
-      text-align: center;
-      font-family: var(--font-mono);
-      font-size: 12px;
-      color: var(--gray-4);
-      background: rgba(255,255,255,0.04);
-      border-radius: 6px;
-      padding: 4px 12px;
-      max-width: 300px;
-      margin: 0 auto;
-    }
-
-    .preview-content {
-      display: grid;
-      grid-template-columns: 200px 1fr;
-      min-height: 500px;
-    }
-
-    .preview-sidebar {
-      background: rgba(5,8,16,0.6);
-      padding: 20px 12px;
-      border-right: 1px solid rgba(255,255,255,0.04);
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-
-    .preview-nav-item {
-      padding: 10px 12px;
-      border-radius: 8px;
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--gray-4);
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .preview-nav-item.active {
-      background: var(--blue);
-      color: white;
-    }
-
-    .preview-main {
-      padding: 24px;
-    }
-
-    .preview-kpi-grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 12px;
-      margin-bottom: 20px;
-    }
-
-    .preview-kpi {
-      background: var(--navy-3);
-      border-radius: 12px;
-      padding: 14px;
-      border: 1px solid rgba(255,255,255,0.05);
-    }
-
-    .pkpi-label { font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gray-4); margin-bottom: 6px; }
-    .pkpi-val { font-family: var(--font-mono); font-size: 18px; font-weight: 500; }
-    .pkpi-val.g { color: #34d399; }
-    .pkpi-val.r { color: #f87171; }
-    .pkpi-val.b { color: #60a5fa; }
-    .pkpi-val.gold { color: #fbbf24; }
-
-    .preview-chart {
-      background: var(--navy-3);
-      border-radius: 12px;
-      padding: 16px;
-      height: 160px;
-      border: 1px solid rgba(255,255,255,0.05);
-      display: flex;
-      align-items: flex-end;
-      gap: 8px;
-      overflow: hidden;
-    }
-
-    .pbar {
-      flex: 1;
-      border-radius: 4px 4px 0 0;
-      background: rgba(37,99,235,0.4);
-      transition: height 0.3s;
-    }
-
-    .pbar.today { background: var(--blue); }
-
-    /* ── FEATURES ── */
-    .features {
-      padding: 120px 24px;
-      max-width: 1100px;
-      margin: 0 auto;
-    }
-
-    .section-label {
-      font-family: var(--font-mono);
-      font-size: 12px;
-      color: var(--blue-light);
-      font-weight: 500;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      margin-bottom: 16px;
-    }
-
-    .section-title {
-      font-size: clamp(32px, 5vw, 52px);
-      font-weight: 800;
-      line-height: 1.1;
-      letter-spacing: -0.02em;
-      margin-bottom: 16px;
-    }
-
-    .section-title em {
-      font-family: var(--font-serif);
-      font-style: italic;
-      font-weight: 400;
-      color: var(--blue-light);
-    }
-
-    .section-sub {
-      font-size: 18px;
-      color: var(--gray-4);
-      max-width: 560px;
-      line-height: 1.6;
-      margin-bottom: 64px;
-    }
-
-    .features-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 20px;
-    }
-
-    .feature-card {
-      background: var(--navy-2);
-      border: 1px solid rgba(255,255,255,0.06);
-      border-radius: 16px;
-      padding: 28px;
-      transition: all 0.3s;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .feature-card::before {
-      content: '';
-      position: absolute;
-      top: 0; left: 0; right: 0;
-      height: 2px;
-      background: linear-gradient(90deg, transparent, var(--blue), transparent);
-      opacity: 0;
-      transition: opacity 0.3s;
-    }
-
-    .feature-card:hover { border-color: rgba(37,99,235,0.3); transform: translateY(-4px); }
-    .feature-card:hover::before { opacity: 1; }
-
-    .feature-icon {
-      font-size: 28px;
-      margin-bottom: 16px;
-      display: block;
-    }
-
-    .feature-title {
-      font-size: 18px;
-      font-weight: 700;
-      margin-bottom: 8px;
-    }
-
-    .feature-desc {
-      font-size: 14px;
-      color: var(--gray-4);
-      line-height: 1.6;
-    }
-
-    .feature-card.big {
-      grid-column: span 2;
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 24px;
-      align-items: center;
-    }
-
-    /* ── TARGET ── */
-    .target {
-      padding: 120px 24px;
-      background: linear-gradient(180deg, transparent, rgba(37,99,235,0.03), transparent);
-    }
-
-    .target-inner {
-      max-width: 1100px;
-      margin: 0 auto;
-    }
-
-    .target-grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 16px;
-      margin-top: 64px;
-    }
-
-    .target-card {
-      text-align: center;
-      padding: 32px 20px;
-      background: var(--navy-2);
-      border-radius: 16px;
-      border: 1px solid rgba(255,255,255,0.06);
-      transition: all 0.3s;
-    }
-
-    .target-card:hover { border-color: rgba(37,99,235,0.3); transform: translateY(-4px); }
-
-    .target-emoji { font-size: 40px; margin-bottom: 16px; display: block; }
-    .target-name { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
-    .target-desc { font-size: 13px; color: var(--gray-4); line-height: 1.5; }
-
-    /* ── PRICING ── */
-    .pricing {
-      padding: 120px 24px;
-      max-width: 900px;
-      margin: 0 auto;
-      text-align: center;
-    }
-
-    .pricing-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 20px;
-      margin-top: 64px;
-    }
-
-    .pricing-card {
-      background: var(--navy-2);
-      border: 1px solid rgba(255,255,255,0.06);
-      border-radius: 20px;
-      padding: 32px 24px;
-      text-align: left;
-      position: relative;
-      transition: all 0.3s;
-    }
-
-    .pricing-card.featured {
-      border-color: var(--blue);
-      background: linear-gradient(135deg, rgba(37,99,235,0.1), var(--navy-2));
-      box-shadow: 0 0 40px rgba(37,99,235,0.15);
-    }
-
-    .pricing-badge {
-      position: absolute;
-      top: -12px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: var(--blue);
-      color: white;
-      font-size: 11px;
-      font-weight: 700;
-      padding: 4px 14px;
-      border-radius: 100px;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      white-space: nowrap;
-    }
-
-    .pricing-plan { font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gray-4); margin-bottom: 12px; }
-    .pricing-price { font-family: var(--font-mono); font-size: 42px; font-weight: 500; margin-bottom: 4px; }
-    .pricing-price span { font-size: 18px; color: var(--gray-4); }
-    .pricing-period { font-size: 13px; color: var(--gray-4); margin-bottom: 24px; }
-    .pricing-desc { font-size: 14px; color: var(--gray-4); margin-bottom: 24px; line-height: 1.5; }
-
-    .pricing-features { list-style: none; display: flex; flex-direction: column; gap: 10px; margin-bottom: 28px; }
-    .pricing-features li { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--gray-4); }
-    .pricing-features li::before { content: '✓'; color: var(--green); font-weight: 700; flex-shrink: 0; }
-
-    .pricing-btn {
-      display: block;
-      text-align: center;
-      padding: 13px;
-      border-radius: 10px;
-      font-family: var(--font-display);
-      font-weight: 700;
-      font-size: 14px;
-      text-decoration: none;
-      transition: all 0.2s;
-    }
-
-    .pricing-btn.primary { background: var(--blue); color: white; box-shadow: 0 4px 16px var(--blue-glow); }
-    .pricing-btn.primary:hover { background: var(--blue-light); transform: translateY(-1px); }
-    .pricing-btn.secondary { border: 1px solid rgba(255,255,255,0.1); color: var(--gray-4); }
-    .pricing-btn.secondary:hover { color: white; border-color: rgba(255,255,255,0.3); }
-
-    /* ── TESTIMONIALS ── */
-    .testimonials {
-      padding: 120px 24px;
-      background: linear-gradient(180deg, transparent, rgba(37,99,235,0.03), transparent);
-    }
-
-    .testimonials-inner {
-      max-width: 1100px;
-      margin: 0 auto;
-    }
-
-    .testimonials-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 20px;
-      margin-top: 64px;
-    }
-
-    .testimonial-card {
-      background: var(--navy-2);
-      border: 1px solid rgba(255,255,255,0.06);
-      border-radius: 16px;
-      padding: 28px;
-    }
-
-    .testimonial-stars { color: var(--gold); font-size: 14px; margin-bottom: 16px; letter-spacing: 2px; }
-    .testimonial-text { font-size: 15px; line-height: 1.7; color: var(--gray-4); margin-bottom: 20px; font-style: italic; }
-    .testimonial-author { display: flex; align-items: center; gap: 12px; }
-    .testimonial-avatar {
-      width: 40px; height: 40px; border-radius: 50%;
-      background: var(--blue);
-      display: flex; align-items: center; justify-content: center;
-      font-weight: 700; font-size: 14px;
-    }
-    .testimonial-name { font-weight: 700; font-size: 14px; }
-    .testimonial-role { font-size: 12px; color: var(--gray-4); font-family: var(--font-mono); }
-
-    /* ── CTA FINALE ── */
-    .cta-final {
-      padding: 120px 24px;
-      text-align: center;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .cta-glow {
-      position: absolute;
-      top: 50%; left: 50%;
-      transform: translate(-50%,-50%);
-      width: 600px; height: 300px;
-      background: radial-gradient(ellipse, rgba(37,99,235,0.15), transparent 70%);
-      pointer-events: none;
-    }
-
-    .cta-final h2 {
-      font-size: clamp(36px, 6vw, 64px);
-      font-weight: 800;
-      line-height: 1.1;
-      letter-spacing: -0.02em;
-      margin-bottom: 20px;
-    }
-
-    .cta-final p {
-      font-size: 18px;
-      color: var(--gray-4);
-      margin-bottom: 48px;
-      max-width: 500px;
-      margin-left: auto;
-      margin-right: auto;
-    }
-
-    /* ── FOOTER ── */
-    footer {
-      border-top: 1px solid rgba(255,255,255,0.06);
-      padding: 40px 24px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      max-width: 1100px;
-      margin: 0 auto;
-      flex-wrap: wrap;
-      gap: 16px;
-    }
-
-    .footer-logo { display: flex; align-items: center; gap: 8px; }
-    .footer-copy { font-size: 13px; color: var(--gray-6); }
-    .footer-links { display: flex; gap: 24px; }
-    .footer-links a { font-size: 13px; color: var(--gray-4); text-decoration: none; transition: color 0.2s; }
-    .footer-links a:hover { color: white; }
-
-    /* ── ANIMATIONS ── */
-    @keyframes fadeUp {
-      from { opacity: 0; transform: translateY(24px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-
-    .reveal {
-      opacity: 0;
-      transform: translateY(32px);
-      transition: opacity 0.6s ease, transform 0.6s ease;
-    }
-
-    .reveal.visible {
-      opacity: 1;
-      transform: translateY(0);
-    }
-
-    /* ── MOBILE ── */
-    @media (max-width: 768px) {
-      nav { padding: 16px 20px; }
-      .nav-links { display: none; }
-      .hero { padding: 100px 20px 60px; }
-      .hero-stats { gap: 24px; flex-wrap: wrap; justify-content: center; }
-      .features-grid { grid-template-columns: 1fr; }
-      .feature-card.big { grid-column: span 1; grid-template-columns: 1fr; }
-      .target-grid { grid-template-columns: 1fr 1fr; }
-      .pricing-grid { grid-template-columns: 1fr; }
-      .testimonials-grid { grid-template-columns: 1fr; }
-      .preview-content { grid-template-columns: 1fr; }
-      .preview-sidebar { display: none; }
-      .preview-kpi-grid { grid-template-columns: 1fr 1fr; }
-      footer { flex-direction: column; text-align: center; }
-    }
+    *{margin:0;padding:0;box-sizing:border-box}html{scroll-behavior:smooth}body{font-family:'Inter',sans-serif;background:#fff;color:#0f172a;line-height:1.6}
+    nav{position:sticky;top:0;z-index:100;background:rgba(255,255,255,.95);backdrop-filter:blur(10px);border-bottom:1px solid #e2e8f0;padding:0 40px;height:64px;display:flex;align-items:center;justify-content:space-between}
+    .nav-logo{display:flex;align-items:center;gap:10px;text-decoration:none}
+    .nav-logo-icon{width:36px;height:36px;background:#2563eb;border-radius:9px;display:flex;align-items:center;justify-content:center;color:white;font-weight:900;font-size:18px}
+    .nav-logo-text{font-size:20px;font-weight:900;color:#0f172a;letter-spacing:-.02em}
+    .nav-links{display:flex;align-items:center;gap:32px}
+    .nav-links a{font-size:14px;font-weight:500;color:#64748b;text-decoration:none;transition:color .2s}
+    .nav-links a:hover{color:#0f172a}
+    .nav-cta{background:#2563eb;color:white!important;padding:10px 20px;border-radius:8px;font-weight:600!important}
+    .nav-cta:hover{background:#1d4ed8!important}
+    .hero{padding:100px 40px 80px;text-align:center;background:linear-gradient(180deg,#f8faff 0%,#fff 100%);border-bottom:1px solid #e2e8f0}
+    .hero-badge{display:inline-flex;align-items:center;gap:6px;background:#eff6ff;color:#2563eb;border:1px solid #bfdbfe;border-radius:100px;padding:6px 16px;font-size:13px;font-weight:600;margin-bottom:28px}
+    .hero h1{font-size:clamp(36px,5vw,60px);font-weight:900;color:#0f172a;line-height:1.1;letter-spacing:-.03em;margin-bottom:20px;max-width:800px;margin-left:auto;margin-right:auto}
+    .hero h1 span{color:#2563eb}
+    .hero p{font-size:18px;color:#64748b;max-width:560px;margin:0 auto 40px;line-height:1.7}
+    .hero-btns{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-bottom:60px}
+    .btn-primary{background:#2563eb;color:white;padding:14px 28px;border-radius:10px;font-size:16px;font-weight:700;text-decoration:none;transition:all .2s;display:inline-flex;align-items:center;gap:8px}
+    .btn-primary:hover{background:#1d4ed8;transform:translateY(-1px);box-shadow:0 8px 24px rgba(37,99,235,.3)}
+    .btn-secondary{background:white;color:#0f172a;border:1.5px solid #e2e8f0;padding:14px 28px;border-radius:10px;font-size:16px;font-weight:600;text-decoration:none;transition:all .2s}
+    .btn-secondary:hover{border-color:#94a3b8;transform:translateY(-1px)}
+    .hero-stats{display:flex;justify-content:center;gap:48px;flex-wrap:wrap}
+    .stat{text-align:center}
+    .stat-num{font-size:28px;font-weight:900;color:#0f172a}
+    .stat-label{font-size:13px;color:#94a3b8;font-weight:500;margin-top:2px}
+    .section{padding:80px 40px}
+    .section-inner{max-width:1100px;margin:0 auto}
+    .section-inner-sm{max-width:900px;margin:0 auto}
+    .section-inner-xs{max-width:700px;margin:0 auto}
+    .section-label{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#2563eb;margin-bottom:12px}
+    .section-title{font-size:clamp(28px,4vw,42px);font-weight:800;color:#0f172a;line-height:1.2;letter-spacing:-.02em;margin-bottom:16px}
+    .section-sub{font-size:17px;color:#64748b;line-height:1.7;margin-bottom:48px;max-width:560px}
+    .bg-gray{background:#f8faff;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0}
+    .app-mock{background:#0a0f1e;border-radius:16px;padding:24px;box-shadow:0 40px 80px rgba(0,0,0,.15)}
+    .mock-bar{display:flex;align-items:center;gap:8px;margin-bottom:20px}
+    .mock-dot{width:12px;height:12px;border-radius:50%}
+    .mock-title{color:rgba(255,255,255,.4);font-size:13px;margin-left:8px}
+    .mock-table{width:100%;border-collapse:collapse}
+    .mock-table th{background:#1e2d4a;color:#60a5fa;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:10px 14px;text-align:left}
+    .mock-table td{padding:10px 14px;font-size:13px;border-bottom:1px solid rgba(255,255,255,.06);color:#94a3b8}
+    .features-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:48px}
+    .feat-card{background:#f8faff;border:1.5px solid #e2e8f0;border-radius:16px;padding:28px;transition:all .2s}
+    .feat-card:hover{border-color:#bfdbfe;box-shadow:0 8px 24px rgba(37,99,235,.08);transform:translateY(-2px)}
+    .feat-icon{font-size:32px;margin-bottom:16px}
+    .feat-title{font-size:17px;font-weight:700;color:#0f172a;margin-bottom:8px}
+    .feat-desc{font-size:14px;color:#64748b;line-height:1.6}
+    .steps{display:flex;flex-direction:column;gap:0;margin-top:48px}
+    .step{display:flex;gap:32px;align-items:flex-start;padding:32px 0;border-bottom:1px solid #e2e8f0}
+    .step:last-child{border-bottom:none}
+    .step-num{min-width:48px;height:48px;background:#2563eb;color:white;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:900;flex-shrink:0}
+    .step-content h3{font-size:20px;font-weight:700;color:#0f172a;margin-bottom:8px}
+    .step-content p{font-size:15px;color:#64748b;line-height:1.7}
+    .reviews-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:48px}
+    .review-card{background:white;border:1.5px solid #e2e8f0;border-radius:16px;padding:28px}
+    .stars{color:#f59e0b;font-size:16px;margin-bottom:14px}
+    .review-text{font-size:15px;color:#374151;line-height:1.7;margin-bottom:20px;font-style:italic}
+    .reviewer{display:flex;align-items:center;gap:12px}
+    .reviewer-avatar{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;color:white;flex-shrink:0}
+    .reviewer-name{font-size:14px;font-weight:700;color:#0f172a}
+    .reviewer-role{font-size:12px;color:#94a3b8}
+    .pricing-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:48px}
+    .pricing-card{background:white;border:1.5px solid #e2e8f0;border-radius:20px;padding:32px;position:relative;transition:all .2s}
+    .pricing-card:hover{transform:translateY(-4px);box-shadow:0 16px 40px rgba(0,0,0,.08)}
+    .pricing-card.featured{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.1)}
+    .featured-badge{position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:#2563eb;color:white;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:4px 14px;border-radius:100px;white-space:nowrap}
+    .plan-name{font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#64748b;margin-bottom:8px}
+    .plan-price{font-size:42px;font-weight:900;color:#0f172a;line-height:1;margin-bottom:4px}
+    .plan-price span{font-size:18px;font-weight:500;color:#94a3b8}
+    .plan-desc{font-size:14px;color:#64748b;margin-bottom:24px;padding-bottom:24px;border-bottom:1px solid #e2e8f0}
+    .plan-features{list-style:none;margin-bottom:28px}
+    .plan-features li{font-size:14px;color:#374151;padding:6px 0;display:flex;align-items:center;gap:10px}
+    .plan-features li::before{content:'✓';color:#22c55e;font-weight:800;font-size:14px;flex-shrink:0}
+    .plan-btn{display:block;text-align:center;padding:13px;border-radius:10px;font-size:15px;font-weight:700;text-decoration:none;transition:all .2s}
+    .plan-btn.primary{background:#2563eb;color:white}
+    .plan-btn.primary:hover{background:#1d4ed8}
+    .plan-btn.outline{border:1.5px solid #e2e8f0;color:#0f172a}
+    .plan-btn.outline:hover{border-color:#94a3b8}
+    .faq-item{border-bottom:1px solid #e2e8f0}
+    .faq-q{width:100%;text-align:left;background:none;border:none;padding:20px 0;font-size:16px;font-weight:600;color:#0f172a;cursor:pointer;display:flex;justify-content:space-between;align-items:center;font-family:'Inter',sans-serif}
+    .faq-q:hover{color:#2563eb}
+    .faq-a{font-size:15px;color:#64748b;line-height:1.7;padding-bottom:20px;display:none}
+    .faq-a.open{display:block}
+    .cta-final{padding:100px 40px;background:#0f172a;text-align:center}
+    .cta-final h2{font-size:clamp(32px,4vw,48px);font-weight:900;color:white;letter-spacing:-.02em;margin-bottom:16px}
+    .cta-final p{font-size:18px;color:#94a3b8;margin-bottom:40px}
+    footer{background:#0f172a;border-top:1px solid rgba(255,255,255,.08);padding:40px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:20px}
+    .footer-logo{display:flex;align-items:center;gap:10px}
+    .footer-logo-icon{width:30px;height:30px;background:#2563eb;border-radius:7px;display:flex;align-items:center;justify-content:center;color:white;font-weight:900;font-size:15px}
+    .footer-logo-text{font-size:16px;font-weight:900;color:white}
+    .footer-copy{font-size:13px;color:#475569}
+    .footer-links{display:flex;gap:24px}
+    .footer-links a{font-size:13px;color:#475569;text-decoration:none;transition:color .2s}
+    .footer-links a:hover{color:white}
+    @media(max-width:768px){nav{padding:0 20px}.nav-links{display:none}.hero{padding:60px 20px 50px}.features-grid,.reviews-grid,.pricing-grid{grid-template-columns:1fr}.step{flex-direction:column;gap:16px}footer{flex-direction:column;text-align:center}.section{padding:60px 20px}}
   </style>
 </head>
 <body>
 
-  <!-- NAV -->
-  <nav>
-    <a href="#" class="nav-logo">
-      <div class="nav-logo-icon">K</div>
-      <span class="nav-logo-text">KONTRO</span>
-    </a>
-    <ul class="nav-links">
-      <li><a href="#funzionalita">Funzionalità</a></li>
-      <li><a href="#chi">Per chi</a></li>
-      <li><a href="#prezzi">Prezzi</a></li>
-      <li><a href="https://www.kontro.cloud/app" class="nav-cta">Inizia gratis →</a></li>
-    </ul>
-  </nav>
+<nav>
+  <a href="/" class="nav-logo">
+    <div class="nav-logo-icon">K</div>
+    <div class="nav-logo-text">KONTRO</div>
+  </a>
+  <div class="nav-links">
+    <a href="#funzionalita">Funzionalità</a>
+    <a href="#prezzi">Prezzi</a>
+    <a href="#recensioni">Recensioni</a>
+    <a href="#faq">FAQ</a>
+    <a href="/app" class="nav-cta">Accedi →</a>
+  </div>
+</nav>
 
-  <!-- HERO -->
-  <section class="hero">
-    <div class="hero-grid"></div>
-    <div class="hero-glow"></div>
+<section class="hero">
+  <div class="hero-badge">🇮🇹 Fatto in Italia per bar e ristoranti</div>
+  <h1>La prima nota digitale<br>per la tua <span>attività</span></h1>
+  <p>Dì addio ai quaderni e ai fogli Excel. KONTRO gestisce incassi, dipendenti, fornitori e banca da un'unica piattaforma.</p>
+  <div class="hero-btns">
+    <a href="/app" class="btn-primary">Inizia gratis — è subito operativo →</a>
+    <a href="#prezzi" class="btn-secondary">Vedi i piani</a>
+  </div>
+  <div class="hero-stats">
+    <div class="stat"><div class="stat-num">3</div><div class="stat-label">Turni gestiti</div></div>
+    <div class="stat"><div class="stat-num">100%</div><div class="stat-label">Cloud, sempre aggiornato</div></div>
+    <div class="stat"><div class="stat-num">0€</div><div class="stat-label">Per iniziare</div></div>
+    <div class="stat"><div class="stat-num">GDPR</div><div class="stat-label">Dati protetti in Europa</div></div>
+  </div>
+</section>
 
-    <div class="hero-badge">
-      Nuovo · Prima nota digitale per attività italiane
-    </div>
-
-    <h1>Gestisci il tuo bar<br><em>senza carta</em></h1>
-    <div class="hero-sub">con KONTRO</div>
-
-    <p>Prima nota digitale, dipendenti, fornitori, banche e previsioni finanziarie — tutto in un'unica app pensata per bar, ristoranti e attività commerciali italiane.</p>
-
-    <div class="hero-actions">
-      <a href="https://www.kontro.cloud/app" class="btn-primary">
-        Inizia gratis — è subito operativo →
-      </a>
-      <a href="#funzionalita" class="btn-secondary">
-        Scopri le funzionalità
-      </a>
-    </div>
-
-    <div class="hero-stats">
-      <div class="stat">
-        <div class="stat-val">3</div>
-        <div class="stat-label">Turni giornalieri</div>
+<section class="section bg-gray">
+  <div class="section-inner-sm">
+    <div class="section-label">Prima Nota</div>
+    <div class="section-title">Tre turni, tutto sotto controllo</div>
+    <div class="section-sub">Mattina, pomeriggio e sera: ogni cassiere compila il suo turno, tu hai il quadro completo in tempo reale.</div>
+    <div class="app-mock">
+      <div class="mock-bar">
+        <div class="mock-dot" style="background:#ff5f56"></div>
+        <div class="mock-dot" style="background:#ffbd2e"></div>
+        <div class="mock-dot" style="background:#27c93f"></div>
+        <div class="mock-title">KONTRO — Prima Nota · Lunedì 14 aprile 2026</div>
       </div>
-      <div class="stat">
-        <div class="stat-val">∞</div>
-        <div class="stat-label">Sedi gestite</div>
-      </div>
-      <div class="stat">
-        <div class="stat-val">0€</div>
-        <div class="stat-label">Per iniziare</div>
-      </div>
-      <div class="stat">
-        <div class="stat-val">100%</div>
-        <div class="stat-label">Made in Italy</div>
-      </div>
-    </div>
-  </section>
-
-  <!-- APP PREVIEW -->
-  <section class="preview-section">
-    <div class="preview-wrap reveal">
-      <div class="preview-bar">
-        <div class="preview-dot r"></div>
-        <div class="preview-dot y"></div>
-        <div class="preview-dot g"></div>
-        <div class="preview-url">www.kontro.cloud</div>
-      </div>
-      <div class="preview-content">
-        <div class="preview-sidebar">
-          <div class="preview-nav-item active">◈ Dashboard</div>
-          <div class="preview-nav-item">✎ Prima Nota</div>
-          <div class="preview-nav-item">◷ Storico</div>
-          <div class="preview-nav-item">🏦 Banca</div>
-          <div class="preview-nav-item">📦 Fornitori</div>
-          <div class="preview-nav-item">👥 Dipendenti</div>
-          <div class="preview-nav-item">⚙ Impostazioni</div>
+      <table class="mock-table">
+        <thead><tr><th>Voce</th><th>☀ Mattina</th><th>🌤 Pomeriggio</th><th>🌙 Sera</th></tr></thead>
+        <tbody>
+          <tr><td style="color:#e2e8f0;font-weight:600">Incasso cassa</td><td style="color:#4ade80">€ 389,70</td><td style="color:#4ade80">€ 600,00</td><td style="color:#4ade80">€ 700,00</td></tr>
+          <tr><td style="color:#e2e8f0;font-weight:600">Ricariche / Money</td><td>€ 222,52</td><td>—</td><td>—</td></tr>
+          <tr><td style="color:#e2e8f0;font-weight:600">Sisal</td><td>€ 10,01</td><td>—</td><td>—</td></tr>
+          <tr style="background:rgba(37,99,235,.08)"><td style="color:#60a5fa;font-weight:700">TOT. ENTRATE</td><td style="color:#60a5fa;font-weight:700">€ 834,43</td><td style="color:#60a5fa;font-weight:700">€ 1.222,73</td><td style="color:#60a5fa;font-weight:700">€ 1.634,23</td></tr>
+        </tbody>
+      </table>
+      <div style="display:flex;gap:12px;margin-top:16px;flex-wrap:wrap">
+        <div style="flex:1;min-width:140px;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:10px;padding:12px;text-align:center">
+          <div style="font-size:11px;color:#4ade80;font-weight:700;text-transform:uppercase;margin-bottom:4px">☀ Incasso Mattina</div>
+          <div style="font-size:20px;font-weight:800;color:#4ade80">€ 595,35</div>
         </div>
-        <div class="preview-main">
-          <div class="preview-kpi-grid">
-            <div class="preview-kpi">
-              <div class="pkpi-label">Entrate oggi</div>
-              <div class="pkpi-val g">€ 1.240,00</div>
-            </div>
-            <div class="preview-kpi">
-              <div class="pkpi-label">Uscite oggi</div>
-              <div class="pkpi-val r">€ 340,00</div>
-            </div>
-            <div class="preview-kpi">
-              <div class="pkpi-label">Saldo del giorno</div>
-              <div class="pkpi-val b">€ 900,00</div>
-            </div>
-            <div class="preview-kpi">
-              <div class="pkpi-label">Saldo del mese</div>
-              <div class="pkpi-val gold">€ 12.450,00</div>
-            </div>
-          </div>
-          <div class="preview-chart" id="chart">
-          </div>
+        <div style="flex:1;min-width:140px;background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.3);border-radius:10px;padding:12px;text-align:center">
+          <div style="font-size:11px;color:#818cf8;font-weight:700;text-transform:uppercase;margin-bottom:4px">🌤 Incasso Pom.</div>
+          <div style="font-size:20px;font-weight:800;color:#818cf8">€ 205,65</div>
+        </div>
+        <div style="flex:1;min-width:140px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:10px;padding:12px;text-align:center">
+          <div style="font-size:11px;color:#fbbf24;font-weight:700;text-transform:uppercase;margin-bottom:4px">💰 Incasso Giornaliero</div>
+          <div style="font-size:20px;font-weight:800;color:#fbbf24">€ 822,34</div>
         </div>
       </div>
     </div>
-  </section>
+  </div>
+</section>
 
-  <!-- FEATURES -->
-  <section class="features" id="funzionalita">
-    <div class="reveal">
-      <div class="section-label">// Funzionalità</div>
-      <h2 class="section-title">Tutto quello che serve<br><em>davvero</em> al tuo locale</h2>
-      <p class="section-sub">KONTRO non è un gestionale generico. È stato costruito ascoltando chi lavora ogni giorno dietro al bancone.</p>
-    </div>
-
+<section class="section" id="funzionalita">
+  <div class="section-inner">
+    <div class="section-label">Funzionalità</div>
+    <div class="section-title">Tutto quello che ti serve,<br>niente di superfluo</div>
+    <div class="section-sub">Costruito appositamente per bar e ristoranti italiani. Niente software complicati.</div>
     <div class="features-grid">
-      <div class="feature-card reveal">
-        <span class="feature-icon">✎</span>
-        <div class="feature-title">Prima Nota a 3 turni</div>
-        <div class="feature-desc">Mattina, pomeriggio e sera. Fondo cassa, incassi, fornitori, prelievi, POS, carte. Il fondo di chiusura pre-compila automaticamente il giorno successivo.</div>
+      <div class="feat-card"><div class="feat-icon">📒</div><div class="feat-title">Prima nota a 3 turni</div><div class="feat-desc">Mattina, pomeriggio e sera con la logica giusta: ogni turno aggiorna il precedente. Incasso giornaliero calcolato automaticamente.</div></div>
+      <div class="feat-card"><div class="feat-icon">👥</div><div class="feat-title">Gestione dipendenti</div><div class="feat-desc">Anagrafica, planning turni settimanale con generazione automatica, presenze, acconti stipendio e export per il consulente paghe.</div></div>
+      <div class="feat-card"><div class="feat-icon">📦</div><div class="feat-title">Fornitori e fatture</div><div class="feat-desc">Anagrafica fornitori con estratto conto, saldo contabile vs effettivo, scadenziario fatture e gestione assegni.</div></div>
+      <div class="feat-card"><div class="feat-icon">🏦</div><div class="feat-title">Banca & finanza</div><div class="feat-desc">Saldi banche in tempo reale, versamenti, RID/addebiti fissi e fabbisogno finanziario a 30 giorni.</div></div>
+      <div class="feat-card"><div class="feat-icon">⚖️</div><div class="feat-title">Conciliazione fiscale</div><div class="feat-desc">Confronta il dichiarato fiscale con il versato in banca. Alert immediato in caso di discrepanze.</div></div>
+      <div class="feat-card"><div class="feat-icon">📄</div><div class="feat-title">Export PDF</div><div class="feat-desc">Prima nota in PDF pronta per il commercialista, planning turni esportabile in PDF e PNG per WhatsApp.</div></div>
+      <div class="feat-card"><div class="feat-icon">🏢</div><div class="feat-title">Multi-sede</div><div class="feat-desc">Gestisci più locali da un'unica dashboard. Prima nota separata per sede, dipendenti condivisi o dedicati.</div></div>
+      <div class="feat-card"><div class="feat-icon">👤</div><div class="feat-title">Ruoli e permessi</div><div class="feat-desc">Owner, Admin e Cassiere con permessi configurabili. Il cassiere vede solo quello che deve vedere.</div></div>
+      <div class="feat-card"><div class="feat-icon">📊</div><div class="feat-title">Dashboard e previsioni</div><div class="feat-desc">KPI giornalieri, trend settimanale, previsione incasso 7 giorni basata sullo storico.</div></div>
+    </div>
+  </div>
+</section>
+
+<section class="section bg-gray">
+  <div class="section-inner-sm">
+    <div class="section-label">Come funziona</div>
+    <div class="section-title">Operativo in 5 minuti</div>
+    <div class="section-sub">Nessuna installazione, nessuna configurazione complessa.</div>
+    <div class="steps">
+      <div class="step"><div class="step-num">1</div><div class="step-content"><h3>Crea il tuo account</h3><p>Registrati con email e nome dell'attività. Gratuito, senza carta di credito. Pronto in 30 secondi.</p></div></div>
+      <div class="step"><div class="step-num">2</div><div class="step-content"><h3>Configura la tua attività</h3><p>Aggiungi sedi, banche, fornitori e dipendenti. Meno di 10 minuti, puoi farlo gradualmente.</p></div></div>
+      <div class="step"><div class="step-num">3</div><div class="step-content"><h3>Compila la prima nota ogni giorno</h3><p>Il cassiere di mattina compila il suo turno, quello di pomeriggio aggiorna, quello di sera chiude. Tutto automatico.</p></div></div>
+      <div class="step"><div class="step-num">4</div><div class="step-content"><h3>Controlla i numeri quando vuoi</h3><p>Dashboard sempre aggiornata, storico completo, export PDF per il commercialista. Dal telefono o computer.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="recensioni">
+  <div class="section-inner">
+    <div style="text-align:center">
+      <div class="section-label">Recensioni</div>
+      <div class="section-title">Cosa dicono i nostri clienti</div>
+      <div class="section-sub" style="margin:0 auto 48px">Titolari di bar e ristoranti che usano KONTRO ogni giorno.</div>
+    </div>
+    <div class="reviews-grid">
+      <div class="review-card">
+        <div class="stars">★★★★★</div>
+        <div class="review-text">"Finalmente una prima nota che capisce come funziona un bar. I tre turni sono perfetti: mattina, pomeriggio e sera compilano ognuno il loro e io ho il totale subito."</div>
+        <div class="reviewer"><div class="reviewer-avatar" style="background:#2563eb">MR</div><div><div class="reviewer-name">Marco Rossi</div><div class="reviewer-role">Titolare — Bar Il Centrale, Roma</div></div></div>
       </div>
-      <div class="feature-card reveal">
-        <span class="feature-icon">🏦</span>
-        <div class="feature-title">Gestione bancaria completa</div>
-        <div class="feature-desc">Estratto conto, assegni postdatati, RID/SDD, versamenti. Gli assegni emessi scalano dalla disponibilità reale — non da quella teorica.</div>
+      <div class="review-card" style="border-color:#2563eb">
+        <div class="stars">★★★★★</div>
+        <div class="review-text">"Ho provato 3 software prima di KONTRO. Questo è l'unico che non richiedeva una settimana di formazione. L'ho dato ai cassieri il lunedì, il mercoledì lo usavano da soli."</div>
+        <div class="reviewer"><div class="reviewer-avatar" style="background:#7c3aed">LB</div><div><div class="reviewer-name">Laura Bianchi</div><div class="reviewer-role">Gestrice — Caffè del Corso, Milano</div></div></div>
       </div>
-      <div class="feature-card reveal">
-        <span class="feature-icon">📦</span>
-        <div class="feature-title">Fornitori & Fatture</div>
-        <div class="feature-desc">Anagrafica fornitori, registro fatture, estratto conto con saldo contabile ed effettivo. Emetti un assegno e le fatture si collegano automaticamente.</div>
-      </div>
-      <div class="feature-card reveal">
-        <span class="feature-icon">👥</span>
-        <div class="feature-title">Gestione dipendenti</div>
-        <div class="feature-desc">Organico per sede, piano turni settimanale, presenze e assenze, acconti stipendio. Export mensile per il consulente paghe in PDF e CSV.</div>
-      </div>
-      <div class="feature-card reveal">
-        <span class="feature-icon">📈</span>
-        <div class="feature-title">Previsioni intelligenti</div>
-        <div class="feature-desc">Previsione incasso basata sullo storico per giorno della settimana. Fabbisogno finanziario a 30 giorni con alert automatici se la liquidità scende sotto zero.</div>
-      </div>
-      <div class="feature-card reveal">
-        <span class="feature-icon">👥</span>
-        <div class="feature-title">Multi-utente con ruoli</div>
-        <div class="feature-desc">Invita cassieri con link. Owner controlla tutto. Admin vede i report. Il cassiere vede solo quello che l'owner decide. Permessi granulari per ogni sezione.</div>
+      <div class="review-card">
+        <div class="stars">★★★★★</div>
+        <div class="review-text">"La conciliazione fiscale mi ha salvato due volte. Mi avvisa subito se i versamenti in banca non tornano. Prima lo scoprivo solo con il commercialista a fine mese."</div>
+        <div class="reviewer"><div class="reviewer-avatar" style="background:#059669">GT</div><div><div class="reviewer-name">Giuseppe Torelli</div><div class="reviewer-role">Titolare — Trattoria Da Giuseppe, Napoli</div></div></div>
       </div>
     </div>
-  </section>
+  </div>
+</section>
 
-  <!-- TARGET -->
-  <section class="target" id="chi">
-    <div class="target-inner">
-      <div class="reveal" style="text-align:center">
-        <div class="section-label">// Per chi è KONTRO</div>
-        <h2 class="section-title">Pensato per chi lavora<br><em>sul campo</em></h2>
-        <p class="section-sub" style="margin:0 auto 0">Non per i commercialisti. Per chi apre alle 6 del mattino e chiude a mezzanotte.</p>
-      </div>
-      <div class="target-grid">
-        <div class="target-card reveal">
-          <span class="target-emoji">☕</span>
-          <div class="target-name">Bar & Caffetterie</div>
-          <div class="target-desc">Prima nota multi-turno, conto scommesse e gratta&vinci separati, gestione personale.</div>
-        </div>
-        <div class="target-card reveal">
-          <span class="target-emoji">🍕</span>
-          <div class="target-name">Ristoranti & Pizzerie</div>
-          <div class="target-desc">Più sedi, più fornitori, più dipendenti. KONTRO scala con te senza complicarsi.</div>
-        </div>
-        <div class="target-card reveal">
-          <span class="target-emoji">🛒</span>
-          <div class="target-name">Negozi & Attività</div>
-          <div class="target-desc">Movimenti extra cassa, categorie personalizzabili, estratto conto fornitori preciso.</div>
-        </div>
-        <div class="target-card reveal">
-          <span class="target-emoji">🍺</span>
-          <div class="target-name">Pub & Locali serali</div>
-          <div class="target-desc">Turno serale dedicato, acconti dipendenti collegati alla cassa o al bonifico.</div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- PRICING -->
-  <section class="pricing" id="prezzi">
-    <div class="reveal">
-      <div class="section-label">// Prezzi</div>
-      <h2 class="section-title">Semplice.<br><em>Trasparente.</em></h2>
-      <p class="section-sub" style="margin:0 auto 24px">Nessun contratto annuale. Nessuna sorpresa in fattura. Cancelli quando vuoi.</p>
-    </div>
-
-    <div class="pricing-grid reveal">
+<section class="section bg-gray" id="prezzi">
+  <div class="section-inner" style="text-align:center">
+    <div class="section-label">Prezzi</div>
+    <div class="section-title">Semplice e trasparente</div>
+    <div class="section-sub" style="margin:0 auto 0">Nessun costo nascosto. Cancelli quando vuoi.</div>
+    <div class="pricing-grid" style="text-align:left">
       <div class="pricing-card">
-        <div class="pricing-plan">Starter</div>
-        <div class="pricing-price">0<span>€</span></div>
-        <div class="pricing-period">Per sempre gratis</div>
-        <div class="pricing-desc">Per chi vuole provare senza impegno.</div>
-        <ul class="pricing-features">
-          <li>1 sede</li>
-          <li>2 utenti</li>
-          <li>Prima nota base</li>
-          <li>30 giorni di storico</li>
-          <li>Export PDF</li>
+        <div class="plan-name">Free</div>
+        <div class="plan-price">€ 0<span>/mese</span></div>
+        <div class="plan-desc">Per chi vuole provare KONTRO senza rischi.</div>
+        <ul class="plan-features">
+          <li>1 sede</li><li>1 utente</li><li>30 giorni di storico</li><li>Prima nota a 3 turni</li><li>Dashboard base</li>
         </ul>
-        <a href="https://www.kontro.cloud/app" class="pricing-btn secondary">Inizia gratis</a>
+        <a href="/app" class="plan-btn outline">Inizia gratis →</a>
       </div>
-
       <div class="pricing-card featured">
-        <div class="pricing-badge">Più popolare</div>
-        <div class="pricing-plan">Pro</div>
-        <div class="pricing-price">29<span>€/mese</span></div>
-        <div class="pricing-period">Per attività serie</div>
-        <div class="pricing-desc">Tutto quello che serve per gestire un'attività in modo professionale.</div>
-        <ul class="pricing-features">
-          <li>Sedi illimitate</li>
-          <li>Utenti illimitati</li>
-          <li>Prima nota completa a 3 turni</li>
-          <li>Dipendenti & Turni</li>
-          <li>Banca & Fornitori</li>
-          <li>Previsioni finanziarie</li>
-          <li>Storico illimitato</li>
+        <div class="featured-badge">⚡ Più scelto</div>
+        <div class="plan-name" style="color:#2563eb">Pro</div>
+        <div class="plan-price">€ 29<span>/mese</span></div>
+        <div class="plan-desc">Per attività con più turni e collaboratori.</div>
+        <ul class="plan-features">
+          <li>Fino a 3 sedi</li><li>Fino a 5 utenti</li><li>Storico illimitato</li><li>Export PDF prima nota</li><li>Planning turni avanzato</li><li>Conciliazione fiscale</li><li>Gestione dipendenti completa</li>
         </ul>
-        <a href="https://www.kontro.cloud/app" class="pricing-btn primary">Inizia 30 giorni gratis →</a>
+        <a href="/app" class="plan-btn primary">Inizia 30 giorni gratis →</a>
       </div>
-
       <div class="pricing-card">
-        <div class="pricing-plan">Business</div>
-        <div class="pricing-price">59<span>€/mese</span></div>
-        <div class="pricing-period">Per gruppi e catene</div>
-        <div class="pricing-desc">Per chi gestisce più attività sotto lo stesso tetto.</div>
-        <ul class="pricing-features">
-          <li>Multi-azienda</li>
-          <li>Dashboard consolidata</li>
-          <li>Supporto prioritario</li>
-          <li>Onboarding dedicato</li>
-          <li>API access</li>
+        <div class="plan-name">Business</div>
+        <div class="plan-price">€ 59<span>/mese</span></div>
+        <div class="plan-desc">Per catene e gestori di più locali.</div>
+        <ul class="plan-features">
+          <li>Sedi illimitate</li><li>Utenti illimitati</li><li>Storico illimitato</li><li>Tutto il piano Pro</li><li>Report mensile PDF</li><li>Supporto prioritario</li><li>Onboarding dedicato</li>
         </ul>
-        <a href="/cdn-cgi/l/email-protection#d2bbbcb4bd92b9bdbca6a0bdfcb1bebda7b6" class="pricing-btn secondary">Contattaci</a>
+        <a href="/app" class="plan-btn outline">Contattaci →</a>
       </div>
     </div>
-  </section>
+    <p style="text-align:center;font-size:13px;color:#94a3b8;margin-top:24px">Tutti i prezzi sono IVA esclusa · Pagamento sicuro via Stripe · Cancelli quando vuoi</p>
+  </div>
+</section>
 
-  <!-- TESTIMONIALS -->
-  <section class="testimonials">
-    <div class="testimonials-inner">
-      <div class="reveal" style="text-align:center">
-        <div class="section-label">// Cosa dicono</div>
-        <h2 class="section-title">Chi lo usa<br><em>non torna indietro</em></h2>
-      </div>
-      <div class="testimonials-grid">
-        <div class="testimonial-card reveal">
-          <div class="testimonial-stars">★★★★★</div>
-          <div class="testimonial-text">"Finalmente un gestionale che capisce come funziona davvero un bar. Il fondo cassa che si pre-compila da solo mi ha già salvato mille volte."</div>
-          <div class="testimonial-author">
-            <div class="testimonial-avatar">M</div>
-            <div>
-              <div class="testimonial-name">Marco R.</div>
-              <div class="testimonial-role">Titolare · Bar Centro, Roma</div>
-            </div>
-          </div>
-        </div>
-        <div class="testimonial-card reveal">
-          <div class="testimonial-stars">★★★★★</div>
-          <div class="testimonial-text">"L'estratto conto fornitori con il saldo contabile ed effettivo è una cosa che cercavo da anni. Gli assegni postdatati finalmente si gestiscono bene."</div>
-          <div class="testimonial-author">
-            <div class="testimonial-avatar">S</div>
-            <div>
-              <div class="testimonial-name">Sara T.</div>
-              <div class="testimonial-role">Amministratrice · Ristorante Da Noi, Milano</div>
-            </div>
-          </div>
-        </div>
-        <div class="testimonial-card reveal">
-          <div class="testimonial-stars">★★★★★</div>
-          <div class="testimonial-text">"Uso KONTRO per due locali. Il consulente paghe ora riceve un PDF preciso ogni mese con presenze e acconti. Zero telefonate inutili."</div>
-          <div class="testimonial-author">
-            <div class="testimonial-avatar">L</div>
-            <div>
-              <div class="testimonial-name">Luca B.</div>
-              <div class="testimonial-role">Titolare · 2 pub, Napoli</div>
-            </div>
-          </div>
-        </div>
-      </div>
+<section class="section" id="faq">
+  <div class="section-inner-xs">
+    <div style="text-align:center;margin-bottom:48px">
+      <div class="section-label">FAQ</div>
+      <div class="section-title">Domande frequenti</div>
     </div>
-  </section>
+    <div class="faq-item"><button class="faq-q" onclick="toggleFaq(this)">Devo installare qualcosa? <span>+</span></button><div class="faq-a">No. KONTRO funziona nel browser su computer, tablet e smartphone. Niente da installare o aggiornare.</div></div>
+    <div class="faq-item"><button class="faq-q" onclick="toggleFaq(this)">I miei dati sono al sicuro? <span>+</span></button><div class="faq-a">Sì. I dati sono salvati su server europei, crittografati e protetti. Sei l'unico proprietario e puoi esportarli o cancellarli in qualsiasi momento.</div></div>
+    <div class="faq-item"><button class="faq-q" onclick="toggleFaq(this)">Posso usarlo da cellulare? <span>+</span></button><div class="faq-a">Sì. KONTRO è ottimizzato per mobile. Il cassiere può compilare la prima nota dallo smartphone senza problemi.</div></div>
+    <div class="faq-item"><button class="faq-q" onclick="toggleFaq(this)">Come funziona il piano Free? <span>+</span></button><div class="faq-a">Il piano Free è gratuito per sempre con 1 sede, 1 utente e 30 giorni di storico. Puoi passare a Pro o Business in qualsiasi momento.</div></div>
+    <div class="faq-item"><button class="faq-q" onclick="toggleFaq(this)">Posso cancellare l'abbonamento? <span>+</span></button><div class="faq-a">Sì, quando vuoi. Vai su Impostazioni → Abbonamento → Gestisci abbonamento. Nessuna penale, i dati restano accessibili fino alla scadenza del periodo pagato.</div></div>
+    <div class="faq-item"><button class="faq-q" onclick="toggleFaq(this)">Posso gestire più locali? <span>+</span></button><div class="faq-a">Sì. Con il piano Pro gestisci fino a 3 sedi, con Business sedi illimitate. Tutto visibile in un'unica dashboard.</div></div>
+  </div>
+</section>
 
-  <!-- CTA FINALE -->
-  <section class="cta-final">
-    <div class="cta-glow"></div>
-    <div class="reveal">
-      <h2>Pronto a controllare<br><em>davvero</em> i tuoi numeri?</h2>
-      <p>Registrati gratis. Nessuna carta di credito. Operativo in 5 minuti.</p>
-      <a href="https://www.kontro.cloud/app" class="btn-primary" style="font-size:18px;padding:18px 40px">
-        Inizia gratis con KONTRO →
-      </a>
-    </div>
-  </section>
+<section class="cta-final">
+  <h2>Inizia oggi, gratis</h2>
+  <p>Nessuna carta di credito richiesta. Operativo in 5 minuti.</p>
+  <a href="/app" class="btn-primary" style="font-size:18px;padding:18px 40px">Crea il tuo account gratuito →</a>
+</section>
 
-  <!-- FOOTER -->
-  <footer>
-    <div class="footer-logo">
-      <div class="nav-logo-icon" style="width:28px;height:28px;font-size:14px">K</div>
-      <span style="font-weight:800;font-size:16px;letter-spacing:0.1em">KONTRO</span>
-    </div>
-    <div class="footer-copy">© 2026 KONTRO. Prima nota digitale italiana.</div>
-    <div class="footer-links">
-      <a href="/privacy">Privacy Policy</a>
-      <a href="/termini">Termini di servizio</a>
-      <a href="/cdn-cgi/l/email-protection#254c4b434a654e4a4b51574a0b46494a5041">Contatti</a>
-    </div>
-  </footer>
+<footer>
+  <div class="footer-logo"><div class="footer-logo-icon">K</div><div class="footer-logo-text">KONTRO</div></div>
+  <div class="footer-copy">© 2026 KONTRO — Prima nota digitale italiana</div>
+  <div class="footer-links"><a href="/privacy">Privacy Policy</a><a href="/termini">Termini di servizio</a><a href="mailto:info@kontro.cloud">info@kontro.cloud</a></div>
+</footer>
 
-  <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js" defer></script><script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
-    // Scroll reveal
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach(e => {
-        if (e.isIntersecting) { e.target.classList.add('visible'); }
-      });
-    }, { threshold: 0.1 });
-
-    document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
-
-    // Chart bars
-    const bars = [45,62,38,71,55,88,65,42,76,58,92,70,48,85,60,73,50,95,67,80];
-    const chart = document.getElementById('chart');
-    
+<script>
+function toggleFaq(btn){
+  const a=btn.nextElementSibling,icon=btn.querySelector('span'),open=a.classList.contains('open');
+  document.querySelectorAll('.faq-a').forEach(x=>x.classList.remove('open'));
+  document.querySelectorAll('.faq-q span').forEach(s=>s.textContent='+');
+  if(!open){a.classList.add('open');icon.textContent='−';}
+}
+</script>
+</body>
+</html>
