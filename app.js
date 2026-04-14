@@ -7054,3 +7054,62 @@ function hexToRgb(hex) {
   const b = parseInt(hex.slice(5,7),16);
   return [r,g,b];
 }
+
+// ============================================
+// CREAZIONE UTENTE DIRETTA (senza email invito)
+// ============================================
+async function createUser() {
+  if (!currentBusiness) return;
+
+  const nome     = document.getElementById('new-user-nome')?.value.trim();
+  const cognome  = document.getElementById('new-user-cognome')?.value.trim();
+  const email    = document.getElementById('invite-email')?.value.trim();
+  const password = document.getElementById('new-user-password')?.value;
+  const role     = document.getElementById('invite-role')?.value || 'cashier';
+  const msgEl    = document.getElementById('invite-message');
+
+  if (!email || !password) {
+    msgEl.textContent = 'Inserisci email e password'; msgEl.className = 'auth-message error'; return;
+  }
+  if (password.length < 8) {
+    msgEl.textContent = 'La password deve essere di almeno 8 caratteri'; msgEl.className = 'auth-message error'; return;
+  }
+
+  // Controllo limite piano Free
+  if (!await checkLimiteUtenti()) return;
+
+  msgEl.textContent = 'Creazione account in corso...'; msgEl.className = 'auth-message';
+
+  const res = await fetch('/api/create-user', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email, password, nome, cognome, role,
+      businessId: currentBusiness.id
+    })
+  });
+
+  const data = await res.json();
+
+  if (!res.ok || data.error) {
+    msgEl.textContent = 'Errore: ' + (data.error || 'Errore sconosciuto');
+    msgEl.className = 'auth-message error';
+    return;
+  }
+
+  const roleLabel = role === 'admin' ? 'Admin' : 'Cassiere';
+  msgEl.textContent = `✓ Account creato! ${nome||''} ${cognome||''} può accedere con ${email}`;
+  msgEl.className = 'auth-message success';
+
+  showToast(`Account ${roleLabel} creato ✓`, 'success');
+
+  // Reset form dopo 3 secondi
+  setTimeout(() => {
+    document.getElementById('new-user-nome').value = '';
+    document.getElementById('new-user-cognome').value = '';
+    document.getElementById('invite-email').value = '';
+    document.getElementById('new-user-password').value = '';
+    msgEl.textContent = '';
+    loadTeam();
+  }, 3000);
+}
