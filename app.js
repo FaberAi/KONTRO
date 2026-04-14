@@ -4406,7 +4406,9 @@ async function saveDipendente() {
 async function loadDipendentiList() {
   if (!currentBusiness) return;
   const { data } = await db.from('dipendenti').select('*, locations(name)')
-    .eq('business_id', currentBusiness.id).order('cognome');
+    .eq('business_id', currentBusiness.id)
+    .eq('attivo', true)
+    .order('cognome');
   const el = document.getElementById('dipendenti-list');
   if (!data?.length) { el.innerHTML = '<div class="empty-state">Nessun dipendente registrato</div>'; return; }
 
