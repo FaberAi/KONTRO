@@ -69,7 +69,7 @@
 
 html, body {
   height: 100%;
-  background: var(--navy-900);
+  background: #111827;
   color: var(--white);
   font-family: var(--font-display);
   font-size: 14px;
@@ -181,7 +181,7 @@ html, body {
 .tab-row {
   display: flex;
   gap: 4px;
-  background: var(--navy-900);
+  background: #111827;
   border-radius: var(--radius);
   padding: 4px;
   margin-bottom: 24px;
@@ -229,7 +229,7 @@ html, body {
 .field select,
 .field textarea {
   width: 100%;
-  background: var(--navy-900);
+  background: #111827;
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: var(--radius);
   color: white;
@@ -333,7 +333,7 @@ html, body {
 .sidebar {
   width: var(--sidebar-w);
   min-height: 100vh;
-  background: linear-gradient(180deg, #080f20 0%, #0d1526 60%, #0a1220 100%);
+  background: linear-gradient(180deg, #0a1020 0%, #0d1628 100%);
   border-right: 1px solid rgba(99,130,200,0.12);
   display: flex;
   flex-direction: column;
@@ -457,13 +457,13 @@ html, body {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  background: #0d1526;
+  background: #111827;
 }
 
 /* TOPBAR */
 .topbar {
   height: var(--topbar-h);
-  background: rgba(13,21,38,0.95);
+  background: rgba(20,29,50,0.97);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid rgba(99,130,200,0.12);
   display: flex;
@@ -523,8 +523,8 @@ html, body {
 }
 
 .kpi-card {
-  background: linear-gradient(135deg, #121e35 0%, #0f1a2e 100%);
-  border: 1px solid rgba(99,130,200,0.14);
+  background: #1a2236;
+  border: 1px solid rgba(99,130,200,0.2);
   border-radius: var(--radius-lg);
   padding: 20px 24px;
   position: relative;
@@ -582,12 +582,12 @@ html, body {
    SECTION CARDS
    ============================================ */
 .section-card {
-  background: linear-gradient(135deg, #121e35 0%, #0f1a2e 100%);
-  border: 1px solid rgba(99,130,200,0.14);
+  background: #1a2236;
+  border: 1px solid rgba(99,130,200,0.2);
   border-radius: var(--radius-lg);
   padding: 24px;
   margin-bottom: 20px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.25);
 }
 
 .section-header {
@@ -613,7 +613,7 @@ html, body {
   align-items: center;
   gap: 14px;
   padding: 12px 16px;
-  background: rgba(255,255,255,0.03);
+  background: rgba(255,255,255,0.05);
   border-radius: var(--radius);
   border: 1px solid rgba(99,130,200,0.1);
   transition: all 0.2s;
@@ -685,7 +685,7 @@ html, body {
   display: flex;
   gap: 8px;
   margin-bottom: 24px;
-  background: var(--navy-900);
+  background: #111827;
   border-radius: var(--radius);
   padding: 6px;
 }
@@ -1111,7 +1111,7 @@ html, body {
 }
 
 .pn-subtot-row td {
-  background: rgba(255,255,255,0.03);
+  background: rgba(255,255,255,0.05);
   font-weight: 700;
   color: white;
 }
@@ -2455,4 +2455,56 @@ html, body {
 @keyframes pulse-badge {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.7; }
+}
+
+/* ── Vivacità extra ── */
+.view > .section-card:first-child {
+  border-top: 2px solid rgba(59,130,246,0.5);
+}
+
+.pn-section-row.entrate td {
+  background: linear-gradient(90deg, rgba(52,211,153,0.12) 0%, transparent 100%) !important;
+  color: #34d399 !important;
+}
+
+.pn-section-row.uscite td {
+  background: linear-gradient(90deg, rgba(248,113,113,0.1) 0%, transparent 100%) !important;
+  color: #f87171 !important;
+}
+
+.pn-section-row.fornitori td {
+  background: linear-gradient(90deg, rgba(251,191,36,0.1) 0%, transparent 100%) !important;
+  color: #fbbf24 !important;
+}
+
+.pn-section-row.prelievi td {
+  background: linear-gradient(90deg, rgba(167,139,250,0.1) 0%, transparent 100%) !important;
+  color: #a78bfa !important;
+}
+
+.pn-section-row.chiusura td {
+  background: linear-gradient(90deg, rgba(34,211,238,0.1) 0%, transparent 100%) !important;
+  color: #22d3ee !important;
+}
+
+/* Banca tabs più vivaci */
+.banca-tab.active {
+  background: linear-gradient(135deg, #2563eb, #3b82f6) !important;
+  color: white !important;
+  box-shadow: 0 4px 12px rgba(59,130,246,0.3) !important;
+}
+
+/* Bottoni primari con gradient */
+.btn-primary {
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%) !important;
+  box-shadow: 0 4px 14px rgba(59,130,246,0.3) !important;
+}
+.btn-primary:hover {
+  background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%) !important;
+  box-shadow: 0 6px 20px rgba(59,130,246,0.4) !important;
+}
+
+/* Chart cards */
+.charts-grid .section-card {
+  border-top: 2px solid rgba(59,130,246,0.3);
 }
