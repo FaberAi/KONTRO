@@ -1,5 +1,7 @@
 {
   "routes": [
+    { "src": "/sitemap.xml",         "dest": "/sitemap.xml" },
+    { "src": "/robots.txt",          "dest": "/robots.txt" },
     { "src": "/privacy",             "dest": "/privacy.html" },
     { "src": "/termini",             "dest": "/termini.html" },
     { "src": "/api/create-checkout", "dest": "/api/create-checkout.js" },
