@@ -5012,7 +5012,7 @@ async function loadPlanningSettimanale() {
         }
 
         if (ti === 0) {
-          html += `<td rowspan="2" style="padding:5px 6px;border-left:2px solid ${pal.rip};border-bottom:2px solid #E2EAF8;text-align:center;background:${pal.ripBg};vertical-align:middle;min-width:80px">
+          html += `<td rowspan="3" style="padding:5px 6px;border-left:2px solid ${pal.rip};border-bottom:2px solid #E2EAF8;text-align:center;background:${pal.ripBg};vertical-align:middle;min-width:80px">
             ${riposi.map(d => `<button onclick="rimuoviRiposoKontro('${d.id}','${g}','${loc.id}')" style="background:none;border:none;cursor:pointer;display:block;margin:2px auto">${dipBadgeHTML(d,'sm')}</button>`).join('')}
             <button onclick="aggiungiRiposoKontro('${g}','${loc.id}')" style="background:none;border:1px dashed ${pal.rip};color:${pal.sub};border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;margin-top:2px">+R</button>
           </td>`;
@@ -5159,14 +5159,14 @@ async function exportTurniPDF() {
     const bg = gi % 2 === 0 ? '#fff' : '#F7F9FF';
     ['mattina','pomeriggio'].forEach((t, ti) => {
       rows += `<tr style="background:${bg}">`;
-      if (ti === 0) rows += `<td rowspan="2" class="cg">${giorniNomi[gi]}<br><b>${fmt(g)}</b></td>`;
+      if (ti === 0) rows += `<td rowspan="3" class="cg">${giorniNomi[gi]}<br><b>${fmt(g)}</b></td>`;
       rows += `<td class="ct">${t==='mattina'?'MAT':'POM'}</td>`;
       sedi.forEach((loc, si) => {
         const pal = sedePalette[si % sedePalette.length];
         const lb = getLav(loc.id, g, t);
         const rb = getRip(loc.id, g);
         rows += `<td class="cn" style="border-left:2px solid ${pal.rip}">${lb.map(bpdf).join('')}&nbsp;</td>`;
-        if (ti === 0) rows += `<td rowspan="2" class="cr" style="background:${pal.ripBg};border-left:2px solid ${pal.rip}">${rb.map(bpdf).join('<br>')}&nbsp;</td>`;
+        if (ti === 0) rows += `<td rowspan="3" class="cr" style="background:${pal.ripBg};border-left:2px solid ${pal.rip}">${rb.map(bpdf).join('<br>')}&nbsp;</td>`;
       });
       rows += `</tr>`;
     });
