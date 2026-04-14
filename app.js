@@ -129,6 +129,13 @@ async function doRegister() {
         role: 'owner'
       });
       await db.rpc('create_default_categories', { p_business_id: biz.id });
+
+      // Invia email di benvenuto
+      fetch('/api/welcome', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, name, businessName })
+      }).catch(e => console.warn('Welcome email error:', e));
     }
   }
 
