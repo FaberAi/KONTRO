@@ -646,6 +646,9 @@ async function saveLocation() {
   const address = document.getElementById('new-loc-address').value.trim();
   if (!name) { showToast('Inserisci il nome della sede', 'error'); return; }
 
+  // Controllo limite piano Free
+  if (!await checkLimiteSedi()) return;
+
   const { error } = await db.from('locations').insert({
     business_id: currentBusiness.id,
     name, address: address || null
@@ -747,6 +750,9 @@ async function sendInvite() {
   const msgEl = document.getElementById('invite-message');
 
   if (!email) { msgEl.textContent = 'Inserisci una email'; msgEl.className = 'auth-message error'; return; }
+
+  // Controllo limite piano Free
+  if (!await checkLimiteUtenti()) return;
 
   msgEl.textContent = 'Invio in corso...'; msgEl.className = 'auth-message';
 
@@ -2962,6 +2968,9 @@ async function salvaNotaGiorno() {
   if (!currentBusiness) return;
   const data = document.getElementById('pn-data').value;
   if (!data) { showPNMsg('Inserisci la data', 'error'); return; }
+
+  // Controllo limite piano Free — storico 30 giorni
+  if (!checkLimiteStoico(data)) return;
   const locId = document.getElementById('pn-location').value || null;
   const fc = getV('pn-fc');
 
@@ -6564,4 +6573,74 @@ async function exportReportMensile() {
   const filename = 'Report_' + from.replace(/-/g,'') + '_' + to.replace(/-/g,'') + '.pdf';
   doc.save(filename);
   showToast('Report PDF generato ✓', 'success');
+}
+
+// ============================================
+// LIMITI PIANO FREE
+// ============================================
+function getPiano() {
+  return currentBusiness?.piano || 'free';
+}
+
+function isPianoFree() {
+  return getPiano() === 'free';
+}
+
+// Mostra modal upgrade quando si supera il limite
+function showUpgradeModal(motivo) {
+  const old = document.getElementById('modal-upgrade');
+  if (old) old.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'modal-upgrade';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  modal.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:32px;max-width:420px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.5)">
+      <div style="font-size:40px;margin-bottom:16px">⚡</div>
+      <h2 style="font-size:22px;font-weight:800;color:var(--text-primary);margin-bottom:8px">Passa a Pro</h2>
+      <p style="font-size:14px;color:var(--gray-400);margin-bottom:8px">${motivo}</p>
+      <p style="font-size:13px;color:var(--gray-500);margin-bottom:24px">Passa al piano Pro a <strong style="color:var(--text-primary)">€29/mese</strong> per sbloccare tutte le funzionalità.</p>
+      <div style="display:flex;gap:10px">
+        <button onclick="document.getElementById('modal-upgrade').remove()" class="btn-secondary" style="flex:1">Non ora</button>
+        <button onclick="document.getElementById('modal-upgrade').remove();showView('impostazioni');switchSettingsTab('abbonamento')" class="btn-primary" style="flex:1">Vedi i piani →</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+}
+
+// Controlla limite sedi
+async function checkLimiteSedi() {
+  if (!isPianoFree()) return true;
+  const count = currentLocations.length;
+  if (count >= 1) {
+    showUpgradeModal('Il piano Free include solo 1 sede. Passa a Pro per aggiungere fino a 3 sedi.');
+    return false;
+  }
+  return true;
+}
+
+// Controlla limite utenti/inviti
+async function checkLimiteUtenti() {
+  if (!isPianoFree()) return true;
+  const { count } = await db.from('user_roles')
+    .select('id', { count: 'exact', head: true })
+    .eq('business_id', currentBusiness.id);
+  if (count >= 1) {
+    showUpgradeModal('Il piano Free include solo 1 utente. Passa a Pro per invitare fino a 5 collaboratori.');
+    return false;
+  }
+  return true;
+}
+
+// Controlla limite storico 30 giorni
+function checkLimiteStoico(data) {
+  if (!isPianoFree()) return true;
+  const limitDate = new Date();
+  limitDate.setDate(limitDate.getDate() - 30);
+  const noteDate = new Date(data + 'T12:00:00');
+  if (noteDate < limitDate) {
+    showUpgradeModal('Il piano Free include solo 30 giorni di storico. Passa a Pro per storico illimitato.');
+    return false;
+  }
+  return true;
 }
