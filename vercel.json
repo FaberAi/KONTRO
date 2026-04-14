@@ -7,8 +7,8 @@
     { "src": "/api/portal",          "dest": "/api/portal.js" },
     { "src": "/api/send-invite",     "dest": "/api/send-invite.js" },
     { "src": "/api/welcome",         "dest": "/api/welcome.js" },
-    { "src": "/landing",             "dest": "/landing.html" },
     { "src": "/app",                 "dest": "/index.html" },
-    { "src": "/",                    "dest": "/index.html" }
+    { "src": "/landing",             "dest": "/landing.html" },
+    { "src": "/",                    "dest": "/landing.html" }
   ]
 }
