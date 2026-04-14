@@ -1,5 +1,7 @@
 {
   "routes": [
+    { "src": "/privacy",             "dest": "/privacy.html" },
+    { "src": "/termini",             "dest": "/termini.html" },
     { "src": "/api/create-checkout", "dest": "/api/create-checkout.js" },
     { "src": "/api/webhook",         "dest": "/api/webhook.js" },
     { "src": "/api/portal",          "dest": "/api/portal.js" },

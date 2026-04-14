@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Termini di Servizio — KONTRO</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Georgia', serif; background: #0a0f1e; color: #e2e8f0; line-height: 1.8; }
+
+    header {
+      background: #0a0f1e;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      padding: 20px 40px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .logo { width: 36px; height: 36px; background: #2563eb; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 800; font-size: 18px; }
+    .logo-text { color: white; font-family: 'Arial', sans-serif; font-weight: 800; font-size: 20px; letter-spacing: .1em; }
+    header a { margin-left: auto; color: #60a5fa; font-family: Arial, sans-serif; font-size: 14px; text-decoration: none; }
+
+    .hero {
+      background: linear-gradient(135deg, #0a0f1e 0%, #1a2a1a 100%);
+      padding: 60px 40px 40px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .hero-badge { display: inline-block; background: rgba(34,197,94,.15); color: #4ade80; border: 1px solid rgba(34,197,94,.3); border-radius: 100px; padding: 4px 14px; font-family: Arial, sans-serif; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 16px; }
+    .hero h1 { font-size: 36px; font-weight: 700; color: white; margin-bottom: 12px; }
+    .hero p { color: #94a3b8; font-size: 15px; }
+
+    .container { max-width: 780px; margin: 0 auto; padding: 60px 40px; }
+
+    .section { margin-bottom: 48px; }
+    .section h2 { font-family: Arial, sans-serif; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: #22c55e; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid rgba(34,197,94,.2); }
+    .section h3 { font-family: Arial, sans-serif; font-size: 16px; font-weight: 700; color: #e2e8f0; margin: 24px 0 10px; }
+    .section p { color: #94a3b8; font-size: 15px; margin-bottom: 14px; }
+    .section ul { color: #94a3b8; font-size: 15px; padding-left: 20px; margin-bottom: 14px; }
+    .section li { margin-bottom: 8px; }
+
+    .piani-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 20px 0; }
+    .piano-box { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); border-radius: 12px; padding: 20px; text-align: center; }
+    .piano-nome { font-family: Arial, sans-serif; font-weight: 800; font-size: 16px; color: white; margin-bottom: 6px; }
+    .piano-prezzo { font-size: 22px; font-weight: 700; color: #22c55e; margin-bottom: 10px; }
+    .piano-feat { font-size: 12px; color: #64748b; line-height: 1.6; }
+
+    .warning-box { background: rgba(234,179,8,.08); border: 1px solid rgba(234,179,8,.25); border-radius: 10px; padding: 16px 20px; margin: 20px 0; }
+    .warning-box p { color: #fbbf24; font-size: 14px; margin: 0; }
+
+    .contact-box { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); border-radius: 12px; padding: 24px; margin-top: 40px; text-align: center; }
+    .contact-box p { color: #94a3b8; font-size: 14px; margin-bottom: 8px; }
+    .contact-box a { color: #4ade80; text-decoration: none; font-weight: 600; }
+
+    footer { border-top: 1px solid rgba(255,255,255,.06); padding: 30px 40px; text-align: center; color: #4b5563; font-family: Arial, sans-serif; font-size: 13px; }
+    footer a { color: #4b5563; text-decoration: none; margin: 0 12px; }
+    footer a:hover { color: #60a5fa; }
+
+    @media (max-width: 600px) {
+      .piani-grid { grid-template-columns: 1fr; }
+      .container { padding: 40px 20px; }
+      header { padding: 16px 20px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">K</div>
+  <div class="logo-text">KONTRO</div>
+  <a href="https://www.kontro.cloud">← Torna all'app</a>
+</header>
+
+<div class="hero">
+  <div style="max-width:780px;margin:0 auto">
+    <div class="hero-badge">Legal</div>
+    <h1>Termini di Servizio</h1>
+    <p>Ultimo aggiornamento: Aprile 2026 · Versione 1.0</p>
+  </div>
+</div>
+
+<div class="container">
+
+  <div class="section">
+    <h2>01 — Accettazione</h2>
+    <p>Utilizzando KONTRO (il "Servizio"), accessibile tramite <strong style="color:#e2e8f0">www.kontro.cloud</strong>, accetti integralmente i presenti Termini di Servizio. Se non accetti, non puoi utilizzare il Servizio.</p>
+    <p>KONTRO è un servizio SaaS di gestione prima nota digitale destinato a titolari e gestori di attività commerciali (bar, ristoranti, pubblici esercizi).</p>
+  </div>
+
+  <div class="section">
+    <h2>02 — Piani e prezzi</h2>
+    <div class="piani-grid">
+      <div class="piano-box">
+        <div class="piano-nome">Free</div>
+        <div class="piano-prezzo">€ 0</div>
+        <div class="piano-feat">1 sede · 1 utente<br>30 giorni storico</div>
+      </div>
+      <div class="piano-box" style="border-color:rgba(99,102,241,.4)">
+        <div class="piano-nome" style="color:#818cf8">Pro</div>
+        <div class="piano-prezzo" style="color:#818cf8">€ 29/mese</div>
+        <div class="piano-feat">3 sedi · 5 utenti<br>Storico illimitato · PDF</div>
+      </div>
+      <div class="piano-box" style="border-color:rgba(245,158,11,.4)">
+        <div class="piano-nome" style="color:#fbbf24">Business</div>
+        <div class="piano-prezzo" style="color:#fbbf24">€ 59/mese</div>
+        <div class="piano-feat">Sedi illimitate<br>Utenti illimitati · Priorità</div>
+      </div>
+    </div>
+    <p>I prezzi sono IVA esclusa. I pagamenti vengono processati tramite Stripe. L'abbonamento si rinnova automaticamente ogni mese fino alla cancellazione.</p>
+  </div>
+
+  <div class="section">
+    <h2>03 — Cancellazione e rimborsi</h2>
+    <p>Puoi cancellare il tuo abbonamento in qualsiasi momento dal pannello <strong style="color:#e2e8f0">Impostazioni → Abbonamento → Gestisci abbonamento</strong>.</p>
+    <ul>
+      <li>La cancellazione è efficace alla fine del periodo di fatturazione corrente</li>
+      <li>Non sono previsti rimborsi per periodi parziali</li>
+      <li>I dati rimangono accessibili fino alla scadenza del periodo pagato</li>
+      <li>Dopo la scadenza il piano torna automaticamente a Free</li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <h2>04 — Proprietà dei dati</h2>
+    <p>I dati inseriti in KONTRO (prima nota, dipendenti, fornitori, movimenti) sono di tua esclusiva proprietà. KONTRO non rivendica alcun diritto su tali dati.</p>
+    <p>Puoi esportare i tuoi dati in qualsiasi momento tramite le funzioni di export PDF disponibili nell'app.</p>
+  </div>
+
+  <div class="section">
+    <h2>05 — Obblighi dell'utente</h2>
+    <p>Ti impegni a:</p>
+    <ul>
+      <li>Fornire informazioni accurate e aggiornate in fase di registrazione</li>
+      <li>Mantenere riservate le credenziali di accesso</li>
+      <li>Non condividere l'account con soggetti non autorizzati</li>
+      <li>Non utilizzare il Servizio per attività illegali o fraudolente</li>
+      <li>Non tentare di accedere a dati di altri utenti</li>
+      <li>Rispettare le normative fiscali e contabili applicabili alla tua attività</li>
+    </ul>
+    <div class="warning-box">
+      <p>⚠️ KONTRO è uno strumento di supporto alla gestione. La responsabilità della correttezza dei dati contabili e fiscali rimane in capo al titolare dell'attività e al suo commercialista.</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>06 — Disponibilità del servizio</h2>
+    <p>KONTRO si impegna a garantire una disponibilità del servizio del 99% su base mensile. Non siamo responsabili per interruzioni dovute a:</p>
+    <ul>
+      <li>Manutenzione programmata (comunicata con anticipo)</li>
+      <li>Cause di forza maggiore</li>
+      <li>Disfunzioni di servizi terzi (Supabase, Vercel, Stripe)</li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <h2>07 — Limitazione di responsabilità</h2>
+    <p>KONTRO non è responsabile per:</p>
+    <ul>
+      <li>Perdite economiche derivanti da dati errati inseriti dall'utente</li>
+      <li>Decisioni aziendali prese sulla base dei dati visualizzati nell'app</li>
+      <li>Danni indiretti, consequenziali o perdita di profitto</li>
+    </ul>
+    <p>In ogni caso, la responsabilità massima di KONTRO è limitata all'importo pagato negli ultimi 3 mesi di abbonamento.</p>
+  </div>
+
+  <div class="section">
+    <h2>08 — Sospensione e cessazione</h2>
+    <p>Ci riserviamo il diritto di sospendere o terminare l'accesso al Servizio in caso di:</p>
+    <ul>
+      <li>Mancato pagamento</li>
+      <li>Violazione dei presenti Termini</li>
+      <li>Utilizzo fraudolento o abusivo del Servizio</li>
+    </ul>
+    <p>In caso di cessazione per nostra iniziativa senza colpa dell'utente, verrà rimborsata la quota proporzionale al periodo non fruito.</p>
+  </div>
+
+  <div class="section">
+    <h2>09 — Modifiche ai termini</h2>
+    <p>Ci riserviamo il diritto di modificare i presenti Termini. Le modifiche saranno comunicate tramite email con almeno <strong style="color:#e2e8f0">30 giorni di preavviso</strong>. Continuando a utilizzare il Servizio dopo tale data, accetti le modifiche.</p>
+  </div>
+
+  <div class="section">
+    <h2>10 — Legge applicabile e foro competente</h2>
+    <p>I presenti Termini sono regolati dalla legge italiana. Per qualsiasi controversia, il foro competente è quello di <strong style="color:#e2e8f0">Roma</strong>, salvo diversa disposizione di legge applicabile ai consumatori.</p>
+  </div>
+
+  <div class="contact-box">
+    <p>Domande sui Termini di Servizio?</p>
+    <a href="mailto:info@kontro.cloud">info@kontro.cloud</a>
+  </div>
+
+</div>
+
+<footer>
+  <div>© 2026 KONTRO — Tutti i diritti riservati</div>
+  <div style="margin-top:10px">
+    <a href="/privacy">Privacy Policy</a>
+    <a href="/termini">Termini di servizio</a>
+    <a href="https://www.kontro.cloud">App</a>
+  </div>
+</footer>
+
+</body>
+</html>
