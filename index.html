@@ -1110,6 +1110,7 @@
         <div class="banca-tabs">
           <button class="banca-tab active" onclick="switchSettingsTab('categorie')" id="stab-categorie">🏷 Categorie</button>
           <button class="banca-tab" onclick="switchSettingsTab('causali')" id="stab-causali">💸 Causali prelievi</button>
+          <button class="banca-tab" onclick="switchSettingsTab('orari')" id="stab-orari">🕐 Orari turni</button>
           <button class="banca-tab" onclick="switchSettingsTab('azienda')" id="stab-azienda">🏢 Azienda</button>
           <button class="banca-tab" onclick="switchSettingsTab('abbonamento')" id="stab-abbonamento">💳 Abbonamento</button>
         </div>
@@ -1202,6 +1203,44 @@
         <div id="spanel-abbonamento" class="banca-panel">
           <div id="abbonamento-content">
             <div class="empty-state">Caricamento...</div>
+          </div>
+        </div>
+
+        <!-- ── ORARI TURNI ── -->
+        <div id="spanel-orari" class="banca-panel">
+          <div class="section-card">
+            <h2 style="margin-bottom:4px">🕐 Orari turni</h2>
+            <p style="font-size:13px;color:var(--gray-400);margin-bottom:20px">Gli orari vengono mostrati nella griglia planning accanto al nome del turno.</p>
+            <div class="form-grid">
+              <div class="field">
+                <label>☀ Mattina — inizio</label>
+                <input type="time" id="orario-mat-start" value="07:00" />
+              </div>
+              <div class="field">
+                <label>☀ Mattina — fine</label>
+                <input type="time" id="orario-mat-end" value="14:00" />
+              </div>
+              <div class="field">
+                <label>🌤 Pomeriggio — inizio</label>
+                <input type="time" id="orario-pom-start" value="14:00" />
+              </div>
+              <div class="field">
+                <label>🌤 Pomeriggio — fine</label>
+                <input type="time" id="orario-pom-end" value="20:00" />
+              </div>
+              <div class="field">
+                <label>🌙 Sera — inizio</label>
+                <input type="time" id="orario-ser-start" value="20:00" />
+              </div>
+              <div class="field">
+                <label>🌙 Sera — fine</label>
+                <input type="time" id="orario-ser-end" value="02:00" />
+              </div>
+            </div>
+            <div class="form-actions">
+              <button class="btn-primary" onclick="saveOrariTurni()">Salva orari →</button>
+            </div>
+            <div id="orari-msg" class="auth-message"></div>
           </div>
         </div>
 

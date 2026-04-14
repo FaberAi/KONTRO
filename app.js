@@ -3119,6 +3119,7 @@ function switchSettingsTab(tab) {
   if (tab === 'azienda') loadAzienda();
   if (tab === 'causali') loadCausaliLista();
   if (tab === 'abbonamento') loadAbbonamento();
+  if (tab === 'orari') loadOrariTurni();
 }
 
 async function initImpostazioni() {
@@ -4979,17 +4980,20 @@ async function loadPlanningSettimanale() {
     const isOggi = g === oggi;
     const rowBg = isOggi ? '#EFF6FF' : (gi % 2 === 0 ? 'white' : '#F8FAFC');
 
-    ['mattina','pomeriggio'].forEach((turno, ti) => {
-      const turnoLabel = turno === 'mattina' ? 'MAT' : 'POM';
+    ['mattina','pomeriggio','sera'].forEach((turno, ti) => {
+      const turnoLabel = turno === 'mattina' ? '☀ MAT' : turno === 'pomeriggio' ? '🌤 POM' : '🌙 SER';
+      const orarioLabel = getOrarioLabel(turno);
       html += `<tr style="background:${rowBg}">`;
 
-      if (ti === 0) {
-        html += `<td rowspan="2" style="padding:8px 10px;border-left:${isOggi?'3px solid #2563EB':'1px solid #E2EAF8'};border-bottom:2px solid #E2EAF8;font-weight:700;color:${isOggi?'#2563EB':'#0F1E3C'};font-size:12px;white-space:nowrap;vertical-align:middle;min-width:80px">
+      if (ti === 0) { // Prima riga del giorno - mostra data
+        html += `<td rowspan="3" style="padding:8px 10px;border-left:${isOggi?'3px solid #2563EB':'1px solid #E2EAF8'};border-bottom:2px solid #E2EAF8;font-weight:700;color:${isOggi?'#2563EB':'#0F1E3C'};font-size:12px;white-space:nowrap;vertical-align:middle;min-width:80px">
           ${giorniNomi[gi]}<br><span style="font-size:16px;font-weight:800">${fmt(g)}</span>
         </td>`;
       }
 
-      html += `<td style="padding:5px 8px;border-left:1px solid #E2EAF8;border-bottom:1px solid #F1F5F9;font-size:10px;color:#94A3B8;font-weight:600;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;min-width:45px;text-align:center">${turnoLabel}</td>`;
+      html += `<td style="padding:5px 8px;border-left:1px solid #E2EAF8;border-bottom:1px solid #F1F5F9;font-size:10px;color:#94A3B8;font-weight:600;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;min-width:55px;text-align:center">
+        ${turnoLabel}<br><span style="font-size:9px;font-weight:400;letter-spacing:0;color:#CBD5E1">${orarioLabel}</span>
+      </td>`;
 
       sedi.forEach((loc, si) => {
         const pal = sedePalette[si % sedePalette.length];
@@ -5047,8 +5051,9 @@ async function aggiungiTurnoKontro(data, locId, turno) {
 
   if (!final.length) { showToast('Tutti i dipendenti sono già assegnati o in riposo', ''); return; }
 
+  const turnoNome = turno === 'mattina' ? '☀ Mattina' : turno === 'pomeriggio' ? '🌤 Pomeriggio' : '🌙 Sera';
   const lista = final.map((d,i) => `${i+1} = ${d.nome} ${d.cognome}`).join('\n');
-  const scelta = prompt(`Chi aggiungere al turno ${turno === 'mattina' ? 'mattina' : 'pomeriggio'}?\n\n${lista}`, '1');
+  const scelta = prompt(`Chi aggiungere al turno ${turnoNome}?\n\n${lista}`, '1');
   if (!scelta) return;
   const idx = parseInt(scelta.trim()) - 1;
   if (isNaN(idx) || idx < 0 || idx >= final.length) return;
@@ -6245,4 +6250,52 @@ async function eseguiGenerazione() {
     chiudiGeneraModal();
     loadPlanningSettimanale();
   }, 2000);
+}
+
+// ============================================
+// ORARI TURNI
+// ============================================
+const ORARI_DEFAULT = {
+  mat: { start: '07:00', end: '14:00' },
+  pom: { start: '14:00', end: '20:00' },
+  ser: { start: '20:00', end: '02:00' }
+};
+
+function getOrariTurni() {
+  try {
+    const saved = localStorage.getItem('kontro_orari_' + (currentBusiness?.id||''));
+    return saved ? JSON.parse(saved) : ORARI_DEFAULT;
+  } catch { return ORARI_DEFAULT; }
+}
+
+function saveOrariTurni() {
+  const orari = {
+    mat: { start: document.getElementById('orario-mat-start')?.value || '07:00', end: document.getElementById('orario-mat-end')?.value || '14:00' },
+    pom: { start: document.getElementById('orario-pom-start')?.value || '14:00', end: document.getElementById('orario-pom-end')?.value || '20:00' },
+    ser: { start: document.getElementById('orario-ser-start')?.value || '20:00', end: document.getElementById('orario-ser-end')?.value || '02:00' }
+  };
+  localStorage.setItem('kontro_orari_' + (currentBusiness?.id||''), JSON.stringify(orari));
+  const msgEl = document.getElementById('orari-msg');
+  msgEl.textContent = 'Orari salvati ✓'; msgEl.className = 'auth-message success';
+  setTimeout(() => msgEl.textContent = '', 3000);
+  showToast('Orari turni salvati ✓', 'success');
+}
+
+function loadOrariTurni() {
+  const orari = getOrariTurni();
+  const set = (id, val) => { const el = document.getElementById(id); if(el) el.value = val; };
+  set('orario-mat-start', orari.mat.start);
+  set('orario-mat-end',   orari.mat.end);
+  set('orario-pom-start', orari.pom.start);
+  set('orario-pom-end',   orari.pom.end);
+  set('orario-ser-start', orari.ser.start);
+  set('orario-ser-end',   orari.ser.end);
+}
+
+function getOrarioLabel(turno) {
+  const o = getOrariTurni();
+  if (turno === 'mattina')    return `${o.mat.start}–${o.mat.end}`;
+  if (turno === 'pomeriggio') return `${o.pom.start}–${o.pom.end}`;
+  if (turno === 'sera')       return `${o.ser.start}–${o.ser.end}`;
+  return '';
 }
