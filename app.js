@@ -5000,7 +5000,6 @@ async function loadPlanningSettimanale() {
 
     ['mattina','pomeriggio','sera'].forEach((turno, ti) => {
       const turnoLabel = turno === 'mattina' ? '☀ MAT' : turno === 'pomeriggio' ? '🌤 POM' : '🌙 SER';
-      const orarioLabel = getOrarioLabel(turno);
       html += `<tr style="background:${rowBg}">`;
 
       if (ti === 0) { // Prima riga del giorno - mostra data
@@ -5010,7 +5009,7 @@ async function loadPlanningSettimanale() {
       }
 
       html += `<td style="padding:5px 8px;border-left:1px solid #E2EAF8;border-bottom:1px solid #F1F5F9;font-size:10px;color:#94A3B8;font-weight:600;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;min-width:55px;text-align:center">
-        ${turnoLabel}<br><span style="font-size:9px;font-weight:400;letter-spacing:0;color:#CBD5E1">${orarioLabel}</span>
+        ${turnoLabel}
       </td>`;
 
       sedi.forEach((loc, si) => {
