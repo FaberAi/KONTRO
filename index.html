@@ -1333,8 +1333,40 @@
                 <div class="field"><label>Sede</label><select id="nd-sede"><option value="">Sede principale</option></select></div>
                 <div class="field full"><label>Note</label><input type="text" id="nd-note" placeholder="Note..." /></div>
                 <div class="field"><label>Telefono</label><input type="text" id="nd-telefono" placeholder="Es. +39 333 1234567" /></div>
-              <div class="field"><label>Colore badge</label><input type="color" id="nd-colore" value="#3b82f6" style="height:42px;padding:4px;cursor:pointer" /></div>
+                <div class="field"><label>Colore badge</label><input type="color" id="nd-colore" value="#3b82f6" style="height:42px;padding:4px;cursor:pointer" /></div>
               </div>
+
+              <!-- Orari turni -->
+              <div style="margin-top:16px;padding:14px;background:var(--bg);border-radius:10px;border:1px solid var(--border)">
+                <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);margin-bottom:12px">🕐 Orari turni (opzionale)</div>
+                <div class="form-grid">
+                  <div class="field">
+                    <label>☀ Mattina — inizio</label>
+                    <input type="time" id="nd-mat-start" placeholder="Es. 07:00" />
+                  </div>
+                  <div class="field">
+                    <label>☀ Mattina — fine</label>
+                    <input type="time" id="nd-mat-end" placeholder="Es. 14:00" />
+                  </div>
+                  <div class="field">
+                    <label>🌤 Pomeriggio — inizio</label>
+                    <input type="time" id="nd-pom-start" placeholder="Es. 14:00" />
+                  </div>
+                  <div class="field">
+                    <label>🌤 Pomeriggio — fine</label>
+                    <input type="time" id="nd-pom-end" placeholder="Es. 20:00" />
+                  </div>
+                  <div class="field">
+                    <label>🌙 Sera — inizio</label>
+                    <input type="time" id="nd-ser-start" placeholder="Es. 20:00" />
+                  </div>
+                  <div class="field">
+                    <label>🌙 Sera — fine</label>
+                    <input type="time" id="nd-ser-end" placeholder="Es. 02:00" />
+                  </div>
+                </div>
+              </div>
+
               <div class="form-actions">
                 <button class="btn-secondary" onclick="hideAddDipendente()">Annulla</button>
                 <button class="btn-primary" onclick="saveDipendente()">Salva dipendente</button>

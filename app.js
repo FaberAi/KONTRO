@@ -4358,7 +4358,13 @@ async function saveDipendente() {
     data_assunzione: document.getElementById('nd-assunzione').value || null,
     note: document.getElementById('nd-note').value.trim(),
     telefono: document.getElementById('nd-telefono').value.trim(),
-    colore: document.getElementById('nd-colore')?.value || '#3b82f6'
+    colore: document.getElementById('nd-colore')?.value || '#3b82f6',
+    mat_start: document.getElementById('nd-mat-start')?.value || null,
+    mat_end:   document.getElementById('nd-mat-end')?.value || null,
+    pom_start: document.getElementById('nd-pom-start')?.value || null,
+    pom_end:   document.getElementById('nd-pom-end')?.value || null,
+    ser_start: document.getElementById('nd-ser-start')?.value || null,
+    ser_end:   document.getElementById('nd-ser-end')?.value || null
   });
   if (error) { showToast('Errore: ' + error.message, 'error'); return; }
   showToast('Dipendente salvato ✓', 'success');
@@ -4393,6 +4399,11 @@ async function loadDipendentiList() {
           <div class="dip-info">
             <div class="dip-nome">${d.nome} ${d.cognome}</div>
             <div class="dip-ruolo">${d.ruolo || '—'}${d.data_assunzione ? ' · dal ' + formatDate(d.data_assunzione) : ''}${d.telefono ? ' · 📞 ' + d.telefono : ''}</div>
+            ${(d.mat_start||d.pom_start||d.ser_start) ? `<div style="font-size:11px;color:var(--gray-400);margin-top:3px">
+              ${d.mat_start ? `☀ ${d.mat_start}–${d.mat_end||'?'}` : ''}
+              ${d.pom_start ? ` · 🌤 ${d.pom_start}–${d.pom_end||'?'}` : ''}
+              ${d.ser_start ? ` · 🌙 ${d.ser_start}–${d.ser_end||'?'}` : ''}
+            </div>` : ''}
           </div>
           <button class="btn-secondary sm" onclick="switchHRTab('presenze');document.getElementById('pres-dipendente').value='${d.id}';loadPresenzeMese()">Presenze</button>
           <button class="btn-secondary sm" onclick="switchHRTab('acconti');document.getElementById('acc-dipendente').value='${d.id}'">Acconti</button>
@@ -4875,12 +4886,19 @@ function navSettimanaOggi() {
   loadPlanningSettimanale();
 }
 
-function dipBadgeHTML(dip, size) {
+function dipBadgeHTML(dip, size, turno) {
   if (!dip) return '';
   const fs = size === 'sm' ? '10px' : '11px';
   const pad = size === 'sm' ? '3px 7px' : '4px 9px';
   const nome = dip.nome.split(' ')[0];
-  return `<span style="background:${dip.colore||'#3b82f6'};color:white;border-radius:5px;padding:${pad};font-size:${fs};font-weight:700;display:inline-block;white-space:nowrap;cursor:pointer">${nome}</span>`;
+  // Mostra orario personale del dipendente se disponibile
+  let orario = '';
+  if (turno && size !== 'sm') {
+    const s = turno === 'mattina' ? dip.mat_start : turno === 'pomeriggio' ? dip.pom_start : dip.ser_start;
+    const e = turno === 'mattina' ? dip.mat_end   : turno === 'pomeriggio' ? dip.pom_end   : dip.ser_end;
+    if (s && e) orario = `<span style="font-size:9px;opacity:.85;display:block;margin-top:1px">${s}–${e}</span>`;
+  }
+  return `<span style="background:${dip.colore||'#3b82f6'};color:white;border-radius:5px;padding:${pad};font-size:${fs};font-weight:700;display:inline-block;white-space:nowrap;cursor:pointer;text-align:center">${nome}${orario}</span>`;
 }
 
 async function loadPlanningSettimanale() {
@@ -4895,7 +4913,7 @@ async function loadPlanningSettimanale() {
 
   // Carica turni dal DB (basati su data, non giorno_settimana)
   const { data: turni } = await db.from('turni_dipendenti')
-    .select('*, dipendenti(id,nome,cognome,colore,location_id)')
+    .select('*, dipendenti(id,nome,cognome,colore,location_id,mat_start,mat_end,pom_start,pom_end,ser_start,ser_end)')
     .eq('business_id', currentBusiness.id)
     .gte('data', giorni[0]).lte('data', giorni[6]);
 
@@ -5005,7 +5023,7 @@ async function loadPlanningSettimanale() {
           const dip = lavoratori[c];
           html += `<td style="padding:4px 5px;border-left:1px solid ${pal.ser};border-bottom:1px solid #F1F5F9;text-align:center;min-width:70px">
             ${dip
-              ? `<button onclick="rimuoviTurnoKontro('${dip.id}','${g}','${loc.id}','${turno}')" style="background:none;border:none;cursor:pointer;padding:0">${dipBadgeHTML(dip)}</button>`
+              ? `<button onclick="rimuoviTurnoKontro('${dip.id}','${g}','${loc.id}','${turno}')" style="background:none;border:none;cursor:pointer;padding:0">${dipBadgeHTML(dip,'',turno)}</button>`
               : `<button onclick="aggiungiTurnoKontro('${g}','${loc.id}','${turno}')" style="background:none;border:1px dashed ${pal.rip};color:${pal.sub};border-radius:5px;padding:4px 10px;cursor:pointer;font-size:13px;width:100%">+</button>`
             }
           </td>`;
@@ -5115,7 +5133,7 @@ async function exportTurniPDF() {
   const anno = new Date(giorni[0]+'T12:00:00').getFullYear();
 
   const { data: turni } = await db.from('turni_dipendenti')
-    .select('*, dipendenti(id,nome,cognome,colore,location_id)')
+    .select('*, dipendenti(id,nome,cognome,colore,location_id,mat_start,mat_end,pom_start,pom_end,ser_start,ser_end)')
     .eq('business_id', currentBusiness.id)
     .gte('data', giorni[0]).lte('data', giorni[6]);
 
@@ -5243,7 +5261,7 @@ async function condividiPlanningWhatsApp() {
   const anno = new Date(giorni[0]+'T12:00:00').getFullYear();
 
   const { data: turni } = await db.from('turni_dipendenti')
-    .select('*, dipendenti(id,nome,cognome,colore,location_id)')
+    .select('*, dipendenti(id,nome,cognome,colore,location_id,mat_start,mat_end,pom_start,pom_end,ser_start,ser_end)')
     .eq('business_id', currentBusiness.id)
     .gte('data', giorni[0]).lte('data', giorni[6]);
 
