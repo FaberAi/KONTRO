@@ -515,9 +515,18 @@
               <thead>
                 <tr>
                   <th class="th-desc">Voce</th>
-                  <th class="th-turno">☀️ Mattina</th>
-                  <th class="th-turno">🌤 Pomeriggio</th>
-                  <th class="th-turno">🌙 Sera</th>
+                  <th class="th-turno">
+                    ☀️ Mattina
+                    <button id="btn-blocca-m" onclick="bloccaTurno('m')" class="btn-blocca" title="Blocca turno mattina">🔓</button>
+                  </th>
+                  <th class="th-turno">
+                    🌤 Pomeriggio
+                    <button id="btn-blocca-p" onclick="bloccaTurno('p')" class="btn-blocca" title="Blocca turno pomeriggio">🔓</button>
+                  </th>
+                  <th class="th-turno">
+                    🌙 Sera
+                    <button id="btn-blocca-s" onclick="bloccaTurno('s')" class="btn-blocca" title="Blocca turno sera">🔓</button>
+                  </th>
                   </tr>
               </thead>
               <tbody id="pn-tbody">
@@ -1894,8 +1903,8 @@
           <div class="help-a">I fornitori nella Prima Nota si selezionano dal menu a tendina nella sezione FORNITORI. Per aggiungerne di nuovi vai su <strong>Fornitori → Anagrafica</strong>.</div>
         </div>
         <div class="help-item">
-          <div class="help-q">Come aggiungo causali di prelievo?</div>
-          <div class="help-a">Vai su <strong>Impostazioni → Causali prelievi</strong> e aggiungi le causali che vuoi (es. Stipendio, Spese personali, Affitto...).</div>
+          <div class="help-q">Come funziona il blocco turno?</div>
+          <div class="help-a">Nella Prima Nota ogni colonna turno (☀ Mattina, 🌤 Pomeriggio, 🌙 Sera) ha un lucchetto 🔓 nell'intestazione. Clicca per bloccare il turno — gli input diventano non modificabili. Solo <strong>owner/admin</strong> possono sbloccare. Il blocco viene salvato e rimane anche riaprendo la giornata.</div>
         </div>
       </div>
 

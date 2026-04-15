@@ -1753,6 +1753,9 @@ async function loadNotaGiorno2() {
     btnElimina.style.display = (canDelete && nota) ? 'inline-flex' : 'none';
     btnElimina.dataset.noteId = nota?.id || '';
   }
+
+  // Carica stato blocchi turni
+  await caricaStatoBlocchi(data, locId);
 }
 
 // Override loadNotaGiorno
@@ -7164,4 +7167,100 @@ async function createUser() {
     msgEl.textContent = '';
     loadTeam();
   }, 3000);
+}
+
+// ============================================
+// BLOCCO TURNI PRIMA NOTA
+// ============================================
+
+// Stato blocchi correnti (caricato da daily_notes)
+let turniBloccati = { m: false, p: false, s: false };
+
+function applicaBlocchi() {
+  ['m','p','s'].forEach(t => {
+    const bloccato = turniBloccati[t];
+    const btn = document.getElementById(`btn-blocca-${t}`);
+    if (!btn) return;
+
+    // Aggiorna bottone
+    btn.textContent = bloccato ? '🔒' : '🔓';
+    btn.className = `btn-blocca${bloccato ? ' bloccato' : ''}`;
+    btn.title = bloccato ? `Turno bloccato — clicca per sbloccare (solo owner/admin)` : `Blocca turno`;
+
+    // Seleziona tutti gli input della colonna
+    const colIdx = t === 'm' ? 1 : t === 'p' ? 2 : 3;
+    document.querySelectorAll(`.pn-table tr td:nth-child(${colIdx + 1}) input,
+                               .pn-table tr td:nth-child(${colIdx + 1}) select`).forEach(el => {
+      el.disabled = bloccato;
+      el.style.opacity = bloccato ? '0.4' : '';
+      el.style.cursor = bloccato ? 'not-allowed' : '';
+      el.style.background = bloccato ? 'rgba(239,68,68,0.05)' : '';
+    });
+  });
+}
+
+async function bloccaTurno(t) {
+  const data = document.getElementById('pn-data')?.value;
+  const locId = document.getElementById('pn-location')?.value || null;
+  if (!data || !currentBusiness) { showToast('Salva prima la prima nota', 'error'); return; }
+
+  const giaBloccato = turniBloccati[t];
+
+  // Sbloccare richiede owner/admin
+  if (giaBloccato && !['owner','admin'].includes(currentRole)) {
+    showToast('Solo owner/admin possono sbloccare un turno', 'error'); return;
+  }
+
+  const turnoNome = t === 'm' ? 'Mattina' : t === 'p' ? 'Pomeriggio' : 'Sera';
+  const azione = giaBloccato ? 'sbloccare' : 'bloccare';
+
+  if (!confirm(`Vuoi ${azione} il turno ${turnoNome}?`)) return;
+
+  // Cerca la nota del giorno
+  let query = db.from('daily_notes')
+    .select('id')
+    .eq('business_id', currentBusiness.id)
+    .eq('data', data);
+  if (locId) query = query.eq('location_id', locId);
+  else query = query.is('location_id', null);
+
+  const { data: note } = await query.single();
+  if (!note) { showToast('Salva prima la prima nota', 'error'); return; }
+
+  const nomeUtente = currentUser?.user_metadata?.full_name || currentUser?.email?.split('@')[0] || '';
+  const updateData = {};
+  updateData[`turno_${t}_bloccato`] = !giaBloccato;
+  updateData[`bloccato_${t}_da`] = !giaBloccato ? nomeUtente : null;
+
+  const { error } = await db.from('daily_notes').update(updateData).eq('id', note.id);
+  if (error) { showToast('Errore: ' + error.message, 'error'); return; }
+
+  turniBloccati[t] = !giaBloccato;
+  applicaBlocchi();
+
+  showToast(
+    giaBloccato ? `Turno ${turnoNome} sbloccato ✓` : `Turno ${turnoNome} bloccato 🔒`,
+    'success'
+  );
+}
+
+// Carica stato blocchi quando si apre la prima nota del giorno
+async function caricaStatoBlocchi(data, locId) {
+  turniBloccati = { m: false, p: false, s: false };
+  if (!data || !currentBusiness) { applicaBlocchi(); return; }
+
+  let query = db.from('daily_notes')
+    .select('turno_m_bloccato, turno_p_bloccato, turno_s_bloccato, bloccato_m_da, bloccato_p_da, bloccato_s_da')
+    .eq('business_id', currentBusiness.id)
+    .eq('data', data);
+  if (locId) query = query.eq('location_id', locId);
+  else query = query.is('location_id', null);
+
+  const { data: note } = await query.single();
+  if (note) {
+    turniBloccati.m = note.turno_m_bloccato || false;
+    turniBloccati.p = note.turno_p_bloccato || false;
+    turniBloccati.s = note.turno_s_bloccato || false;
+  }
+  applicaBlocchi();
 }

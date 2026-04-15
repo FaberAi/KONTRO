@@ -2828,3 +2828,36 @@ html, body {
   #help-drawer { width: 100%; max-width: 100%; }
   #help-fab { bottom: 80px; right: 16px; }
 }
+
+/* Bottone blocca turno */
+.btn-blocca {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  margin-left: 4px;
+  opacity: 0.7;
+  transition: all 0.2s;
+  vertical-align: middle;
+}
+.btn-blocca:hover { opacity: 1; transform: scale(1.2); }
+.btn-blocca.bloccato { opacity: 1; }
+
+/* Colonna turno bloccata */
+.turno-bloccato input,
+.turno-bloccato select {
+  opacity: 0.5;
+  pointer-events: none;
+  cursor: not-allowed;
+  background: rgba(239,68,68,0.05) !important;
+}
+.turno-bloccato-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(239,68,68,0.03);
+  border-top: 2px solid rgba(239,68,68,0.3);
+  pointer-events: none;
+  z-index: 1;
+}
