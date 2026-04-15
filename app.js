@@ -194,7 +194,7 @@ function populateLocationSelects() {
   selects.forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
-    const firstOption = id === 'location-select' ? '<option value="">Tutte le sedi</option>' : '<option value="">Sede principale</option>';
+    const firstOption = id === 'location-select' ? '<option value="">Tutte le sedi</option>' : '<option value="">Disponibile su tutte le sedi</option>';
     el.innerHTML = firstOption + currentLocations.map(l =>
       `<option value="${l.id}">${l.name}</option>`
     ).join('');
@@ -1481,7 +1481,7 @@ function initPrimaNota() {
   document.getElementById('pn-data').value = today;
   const sel = document.getElementById('pn-location');
   if (sel) {
-    sel.innerHTML = '<option value="">Sede principale</option>' +
+    sel.innerHTML = '<option value="">Disponibile su tutte le sedi</option>' +
       currentLocations.map(l => `<option value="${l.id}">${l.name}</option>`).join('');
   }
   _buildPNFornitoriSelects();
@@ -2308,7 +2308,7 @@ async function initFornitori() {
   // Popola select sedi nel form fattura
   const nftSede = document.getElementById('nft-sede');
   if (nftSede) {
-    nftSede.innerHTML = '<option value="">Sede principale</option>' +
+    nftSede.innerHTML = '<option value="">Disponibile su tutte le sedi</option>' +
       currentLocations.map(l => `<option value="${l.id}">${l.name}</option>`).join('');
   }
   // Date default estratto
@@ -4454,7 +4454,7 @@ async function loadDipendentiList() {
   // Raggruppa per sede
   const bySede = {};
   data.forEach(d => {
-    const sedeNome = d.location_id ? (d.locations?.name || 'Sede principale') : '🏢 Tutte le sedi';
+    const sedeNome = d.location_id ? (d.locations?.name || 'Disponibile su tutte le sedi') : 'Disponibile su tutte le sedi';
     if (!bySede[sedeNome]) bySede[sedeNome] = [];
     bySede[sedeNome].push(d);
   });
@@ -4467,7 +4467,7 @@ async function loadDipendentiList() {
           <div class="dip-avatar">${d.nome[0]}${d.cognome[0]}</div>
           <div class="dip-info">
             <div class="dip-nome">${d.nome} ${d.cognome}</div>
-            <div class="dip-ruolo">${d.ruolo || '—'}${d.data_assunzione ? ' · dal ' + formatDate(d.data_assunzione) : ''}${d.telefono ? ' · 📞 ' + d.telefono : ''}${!d.location_id ? ' · <span style="color:var(--blue-300)">🏢 Tutte le sedi</span>' : ''}</div>
+            <div class="dip-ruolo">${d.ruolo || '—'}${d.data_assunzione ? ' · dal ' + formatDate(d.data_assunzione) : ''}${d.telefono ? ' · 📞 ' + d.telefono : ''}${!d.location_id ? ' · <span style="color:var(--blue-300)">Disponibile su tutte le sedi</span>' : ''}</div>
             ${(d.mat_start||d.pom_start||d.ser_start) ? `<div style="font-size:11px;color:var(--gray-400);margin-top:3px">
               ${d.mat_start ? `☀ ${d.mat_start}–${d.mat_end||'?'}` : ''}
               ${d.pom_start ? ` · 🌤 ${d.pom_start}–${d.pom_end||'?'}` : ''}
@@ -4911,7 +4911,7 @@ async function exportHRCSV() {
 function populateSedeDipendente() {
   const sel = document.getElementById('nd-sede');
   if (!sel) return;
-  sel.innerHTML = '<option value="">Sede principale</option>' +
+  sel.innerHTML = '<option value="">Disponibile su tutte le sedi</option>' +
     currentLocations.map(l => `<option value="${l.id}">${l.name}</option>`).join('');
 }
 
@@ -5535,7 +5535,7 @@ async function buildOrganicoBySede() {
 
   const bySede = {};
   dips.forEach(d => {
-    const k = d.locations?.name || 'Sede principale';
+    const k = d.locations?.name || 'Disponibile su tutte le sedi';
     if (!bySede[k]) bySede[k] = [];
     bySede[k].push(d);
   });
@@ -5899,7 +5899,7 @@ async function exportPrimaNota() {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
   const data = document.getElementById('pn-data')?.value || '';
-  const locNome = document.getElementById('pn-location')?.selectedOptions[0]?.text || 'Sede principale';
+  const locNome = document.getElementById('pn-location')?.selectedOptions[0]?.text || 'Disponibile su tutte le sedi';
   const bizNome = currentBusiness?.nome || 'KONTRO';
   const dataFmt = data ? new Date(data + 'T12:00:00').toLocaleDateString('it-IT', { weekday:'long', day:'2-digit', month:'long', year:'numeric' }) : '';
 
