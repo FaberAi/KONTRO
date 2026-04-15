@@ -4454,7 +4454,7 @@ async function loadDipendentiList() {
   // Raggruppa per sede
   const bySede = {};
   data.forEach(d => {
-    const sedeNome = d.locations?.name || 'Sede principale';
+    const sedeNome = d.location_id ? (d.locations?.name || 'Sede principale') : '🏢 Tutte le sedi';
     if (!bySede[sedeNome]) bySede[sedeNome] = [];
     bySede[sedeNome].push(d);
   });
@@ -4467,7 +4467,7 @@ async function loadDipendentiList() {
           <div class="dip-avatar">${d.nome[0]}${d.cognome[0]}</div>
           <div class="dip-info">
             <div class="dip-nome">${d.nome} ${d.cognome}</div>
-            <div class="dip-ruolo">${d.ruolo || '—'}${d.data_assunzione ? ' · dal ' + formatDate(d.data_assunzione) : ''}${d.telefono ? ' · 📞 ' + d.telefono : ''}</div>
+            <div class="dip-ruolo">${d.ruolo || '—'}${d.data_assunzione ? ' · dal ' + formatDate(d.data_assunzione) : ''}${d.telefono ? ' · 📞 ' + d.telefono : ''}${!d.location_id ? ' · <span style="color:var(--blue-300)">🏢 Tutte le sedi</span>' : ''}</div>
             ${(d.mat_start||d.pom_start||d.ser_start) ? `<div style="font-size:11px;color:var(--gray-400);margin-top:3px">
               ${d.mat_start ? `☀ ${d.mat_start}–${d.mat_end||'?'}` : ''}
               ${d.pom_start ? ` · 🌤 ${d.pom_start}–${d.pom_end||'?'}` : ''}
@@ -6313,45 +6313,55 @@ async function eseguiGenerazione() {
     const pat = pattern[dip.id];
     if (!pat) return;
     const nWeeks = weekCount[dip.id]?.size || 1;
-    const locKey = dip.location_id || 'principale';
     const puoDoppio = dip.puo_doppio_turno === true;
+
+    // Dipendente multi-sede: considera tutti i pattern di tutte le sedi
+    // Dipendente sede fissa: considera solo il pattern della sua sede
+    const locKeys = dip.location_id
+      ? [dip.location_id]
+      : Object.keys(pat[0] || pat[Object.keys(pat)[0]] || {});
 
     giorni.forEach((g, gi) => {
       if (assenzeMappa[`${dip.id}_${g}`]) return;
       const dowPat = pat[gi];
       if (!dowPat) return;
-      const locPat = dowPat[locKey] || dowPat[Object.keys(dowPat)[0]];
-      if (!locPat) return;
 
-      if (puoDoppio) {
-        // Dipendente con doppio turno — genera tutti i turni con frequenza sufficiente
-        Object.entries(locPat).forEach(([turno, count]) => {
-          if (count / nWeeks >= soglia) {
-            turniDaInserire.push({
-              business_id: currentBusiness.id,
-              dipendente_id: dip.id,
-              data: g,
-              location_id: dip.location_id || null,
-              turno
-            });
-          }
-        });
-      } else {
-        // Dipendente normale — solo il turno più frequente
-        let bestTurno = null, bestCount = 0;
-        Object.entries(locPat).forEach(([turno, count]) => {
-          if (count > bestCount) { bestCount = count; bestTurno = turno; }
-        });
-        if (!bestTurno) return;
-        if (bestCount / nWeeks < soglia) return;
-        turniDaInserire.push({
-          business_id: currentBusiness.id,
-          dipendente_id: dip.id,
-          data: g,
-          location_id: dip.location_id || null,
-          turno: bestTurno
-        });
-      }
+      // Per ogni sede rilevante, genera i turni
+      const sediDaUsare = dip.location_id
+        ? [dip.location_id]
+        : currentLocations.map(l => l.id);
+
+      sediDaUsare.forEach(locId => {
+        const locPat = dowPat[locId] || dowPat['principale'] || dowPat[Object.keys(dowPat)[0]];
+        if (!locPat) return;
+
+        if (puoDoppio) {
+          Object.entries(locPat).forEach(([turno, count]) => {
+            if (count / nWeeks >= soglia) {
+              turniDaInserire.push({
+                business_id: currentBusiness.id,
+                dipendente_id: dip.id,
+                data: g,
+                location_id: locId || null,
+                turno
+              });
+            }
+          });
+        } else {
+          let bestTurno = null, bestCount = 0;
+          Object.entries(locPat).forEach(([turno, count]) => {
+            if (count > bestCount) { bestCount = count; bestTurno = turno; }
+          });
+          if (!bestTurno || bestCount / nWeeks < soglia) return;
+          turniDaInserire.push({
+            business_id: currentBusiness.id,
+            dipendente_id: dip.id,
+            data: g,
+            location_id: locId || null,
+            turno: bestTurno
+          });
+        }
+      });
     });
   });
 
