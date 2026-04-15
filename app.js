@@ -3878,10 +3878,70 @@ async function loadEstrattoBanca() {
 }
 
 async function exportEstrattoBancaPDF() {
-  const d = window._estrattoBancaData;
-  if (!d) { showToast('Carica prima l\'estratto conto', 'error'); return; }
+  if (!currentBusiness) return;
 
-  showToast('Generazione PDF...', '');
+  // Legge i filtri dalla tab estratto conto
+  const bancaId = document.getElementById('eb-banca')?.value;
+  const from = document.getElementById('eb-from')?.value;
+  const to   = document.getElementById('eb-to')?.value;
+
+  if (!bancaId) { showToast('Seleziona una banca prima di esportare', 'error'); return; }
+
+  showToast('Generazione PDF...', 'success');
+
+  // Carica dati banca
+  const { data: banca } = await db.from('banche').select('*').eq('id', bancaId).single();
+
+  // Carica movimenti dal DB
+  let qMov = db.from('movimenti_banca')
+    .select('*').eq('banca_id', bancaId).order('data', { ascending: true });
+  if (from) qMov = qMov.gte('data', from);
+  if (to)   qMov = qMov.lte('data', to);
+  const { data: movimenti } = await qMov;
+
+  // Carica versamenti
+  let qVers = db.from('versamenti')
+    .select('*').eq('business_id', currentBusiness.id).order('data', { ascending: true });
+  if (from) qVers = qVers.gte('data', from);
+  if (to)   qVers = qVers.lte('data', to);
+  const { data: versamenti } = await qVers;
+
+  // Carica assegni addebitati
+  let qAss = db.from('assegni')
+    .select('*, fornitori(ragione_sociale)')
+    .eq('business_id', currentBusiness.id)
+    .eq('stato', 'addebitato').order('data_incasso', { ascending: true });
+  if (from) qAss = qAss.gte('data_incasso', from);
+  if (to)   qAss = qAss.lte('data_incasso', to);
+  const { data: assegni } = await qAss;
+
+  // Costruisci lista movimenti unificata
+  const allMov = [
+    ...(movimenti||[]).map(m => ({
+      data: m.data, tipo: m.tipo_movimento || 'Movimento',
+      desc: m.descrizione || '—',
+      importo: Math.abs(parseFloat(m.importo)||0),
+      segno: (parseFloat(m.importo)||0) >= 0 ? 'avere' : 'dare'
+    })),
+    ...(versamenti||[]).map(v => ({
+      data: v.data, tipo: 'Versamento',
+      desc: v.note || 'Versamento cassa',
+      importo: parseFloat(v.importo)||0,
+      segno: 'avere'
+    })),
+    ...(assegni||[]).map(a => ({
+      data: a.data_incasso, tipo: 'Assegno',
+      desc: (a.fornitori?.ragione_sociale || '') + (a.numero ? ' N° '+a.numero : ''),
+      importo: parseFloat(a.importo)||0,
+      segno: 'dare'
+    }))
+  ].sort((a,b) => a.data > b.data ? 1 : -1);
+
+  const totEntrate = allMov.filter(m=>m.segno==='avere').reduce((s,m)=>s+m.importo,0);
+  const totUscite  = allMov.filter(m=>m.segno==='dare').reduce((s,m)=>s+m.importo,0);
+  const saldoIniziale = parseFloat(banca?.saldo_iniziale||0);
+  const saldoFinale = saldoIniziale + totEntrate - totUscite;
+
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const W = 210, margin = 16;
@@ -3902,18 +3962,18 @@ async function exportEstrattoBancaPDF() {
   doc.setTextColor(10,15,30); doc.setFontSize(16); doc.setFont('helvetica','bold');
   doc.text('Estratto Conto Bancario', margin, y); y += 7;
   doc.setFontSize(11); doc.setTextColor(37,99,235);
-  doc.text(d.banca?.nome + (d.banca?.istituto ? ' — ' + d.banca.istituto : ''), margin, y); y += 5;
+  doc.text((banca?.nome || 'Banca') + (banca?.istituto ? ' — ' + banca.istituto : ''), margin, y); y += 5;
   doc.setFontSize(9); doc.setTextColor(107,114,128);
-  doc.text('Periodo: ' + formatDate(d.from) + ' — ' + formatDate(d.to), margin, y);
+  if (from && to) doc.text('Periodo: ' + formatDate(from) + ' — ' + formatDate(to), margin, y);
   doc.text(currentBusiness?.name || '', W-margin, y, {align:'right'}); y += 10;
 
   // KPI
   const kpiW = (W - margin*2 - 12)/4;
   const kpis = [
-    {label:'Saldo iniziale', val:formatEur(d.saldoIniziale), color:[37,99,235]},
-    {label:'Entrate', val:formatEur(d.totEntrate), color:[16,185,129]},
-    {label:'Uscite', val:formatEur(d.totUscite), color:[239,68,68]},
-    {label:'Saldo finale', val:formatEur(d.saldoFinale), color:d.saldoFinale>=0?[16,185,129]:[239,68,68]}
+    {label:'Saldo iniziale', val:formatEur(saldoIniziale), color:[37,99,235]},
+    {label:'Entrate', val:formatEur(totEntrate), color:[16,185,129]},
+    {label:'Uscite', val:formatEur(totUscite), color:[239,68,68]},
+    {label:'Saldo finale', val:formatEur(saldoFinale), color:saldoFinale>=0?[16,185,129]:[239,68,68]}
   ];
   kpis.forEach((k,i) => {
     const x = margin + i*(kpiW+4);
@@ -3926,7 +3986,7 @@ async function exportEstrattoBancaPDF() {
   });
   y += 22;
 
-  // Tabella
+  // Tabella movimenti
   doc.setFontSize(11); doc.setFont('helvetica','bold'); doc.setTextColor(10,15,30);
   doc.text('Dettaglio movimenti', margin, y); y += 6;
   doc.setFillColor(10,15,30); doc.rect(margin,y,W-margin*2,7,'F');
@@ -3938,15 +3998,21 @@ async function exportEstrattoBancaPDF() {
   doc.text('SALDO', W-margin-2, y+5, {align:'right'});
   y += 9;
 
-  let saldo = d.saldoIniziale;
-  d.allMov.forEach((m, i) => {
+  let saldo = saldoIniziale;
+  if (!allMov.length) {
+    doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(107,114,128);
+    doc.text('Nessun movimento nel periodo selezionato', margin+2, y+4);
+    y += 10;
+  }
+
+  allMov.forEach((m, i) => {
     if (y > 270) { doc.addPage(); y = 20; }
     saldo += m.segno === 'avere' ? m.importo : -m.importo;
     if (i%2===0) { doc.setFillColor(248,250,252); doc.rect(margin,y-3,W-margin*2,7,'F'); }
     doc.setFont('helvetica','normal'); doc.setFontSize(7.5);
     doc.setTextColor(107,114,128); doc.text(formatDate(m.data), margin+2, y+2);
-    doc.setTextColor(10,15,30); doc.text(m.tipo.replace(/[^\x00-\x7F]/g,'').trim(), margin+24, y+2);
-    doc.text(m.desc.substring(0,35), margin+50, y+2);
+    doc.setTextColor(10,15,30); doc.text((m.tipo||'').substring(0,12), margin+24, y+2);
+    doc.text((m.desc||'').substring(0,35), margin+50, y+2);
     m.segno==='avere' ? doc.setTextColor(16,185,129) : doc.setTextColor(239,68,68);
     doc.setFont('helvetica','bold');
     doc.text((m.segno==='avere'?'+':'-')+formatEur(m.importo), margin+130, y+2);
@@ -3962,16 +4028,17 @@ async function exportEstrattoBancaPDF() {
   doc.setFillColor(10,15,30); doc.rect(margin,y,W-margin*2,8,'F');
   doc.setTextColor(255,255,255); doc.setFontSize(8); doc.setFont('helvetica','bold');
   doc.text('SALDO FINALE', margin+2, y+5.5);
-  d.saldoFinale>=0 ? doc.setTextColor(52,211,153) : doc.setTextColor(248,113,113);
-  doc.text(formatEur(d.saldoFinale), W-margin-2, y+5.5, {align:'right'});
+  saldoFinale>=0 ? doc.setTextColor(52,211,153) : doc.setTextColor(248,113,113);
+  doc.text(formatEur(saldoFinale), W-margin-2, y+5.5, {align:'right'});
 
   doc.setPage(1); doc.setFontSize(7); doc.setTextColor(156,163,175); doc.setFont('helvetica','normal');
   doc.text('KONTRO — Prima nota digitale · www.kontro.cloud', margin, 290);
 
-  const filename = 'KONTRO_Banca_' + (d.banca?.nome||'').replace(/\s/g,'_') + '_' + d.from + '_' + d.to + '.pdf';
-  doc.save(filename);
-  showToast('PDF scaricato ✓', 'success');
+  const nomeBanca = (banca?.nome||'Banca').replace(/\s/g,'_');
+  doc.save(`KONTRO_Banca_${nomeBanca}_${from||'all'}_${to||'all'}.pdf`);
+  showToast('PDF estratto conto generato ✓', 'success');
 }
+
 
 // ============================================
 // PREVISIONI DASHBOARD
