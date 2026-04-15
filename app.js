@@ -1630,13 +1630,10 @@ function addFornitoreRow() {
   tr.className = 'pn-dyn-row' + (idx%2===0?' pn-row-even':'');
   tr.id = 'fornitori-r'+idx;
 
-  // Select fornitore dall'anagrafica
-  const optsHtml = '<option value="">— Fornitore —</option>' +
-    (fornitoriCache||[]).map(f => `<option value="${f.id}">${f.ragione_sociale}</option>`).join('');
-
   tr.innerHTML = `
     <td class="td-desc" style="display:flex;align-items:center;gap:4px">
-      <select class="pn-desc-input" id="fdesc-${idx}">${optsHtml}</select>
+      <div id="fdesc-wrap-${idx}" style="flex:1"></div>
+      <input type="hidden" id="fdesc-${idx}" value="" />
       <button class="pn-remove-btn" onclick="removeRow(this,'f',${idx})">×</button>
     </td>
     <td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fm-${idx}" oninput="calcPN()"/></td>
@@ -1647,6 +1644,13 @@ function addFornitoreRow() {
   const prelieviHeader = document.getElementById('prelievi-header');
   if (prelieviHeader) prelieviHeader.parentNode.insertBefore(tr, prelieviHeader);
   pnFornitoriCount++;
+
+  // Inizializza il componente ricerca
+  creaSelectFornitoreConRicerca(`fdesc-wrap-${idx}`, {
+    onSelect: (id, nome) => {
+      document.getElementById('fdesc-'+idx).value = id;
+    }
+  });
 }
 
 function addPrelievRow() {
@@ -2305,6 +2309,21 @@ async function initFornitori() {
   await loadFornitoriCache();
   populateFornitoriSelects();
   loadFornitoriList();
+
+  // Componente ricerca per fattura
+  creaSelectFornitoreConRicerca('nft-fornitore-wrap', {
+    placeholder: 'Seleziona fornitore',
+    onSelect: (id) => { document.getElementById('nft-fornitore').value = id; }
+  });
+
+  // Componente ricerca per estratto conto
+  creaSelectFornitoreConRicerca('ec-fornitore-wrap', {
+    placeholder: 'Seleziona fornitore',
+    onSelect: (id) => {
+      document.getElementById('ec-fornitore').value = id;
+      loadEstratto();
+    }
+  });
   // Popola select sedi nel form fattura
   const nftSede = document.getElementById('nft-sede');
   if (nftSede) {
@@ -3078,7 +3097,13 @@ async function salvaNotaGiorno() {
         descrizione = f ? f.ragione_sociale : '';
       }
     } else if (descEl?.tagName === 'INPUT') {
-      descrizione = descEl.value?.trim() || '';
+      // Input hidden dal componente ricerca
+      const val = descEl.value?.trim();
+      if (val) {
+        fornitoreId = val;
+        const f = fornitoriCache.find(x => x.id === val);
+        descrizione = f ? f.ragione_sociale : val;
+      }
     }
 
     if (m || p || s || descrizione || fornitoreId) {
@@ -7479,3 +7504,123 @@ hideAddDipendente = function() {
   if (btn) btn.textContent = 'Salva dipendente';
   _hideAddDipendenteOrig();
 };
+
+// ============================================
+// SELECT FORNITORE CON RICERCA
+// ============================================
+function creaSelectFornitoreConRicerca(containerId, opts = {}) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  const { onSelect, placeholder = '— Fornitore —', selectedId = '', selectedNome = '' } = opts;
+
+  let valoreCorrente = selectedId;
+  let nomeCorrente = selectedNome || placeholder;
+
+  container.innerHTML = `
+    <div class="fornitore-search-wrap" id="fsw-${containerId}">
+      <input type="text" class="fornitore-search-input" id="fsi-${containerId}"
+        value="${nomeCorrente === placeholder ? '' : nomeCorrente}"
+        placeholder="${placeholder}" readonly
+        onclick="apriDropdownFornitore('${containerId}')" />
+      <span class="fornitore-search-arrow">▼</span>
+      <div class="fornitore-dropdown" id="fsd-${containerId}">
+        <div class="fornitore-dropdown-search">
+          <input type="text" placeholder="🔍 Cerca fornitore..." id="fss-${containerId}"
+            oninput="filtraDropdownFornitore('${containerId}', this.value)"
+            onclick="event.stopPropagation()" />
+        </div>
+        <div class="fornitore-dropdown-list" id="fsl-${containerId}">
+          ${buildOpzioniFornitore(containerId, '', valoreCorrente)}
+        </div>
+      </div>
+    </div>`;
+
+  // Chiudi cliccando fuori
+  document.addEventListener('click', function chiudiHandler(e) {
+    const wrap = document.getElementById('fsw-'+containerId);
+    if (wrap && !wrap.contains(e.target)) {
+      chiudiDropdownFornitore(containerId);
+    }
+  }, { once: false });
+
+  // Salva callback
+  window._fornitoreCallbacks = window._fornitoreCallbacks || {};
+  window._fornitoreCallbacks[containerId] = onSelect;
+  window._fornitoreValori = window._fornitoreValori || {};
+  window._fornitoreValori[containerId] = valoreCorrente;
+}
+
+function buildOpzioniFornitore(containerId, filtro, selectedId) {
+  const items = fornitoriCache || [];
+  const filtered = filtro
+    ? items.filter(f => f.ragione_sociale.toLowerCase().includes(filtro.toLowerCase()))
+    : items;
+
+  let html = `<div class="fornitore-option${!selectedId ? ' selected' : ''}"
+    onclick="selezionaFornitore('${containerId}', '', '— Fornitore —')">
+    — Fornitore —
+  </div>`;
+
+  if (!filtered.length) {
+    html += `<div class="fornitore-option empty">Nessun risultato</div>`;
+  } else {
+    html += filtered.map(f => `
+      <div class="fornitore-option${f.id === selectedId ? ' selected' : ''}"
+        onclick="selezionaFornitore('${containerId}', '${f.id}', '${f.ragione_sociale.replace(/'/g,"\\'")}')">
+        ${f.ragione_sociale}
+      </div>`).join('');
+  }
+  return html;
+}
+
+function apriDropdownFornitore(containerId) {
+  // Chiudi tutti gli altri
+  document.querySelectorAll('.fornitore-dropdown.open').forEach(d => d.classList.remove('open'));
+  const dd = document.getElementById('fsd-'+containerId);
+  if (dd) {
+    dd.classList.add('open');
+    // Focus sulla ricerca
+    setTimeout(() => {
+      const s = document.getElementById('fss-'+containerId);
+      if (s) s.focus();
+    }, 50);
+  }
+}
+
+function chiudiDropdownFornitore(containerId) {
+  const dd = document.getElementById('fsd-'+containerId);
+  if (dd) dd.classList.remove('open');
+}
+
+function filtraDropdownFornitore(containerId, filtro) {
+  const list = document.getElementById('fsl-'+containerId);
+  if (!list) return;
+  const sel = window._fornitoreValori?.[containerId] || '';
+  list.innerHTML = buildOpzioniFornitore(containerId, filtro, sel);
+}
+
+function selezionaFornitore(containerId, id, nome) {
+  window._fornitoreValori = window._fornitoreValori || {};
+  window._fornitoreValori[containerId] = id;
+
+  const input = document.getElementById('fsi-'+containerId);
+  if (input) input.value = id ? nome : '';
+  input.placeholder = id ? nome : '— Fornitore —';
+
+  chiudiDropdownFornitore(containerId);
+
+  // Aggiorna search input
+  const s = document.getElementById('fss-'+containerId);
+  if (s) s.value = '';
+  const list = document.getElementById('fsl-'+containerId);
+  if (list) list.innerHTML = buildOpzioniFornitore(containerId, '', id);
+
+  // Callback
+  const cb = window._fornitoreCallbacks?.[containerId];
+  if (cb) cb(id, nome);
+}
+
+function getValoreFornitore(containerId) {
+  return window._fornitoreValori?.[containerId] || '';
+}

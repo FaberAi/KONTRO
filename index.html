@@ -1074,7 +1074,7 @@
           <div class="section-card" style="margin-bottom:16px">
             <h2 style="margin-bottom:16px">Registra fattura</h2>
             <div class="form-grid">
-              <div class="field"><label>Fornitore</label><select id="nft-fornitore"><option value="">Seleziona fornitore</option></select></div>
+              <div class="field"><label>Fornitore</label><div id="nft-fornitore-wrap"></div><input type="hidden" id="nft-fornitore" /></div>
               <div class="field"><label>Numero fattura</label><input type="text" id="nft-numero" placeholder="Es. FT-2024-001" /></div>
               <div class="field"><label>Data fattura</label><input type="date" id="nft-data" /></div>
               <div class="field"><label>Data scadenza</label><input type="date" id="nft-scadenza" /></div>
@@ -1132,7 +1132,7 @@
             <div class="form-grid">
               <div class="field">
                 <label>Fornitore</label>
-                <select id="ec-fornitore" onchange="loadEstratto()"><option value="">Seleziona fornitore</option></select>
+                <div id="ec-fornitore-wrap" style="flex:1"></div><input type="hidden" id="ec-fornitore" />
               </div>
               <div class="field"><label>Da</label><input type="date" id="ec-from" onchange="loadEstratto()" /></div>
               <div class="field"><label>A</label><input type="date" id="ec-to" onchange="loadEstratto()" /></div>
