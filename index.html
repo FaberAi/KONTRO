@@ -1422,6 +1422,14 @@
                     <input type="time" id="nd-ser-end" placeholder="Es. 02:00" />
                   </div>
                 </div>
+                <!-- Doppio turno -->
+                <label style="display:flex;align-items:center;gap:10px;margin-top:12px;padding:10px 14px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;cursor:pointer">
+                  <input type="checkbox" id="nd-doppio-turno" style="width:16px;height:16px;accent-color:#2563eb">
+                  <div>
+                    <div style="font-size:13px;font-weight:600;color:var(--text-primary)">🔄 Può fare doppio turno</div>
+                    <div style="font-size:11px;color:var(--gray-400)">Il generatore potrà assegnarlo a più turni nello stesso giorno</div>
+                  </div>
+                </label>
               </div>
 
               <!-- Accordo contrattuale -->
@@ -1916,6 +1924,10 @@
         <div class="help-item">
           <div class="help-q">Come funziona il generatore automatico?</div>
           <div class="help-a">Clicca <strong>⚡ Genera settimana</strong> — il sistema analizza le ultime 8 settimane e ripropone i turni in base al pattern storico. Puoi inserire le assenze prima di generare.</div>
+        </div>
+        <div class="help-item">
+          <div class="help-q">Cos'è il doppio turno?</div>
+          <div class="help-a">Attivando <strong>🔄 Può fare doppio turno</strong> nella scheda dipendente, il generatore automatico potrà assegnarlo a più turni nello stesso giorno (es. mattina e sera) se lo storico lo conferma. I dipendenti senza questa opzione ricevono sempre un solo turno per giorno.</div>
         </div>
         <div class="help-item">
           <div class="help-q">Come esporto il PDF presenze mensile?</div>

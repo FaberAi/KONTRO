@@ -4412,7 +4412,8 @@ async function saveDipendente() {
     notturno_attivo:      document.getElementById('nd-notturno-attivo')?.checked || false,
     magg_straordinario_feriale: parseFloat(document.getElementById('nd-magg-straord')?.value) || 15,
     magg_straordinario_festivo: parseFloat(document.getElementById('nd-magg-festivo')?.value) || 30,
-    magg_notturno: parseFloat(document.getElementById('nd-magg-notturno')?.value) || 50
+    magg_notturno: parseFloat(document.getElementById('nd-magg-notturno')?.value) || 50,
+    puo_doppio_turno: document.getElementById('nd-doppio-turno')?.checked || false
   });
   if (error) { showToast('Errore: ' + error.message, 'error'); return; }
   showToast('Dipendente salvato ✓', 'success');
@@ -4458,6 +4459,7 @@ async function loadDipendentiList() {
               ${d.tipo_contratto === 'ccnl'
                 ? `📊 CCNL · €${d.paga_oraria||0}/h · ${d.ore_settimanali||40}h/sett`
                 : `💰 Forfettario${d.importo_fisso ? ' · €' + d.importo_fisso + '/mese' : ''}`}
+              ${d.puo_doppio_turno ? ' · 🔄 Doppio turno' : ''}
             </div>
           </div>
           <button class="btn-secondary sm" onclick="switchHRTab('presenze');document.getElementById('pres-dipendente').value='${d.id}';loadPresenzeMese()">Presenze</button>
@@ -6202,8 +6204,10 @@ async function eseguiGenerazione() {
 
   const assenze = raccogliAssenze();
 
-  // Storico ultime 8 settimane
-  const otto = new Date(giorni[0]+'T12:00:00');
+  // Storico ultime 8 settimane — sempre a ritroso da OGGI
+  // (non dalla settimana selezionata, per funzionare anche con settimane future)
+  const oggi = new Date().toISOString().split('T')[0];
+  const otto = new Date();
   otto.setDate(otto.getDate() - 56);
   const dataFrom = otto.toISOString().split('T')[0];
 
@@ -6211,14 +6215,26 @@ async function eseguiGenerazione() {
     .select('dipendente_id, data, turno, location_id')
     .eq('business_id', currentBusiness.id)
     .gte('data', dataFrom)
-    .lt('data', giorni[0])
+    .lt('data', giorni[0])   // esclude la settimana da generare
     .neq('turno', 'riposo');
 
   if (!storicoTurni || !storicoTurni.length) {
-    msgEl.style.background='rgba(234,179,8,0.1)';
-    msgEl.style.color='#ca8a04';
-    msgEl.textContent='⚠️ Storico insufficiente — inserisci almeno 1-2 settimane manualmente prima di usare la generazione automatica.';
-    return;
+    // Se la settimana è futura, prova a prendere lo storico completo disponibile
+    const { data: storicoAlt } = await db.from('turni_dipendenti')
+      .select('dipendente_id, data, turno, location_id')
+      .eq('business_id', currentBusiness.id)
+      .lt('data', giorni[0])
+      .neq('turno', 'riposo')
+      .limit(200);
+
+    if (!storicoAlt || !storicoAlt.length) {
+      msgEl.style.background='rgba(234,179,8,0.1)';
+      msgEl.style.color='#ca8a04';
+      msgEl.textContent='⚠️ Storico insufficiente — inserisci almeno 1-2 settimane manualmente prima di usare la generazione automatica.';
+      return;
+    }
+    // Usa lo storico alternativo
+    storicoTurni.push(...storicoAlt);
   }
 
   // Costruisci pattern per dipendente
@@ -6279,6 +6295,7 @@ async function eseguiGenerazione() {
     if (!pat) return;
     const nWeeks = weekCount[dip.id]?.size || 1;
     const locKey = dip.location_id || 'principale';
+    const puoDoppio = dip.puo_doppio_turno === true;
 
     giorni.forEach((g, gi) => {
       if (assenzeMappa[`${dip.id}_${g}`]) return;
@@ -6287,21 +6304,35 @@ async function eseguiGenerazione() {
       const locPat = dowPat[locKey] || dowPat[Object.keys(dowPat)[0]];
       if (!locPat) return;
 
-      let bestTurno = null, bestCount = 0;
-      Object.entries(locPat).forEach(([turno, count]) => {
-        if (count > bestCount) { bestCount = count; bestTurno = turno; }
-      });
-
-      if (!bestTurno) return;
-      if (bestCount / nWeeks < soglia) return;
-
-      turniDaInserire.push({
-        business_id: currentBusiness.id,
-        dipendente_id: dip.id,
-        data: g,
-        location_id: dip.location_id || null,
-        turno: bestTurno
-      });
+      if (puoDoppio) {
+        // Dipendente con doppio turno — genera tutti i turni con frequenza sufficiente
+        Object.entries(locPat).forEach(([turno, count]) => {
+          if (count / nWeeks >= soglia) {
+            turniDaInserire.push({
+              business_id: currentBusiness.id,
+              dipendente_id: dip.id,
+              data: g,
+              location_id: dip.location_id || null,
+              turno
+            });
+          }
+        });
+      } else {
+        // Dipendente normale — solo il turno più frequente
+        let bestTurno = null, bestCount = 0;
+        Object.entries(locPat).forEach(([turno, count]) => {
+          if (count > bestCount) { bestCount = count; bestTurno = turno; }
+        });
+        if (!bestTurno) return;
+        if (bestCount / nWeeks < soglia) return;
+        turniDaInserire.push({
+          business_id: currentBusiness.id,
+          dipendente_id: dip.id,
+          data: g,
+          location_id: dip.location_id || null,
+          turno: bestTurno
+        });
+      }
     });
   });
 
