@@ -1704,11 +1704,51 @@ async function loadNotaGiorno2() {
   let query = db.from('daily_notes').select('*, daily_note_rows(*)')
     .eq('business_id', currentBusiness.id).eq('data', data);
   if (locId) query = query.eq('location_id', locId);
-  const { data: noteList2 } = await query.order('created_at', { ascending: false }).limit(10);
-  const nota = (noteList2 || []).find(n => locId ? n.location_id === locId : !n.location_id) || null;
+  const { data: noteList2 } = await query.order('created_at', { ascending: false }).limit(20);
 
   resetPN();
+
+  // Se locId è vuoto (Tutte le sedi) → aggrega i totali di tutti i locali in modalità sola lettura
+  if (!locId && noteList2?.length > 1) {
+    // Mostra totali aggregati — sola lettura
+    const campiMap = [
+      ['incasso','incasso'],['money','money'],['grattavinci','grattavinci'],['sisal','sisal'],['conto-bet','conto_bet'],
+      ['fatture','fatture'],['giornali','giornali'],
+      ['pos','pos'],['carte','carte'],['bonifici','bonifici'],['fc-usc','fondo_chiusura']
+    ];
+    campiMap.forEach(([html, db]) => {
+      ['m','p','s'].forEach(t => {
+        const el = document.getElementById(html+'-'+t);
+        if (!el) return;
+        const tot = noteList2.reduce((s,n) => s + (parseFloat(n[db+'_'+t])||0), 0);
+        el.value = tot > 0 ? tot.toFixed(2) : '';
+        el.disabled = true; // Solo lettura in modalità aggregata
+        el.style.opacity = '0.7';
+      });
+    });
+
+    // Mostra info aggregazione
+    showPNMsg(`📊 Totali aggregati di ${noteList2.length} sedi — seleziona una sede per modificare`, '');
+    calcPN();
+
+    // Nascondi bottone salva e blocchi
+    document.getElementById('btn-elimina-nota')?.style && (document.getElementById('btn-elimina-nota').style.display = 'none');
+    document.querySelectorAll('.btn-blocca').forEach(b => b.style.display = 'none');
+    await caricaStatoBlocchi(null, null);
+    return;
+  }
+
+  // Modalità normale — sede specifica o unica nota
+  const nota = (noteList2 || []).find(n => locId ? n.location_id === locId : !n.location_id) || noteList2?.[0] || null;
+
   if (!nota) return;
+
+  // Riabilita input se erano stati disabilitati
+  document.querySelectorAll('.pn-input, .pn-fc-input').forEach(el => {
+    el.disabled = false;
+    el.style.opacity = '';
+  });
+  document.querySelectorAll('.btn-blocca').forEach(b => b.style.display = '');
 
   document.getElementById('pn-fc').value = nota.fondo_cassa || '';
   const campiMap = [
