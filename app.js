@@ -6085,7 +6085,7 @@ async function apriGeneraSettimana() {
         <div>
           <div style="font-size:16px;font-weight:800;color:var(--text-primary)">⚡ Genera settimana automatica</div>
           <div style="font-size:12px;color:var(--gray-400);margin-top:2px">
-            ${fmt(giorni[0])} – ${fmt(giorni[6])} · basato sulle ultime 8 settimane
+            ${fmt(giorni[0])} – ${fmt(giorni[6])} · basato sulle ultime 8 settimane passate
           </div>
         </div>
         <button onclick="chiudiGeneraModal()" class="btn-secondary sm">✕</button>
