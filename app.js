@@ -4482,6 +4482,7 @@ async function loadDipendentiList() {
           </div>
           <button class="btn-secondary sm" onclick="switchHRTab('presenze');document.getElementById('pres-dipendente').value='${d.id}';loadPresenzeMese()">Presenze</button>
           <button class="btn-secondary sm" onclick="switchHRTab('acconti');document.getElementById('acc-dipendente').value='${d.id}'">Acconti</button>
+          <button class="btn-secondary sm" onclick="modificaDipendente('${d.id}')">✏️</button>
           <button class="entry-del" onclick="deleteDipendente('${d.id}')">✕</button>
         </div>`).join('')}
     </div>`).join('');
@@ -7279,3 +7280,125 @@ async function caricaStatoBlocchi(data, locId) {
   }
   applicaBlocchi();
 }
+
+// ============================================
+// MODIFICA DIPENDENTE
+// ============================================
+let dipendenteDaModificare = null;
+
+async function modificaDipendente(id) {
+  const { data: d } = await db.from('dipendenti').select('*').eq('id', id).single();
+  if (!d) { showToast('Dipendente non trovato', 'error'); return; }
+
+  dipendenteDaModificare = id;
+
+  // Apri il form
+  showAddDipendente();
+
+  // Pre-compila tutti i campi
+  const set = (elId, val) => { const el = document.getElementById(elId); if (el) el.value = val || ''; };
+  const setCheck = (elId, val) => { const el = document.getElementById(elId); if (el) el.checked = !!val; };
+
+  set('nd-nome', d.nome);
+  set('nd-cognome', d.cognome);
+  set('nd-ruolo', d.ruolo);
+  set('nd-assunzione', d.data_assunzione);
+  set('nd-sede', d.location_id);
+  set('nd-note', d.note);
+  set('nd-telefono', d.telefono);
+  set('nd-colore', d.colore || '#3b82f6');
+
+  // Orari turni
+  set('nd-mat-start', d.mat_start);
+  set('nd-mat-end', d.mat_end);
+  set('nd-pom-start', d.pom_start);
+  set('nd-pom-end', d.pom_end);
+  set('nd-ser-start', d.ser_start);
+  set('nd-ser-end', d.ser_end);
+  setCheck('nd-doppio-turno', d.puo_doppio_turno);
+
+  // Tipo contratto
+  const tipo = d.tipo_contratto || 'forfettario';
+  const radioEl = document.getElementById('tc-' + tipo);
+  if (radioEl) { radioEl.checked = true; toggleTipoContratto(); }
+  set('nd-importo-fisso', d.importo_fisso);
+  set('nd-paga-oraria', d.paga_oraria);
+  set('nd-ore-settimanali', d.ore_settimanali || 40);
+  setCheck('nd-straord-attivo', d.straordinario_attivo);
+  setCheck('nd-festivo-attivo', d.festivo_attivo);
+  setCheck('nd-notturno-attivo', d.notturno_attivo);
+  set('nd-magg-straord', d.magg_straordinario_feriale || 15);
+  set('nd-magg-festivo', d.magg_straordinario_festivo || 30);
+  set('nd-magg-notturno', d.magg_notturno || 50);
+
+  // Cambia titolo e bottone
+  const btn = document.querySelector('#add-dipendente-form .btn-primary');
+  if (btn) btn.textContent = 'Salva modifiche →';
+
+  // Scroll al form
+  document.getElementById('add-dipendente-form').scrollIntoView({ behavior: 'smooth' });
+}
+
+// Override saveDipendente per gestire modifica
+const _saveDipendenteOrig = saveDipendente;
+saveDipendente = async function() {
+  if (!dipendenteDaModificare) { await _saveDipendenteOrig(); return; }
+
+  const id = dipendenteDaModificare;
+  const nome = document.getElementById('nd-nome').value.trim();
+  const cognome = document.getElementById('nd-cognome').value.trim();
+  if (!nome || !cognome) { showToast('Inserisci nome e cognome', 'error'); return; }
+
+  const { error } = await db.from('dipendenti').update({
+    nome, cognome,
+    ruolo: document.getElementById('nd-ruolo').value.trim(),
+    location_id: document.getElementById('nd-sede').value || null,
+    data_assunzione: document.getElementById('nd-assunzione').value || null,
+    note: document.getElementById('nd-note').value.trim(),
+    telefono: document.getElementById('nd-telefono').value.trim(),
+    colore: document.getElementById('nd-colore')?.value || '#3b82f6',
+    mat_start: document.getElementById('nd-mat-start')?.value || null,
+    mat_end:   document.getElementById('nd-mat-end')?.value || null,
+    pom_start: document.getElementById('nd-pom-start')?.value || null,
+    pom_end:   document.getElementById('nd-pom-end')?.value || null,
+    ser_start: document.getElementById('nd-ser-start')?.value || null,
+    ser_end:   document.getElementById('nd-ser-end')?.value || null,
+    puo_doppio_turno: document.getElementById('nd-doppio-turno')?.checked || false,
+    tipo_contratto: document.querySelector('input[name="tipo-contratto"]:checked')?.value || 'forfettario',
+    importo_fisso: parseFloat(document.getElementById('nd-importo-fisso')?.value) || 0,
+    paga_oraria: parseFloat(document.getElementById('nd-paga-oraria')?.value) || 0,
+    ore_settimanali: parseInt(document.getElementById('nd-ore-settimanali')?.value) || 40,
+    straordinario_attivo: document.getElementById('nd-straord-attivo')?.checked || false,
+    festivo_attivo: document.getElementById('nd-festivo-attivo')?.checked || false,
+    notturno_attivo: document.getElementById('nd-notturno-attivo')?.checked || false,
+    magg_straordinario_feriale: parseFloat(document.getElementById('nd-magg-straord')?.value) || 15,
+    magg_straordinario_festivo: parseFloat(document.getElementById('nd-magg-festivo')?.value) || 30,
+    magg_notturno: parseFloat(document.getElementById('nd-magg-notturno')?.value) || 50
+  }).eq('id', id);
+
+  if (error) { showToast('Errore: ' + error.message, 'error'); return; }
+
+  showToast('Dipendente aggiornato ✓', 'success');
+  dipendenteDaModificare = null;
+
+  // Reset bottone
+  const btn = document.querySelector('#add-dipendente-form .btn-primary');
+  if (btn) btn.textContent = 'Salva dipendente';
+
+  hideAddDipendente();
+  ['nd-nome','nd-cognome','nd-ruolo','nd-note','nd-telefono'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  await loadDipendentiCache();
+  populateDipendentiSelects();
+  loadDipendentiList();
+};
+
+// Reset modifica quando si annulla
+const _hideAddDipendenteOrig = hideAddDipendente;
+hideAddDipendente = function() {
+  dipendenteDaModificare = null;
+  const btn = document.querySelector('#add-dipendente-form .btn-primary');
+  if (btn) btn.textContent = 'Salva dipendente';
+  _hideAddDipendenteOrig();
+};
