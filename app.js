@@ -313,18 +313,18 @@ function updateUserUI() {
     } else if (isAdmin) {
       visible = !['team','impostazioni'].includes(view);
     } else if (isManager) {
-      // Manager: Prima Nota, Storico, HR (turni+acconti), Fornitori (solo fatture), Dashboard
+      // Manager: Prima Nota, Storico, HR (turni+acconti), Fornitori, Dashboard
       visible = ['dashboard','primanota','storico','hr','fornitori'].includes(view);
     } else if (isCashier) {
       const permMap = {
         dashboard: true,
         primanota: true,
         sedi: true,
+        fornitori: true,  // cassiere può registrare fatture del suo locale
         movimenti: perms.movimenti,
         storico: perms.storico,
         report: perms.report,
         banca: perms.banca,
-        fornitori: perms.fornitori,
         team: false,
         impostazioni: false
       };
