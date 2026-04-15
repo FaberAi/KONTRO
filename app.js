@@ -3114,10 +3114,25 @@ async function salvaNotaGiorno() {
   const fcChiusura = getV('fc-usc-s') || getV('fc-usc-p') || getV('fc-usc-m');
   if (fcChiusura > 0) {
     const dom = new Date(data); dom.setDate(dom.getDate() + 1);
-    await db.from('daily_notes').upsert({
-      business_id: currentBusiness.id, location_id: locId,
-      data: dom.toISOString().split('T')[0], fondo_cassa: fcChiusura
-    }, { onConflict: 'business_id,location_id,data', ignoreDuplicates: true });
+    const domStr = dom.toISOString().split('T')[0];
+
+    // Verifica se esiste già una nota per domani
+    let qDom = db.from('daily_notes').select('id')
+      .eq('business_id', currentBusiness.id).eq('data', domStr);
+    if (locId) qDom = qDom.eq('location_id', locId);
+    else qDom = qDom.is('location_id', null);
+    const { data: notaDom } = await qDom.single();
+
+    if (notaDom) {
+      // Aggiorna fondo cassa sulla nota esistente
+      await db.from('daily_notes').update({ fondo_cassa: fcChiusura }).eq('id', notaDom.id);
+    } else {
+      // Crea nuova nota con solo il fondo cassa
+      await db.from('daily_notes').insert({
+        business_id: currentBusiness.id, location_id: locId,
+        data: domStr, fondo_cassa: fcChiusura
+      });
+    }
   }
 
   // Scala automaticamente le giocate dal conto bet
