@@ -194,7 +194,7 @@ function populateLocationSelects() {
   selects.forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
-    const firstOption = id === 'location-select' ? '<option value="">Tutte le sedi</option>' : '<option value="">Riepilogo generale sedi</option>';
+    const firstOption = id === 'pn-location' ? '<option value="">Riepilogo generale sedi</option>' : id === 'location-select' ? '<option value="">Tutte le sedi</option>' : '<option value="">Tutte le sedi</option>';
     el.innerHTML = firstOption + currentLocations.map(l =>
       `<option value="${l.id}">${l.name}</option>`
     ).join('');
@@ -2367,7 +2367,7 @@ async function initFornitori() {
   // Popola select sedi nel form fattura
   const nftSede = document.getElementById('nft-sede');
   if (nftSede) {
-    nftSede.innerHTML = '<option value="">Riepilogo generale sedi</option>' +
+    nftSede.innerHTML = '<option value="">— Sede di scarico —</option>' +
       currentLocations.map(l => `<option value="${l.id}">${l.name}</option>`).join('');
   }
   // Date default estratto
@@ -4590,7 +4590,7 @@ async function loadDipendentiList() {
   // Raggruppa per sede
   const bySede = {};
   data.forEach(d => {
-    const sedeNome = d.location_id ? (d.locations?.name || 'Riepilogo generale sedi') : 'Riepilogo generale sedi';
+    const sedeNome = d.location_id ? (d.locations?.name || 'Disponibile su tutte le sedi') : 'Disponibile su tutte le sedi';
     if (!bySede[sedeNome]) bySede[sedeNome] = [];
     bySede[sedeNome].push(d);
   });
@@ -5671,7 +5671,7 @@ async function buildOrganicoBySede() {
 
   const bySede = {};
   dips.forEach(d => {
-    const k = d.locations?.name || 'Riepilogo generale sedi';
+    const k = d.locations?.name || 'Disponibile su tutte le sedi';
     if (!bySede[k]) bySede[k] = [];
     bySede[k].push(d);
   });
