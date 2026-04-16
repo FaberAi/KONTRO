@@ -2988,3 +2988,11 @@ html, body {
 .fornitore-option:hover { background: rgba(99,130,200,0.12); }
 .fornitore-option.selected { background: rgba(37,99,235,0.15); color: var(--blue-300); }
 .fornitore-option.empty { color: var(--gray-400); font-style: italic; }
+
+/* Fix compilatori prima nota */
+.pn-compilatori .field label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 11px;
+}
