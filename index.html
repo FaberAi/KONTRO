@@ -728,6 +728,7 @@
             <div class="form-actions">
               <button class="btn-secondary" onclick="resetPN()">Reset</button>
               <button class="btn-secondary" onclick="exportPrimaNota()">📄 PDF</button>
+              <button class="btn-secondary" id="btn-invia-report" onclick="inviaReportSerale(document.getElementById('pn-data').value, document.getElementById('pn-location').value||null)" style="display:none">📧 Invia report</button>
               <button class="btn-danger" id="btn-elimina-nota" onclick="eliminaNotaGiorno()" style="display:none">🗑 Elimina nota</button>
               <button class="btn-primary" onclick="salvaNotaGiorno()">Salva prima nota →</button>
             </div>

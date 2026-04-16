@@ -7344,12 +7344,10 @@ function applicaBlocchi() {
     const btn = document.getElementById(`btn-blocca-${t}`);
     if (!btn) return;
 
-    // Aggiorna bottone
     btn.textContent = bloccato ? '🔒' : '🔓';
     btn.className = `btn-blocca${bloccato ? ' bloccato' : ''}`;
     btn.title = bloccato ? `Turno bloccato — clicca per sbloccare (solo owner/admin)` : `Blocca turno`;
 
-    // Seleziona tutti gli input della colonna
     const colIdx = t === 'm' ? 1 : t === 'p' ? 2 : 3;
     document.querySelectorAll(`.pn-table tr td:nth-child(${colIdx + 1}) input,
                                .pn-table tr td:nth-child(${colIdx + 1}) select`).forEach(el => {
@@ -7359,6 +7357,12 @@ function applicaBlocchi() {
       el.style.background = bloccato ? 'rgba(239,68,68,0.05)' : '';
     });
   });
+
+  // Mostra bottone "Invia report" solo se il turno sera è bloccato
+  const btnReport = document.getElementById('btn-invia-report');
+  if (btnReport) {
+    btnReport.style.display = turniBloccati.s ? 'inline-flex' : 'none';
+  }
 }
 
 async function bloccaTurno(t) {
@@ -7404,11 +7408,6 @@ async function bloccaTurno(t) {
     giaBloccato ? `Turno ${turnoNome} sbloccato ✓` : `Turno ${turnoNome} bloccato 🔒`,
     'success'
   );
-
-  // Se si sta BLOCCANDO (non sbloccando) il turno SERA → invia report
-  if (!giaBloccato && t === 's') {
-    await inviaReportSerale(data, locId);
-  }
 }
 
 // Carica stato blocchi quando si apre la prima nota del giorno
