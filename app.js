@@ -3340,6 +3340,8 @@ async function loadAzienda() {
   document.getElementById('az-email').value = currentBusiness.email || '';
   document.getElementById('az-piva').value = currentBusiness.vat_number || '';
   document.getElementById('az-tel').value = currentBusiness.phone || '';
+  if (document.getElementById('az-email-report'))
+    document.getElementById('az-email-report').value = currentBusiness.email_report || '';
 }
 
 async function saveAzienda() {
@@ -3351,12 +3353,14 @@ async function saveAzienda() {
     name: nome,
     email: document.getElementById('az-email').value.trim(),
     vat_number: document.getElementById('az-piva').value.trim(),
-    phone: document.getElementById('az-tel').value.trim()
+    phone: document.getElementById('az-tel').value.trim(),
+    email_report: document.getElementById('az-email-report')?.value.trim() || null
   }).eq('id', currentBusiness.id);
 
   if (error) { showToast('Errore: ' + error.message, 'error'); return; }
 
   currentBusiness.name = nome;
+  currentBusiness.email_report = document.getElementById('az-email-report')?.value.trim() || null;
   document.getElementById('business-name-sidebar').textContent = nome;
   const msgEl = document.getElementById('az-msg');
   msgEl.textContent = 'Dati salvati ✓';
@@ -7400,6 +7404,11 @@ async function bloccaTurno(t) {
     giaBloccato ? `Turno ${turnoNome} sbloccato ✓` : `Turno ${turnoNome} bloccato 🔒`,
     'success'
   );
+
+  // Se si sta BLOCCANDO (non sbloccando) il turno SERA → invia report
+  if (!giaBloccato && t === 's') {
+    await inviaReportSerale(data, locId);
+  }
 }
 
 // Carica stato blocchi quando si apre la prima nota del giorno
@@ -7663,4 +7672,80 @@ function selezionaFornitore(containerId, id, nome) {
 
 function getValoreFornitore(containerId) {
   return window._fornitoreValori?.[containerId] || '';
+}
+
+// ============================================
+// REPORT SERALE AUTOMATICO
+// ============================================
+async function inviaReportSerale(data, locId) {
+  try {
+    // Carica la nota del giorno
+    let qNota = db.from('daily_notes').select('*, daily_note_rows(*)')
+      .eq('business_id', currentBusiness.id).eq('data', data);
+    if (locId) qNota = qNota.eq('location_id', locId);
+    else qNota = qNota.is('location_id', null);
+    const { data: nota } = await qNota.single();
+    if (!nota) return;
+
+    // Carica fatture registrate oggi per questa sede
+    let qFatture = db.from('fatture_fornitori')
+      .select('*, fornitori(ragione_sociale)')
+      .eq('business_id', currentBusiness.id)
+      .eq('data_fattura', data);
+    if (locId) qFatture = qFatture.eq('sede_id', locId);
+    const { data: fatture } = await qFatture;
+
+    // Carica email admin/owner
+    const { data: membri } = await db.from('user_roles')
+      .select('role, user_id')
+      .eq('business_id', currentBusiness.id)
+      .in('role', ['owner', 'admin']);
+
+    // Email destinatario — usa email_report se configurata, altrimenti email owner
+    const emailAdmin = currentBusiness.email_report || currentUser?.email || '';
+
+    // Dati sede
+    const sede = locId ? currentLocations.find(l => l.id === locId)?.name : null;
+
+    // Fornitori dalla prima nota
+    const fornitori = (nota.daily_note_rows||[])
+      .filter(r => r.categoria === 'fornitore' && (r.importo_m || r.importo_p || r.importo_s))
+      .map(r => ({
+        nome: r.descrizione || '—',
+        importo: parseFloat(r.importo_s || r.importo_p || r.importo_m) || 0
+      }));
+
+    // Dati fatture
+    const fattureData = (fatture||[]).map(f => ({
+      numero: f.numero,
+      fornitore: f.fornitori?.ragione_sociale || '—',
+      importo: parseFloat(f.importo_totale) || 0,
+      stato: f.stato || 'aperta'
+    }));
+
+    const compilatore = nota.bloccato_s_da || nota.compilatore_s ||
+      currentUser?.user_metadata?.full_name || currentUser?.email?.split('@')[0] || '—';
+
+    await fetch('/api/report-serale', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        businessName: currentBusiness.name || currentBusiness.nome,
+        data,
+        sede,
+        compilatore,
+        entrate: nota.totale_entrate || 0,
+        uscite: nota.totale_uscite || 0,
+        incasso: nota.incasso_giornaliero || 0,
+        differenza: nota.differenza || 0,
+        fornitori,
+        fatture: fattureData,
+        emailAdmin
+      })
+    });
+
+    showToast('📧 Report serale inviato all\'admin', 'success');
+  } catch (err) {
+    console.warn('Report serale error:', err.message);
+  }
 }

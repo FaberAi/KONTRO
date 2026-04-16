@@ -8,6 +8,7 @@
     { "src": "/api/webhook",         "dest": "/api/webhook.js" },
     { "src": "/api/portal",          "dest": "/api/portal.js" },
     { "src": "/api/create-user",     "dest": "/api/create-user.js" },
+    { "src": "/api/report-serale",   "dest": "/api/report-serale.js" },
     { "src": "/api/send-invite",     "dest": "/api/send-invite.js" },
     { "src": "/api/welcome",         "dest": "/api/welcome.js" },
     { "src": "/app",                 "dest": "/index.html" },
