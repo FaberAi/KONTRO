@@ -3,7 +3,7 @@
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { email, password, nome, cognome, role, businessId } = req.body;
+  const { email, password, nome, cognome, role, locationId, businessId } = req.body;
   if (!email || !password || !businessId) {
     return res.status(400).json({ error: 'Email, password e businessId obbligatori' });
   }
@@ -51,7 +51,8 @@ module.exports = async function handler(req, res) {
       body: JSON.stringify({
         user_id: userId,
         business_id: businessId,
-        role: role || 'cashier'
+        role: role || 'cashier',
+        location_id: locationId || null
       })
     });
 
