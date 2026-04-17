@@ -7,6 +7,7 @@ let currentBusiness = null;
 let currentLocations = [];
 let selectedLocation = null;
 let selectedType = 'entrata';
+let numTurni = 3; // ★ TURNI CONFIGURABILI: 2 o 3
 
 // ============================================
 // INIT
@@ -172,6 +173,7 @@ async function loadBusiness() {
   if (data) {
     currentBusiness = data.businesses;
     currentRole = data.role; // 'owner', 'admin', 'cashier'
+    numTurni = parseInt(currentBusiness.num_turni) || 3; // ★ carica num_turni
   }
 }
 
@@ -1476,6 +1478,57 @@ function showPNMsg(msg, type) {
 let pnFornitoriCount = 5;
 let pnPrelieviCount = 3;
 
+
+// ★ TURNI CONFIGURABILI — mostra/nasconde colonna Pomeriggio
+function applicaTurniConfig() {
+  const mostra = numTurni >= 3;
+
+  // Header th Pomeriggio (3° colonna)
+  const table = document.querySelector('.pn-table');
+  if (table) {
+    const thPom = table.querySelectorAll('thead tr th')[2];
+    if (thPom) thPom.style.display = mostra ? '' : 'none';
+  }
+
+  // Input colonna Pomeriggio — voci fisse
+  const idsPom = [
+    'incasso-p','money-p','grattavinci-p','sisal-p','conto-bet-p',
+    'fatture-p','giornali-p','pos-p','carte-p','bonifici-p','fc-usc-p',
+    'tot-ent-p','tot-usc-p','diff-p'
+  ];
+  idsPom.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      const td = el.closest ? el.closest('td') : el.parentElement;
+      if (td) td.style.display = mostra ? '' : 'none';
+    }
+  });
+
+  // Righe dinamiche fornitori/prelievi — colonna Pomeriggio
+  for (let i = 0; i < 20; i++) {
+    ['fp-', 'pp-'].forEach(pref => {
+      const el = document.getElementById(pref + i);
+      if (el) { const td = el.closest('td'); if (td) td.style.display = mostra ? '' : 'none'; }
+    });
+  }
+
+  // Tab mobile Pomeriggio (indice 1)
+  const tabs = document.querySelectorAll('.pn-mobile-tab');
+  if (tabs[1]) tabs[1].style.display = mostra ? '' : 'none';
+
+  // Campo compilatore Pomeriggio
+  const cpEl = document.getElementById('cp');
+  if (cpEl) { const f = cpEl.closest('.field'); if (f) f.style.display = mostra ? '' : 'none'; }
+
+  // KPI incasso Pomeriggio
+  const kpiP = document.getElementById('r-inc-p');
+  if (kpiP) { const kpi = kpiP.closest('.pn-kpi'); if (kpi) kpi.style.display = mostra ? '' : 'none'; }
+
+  // Bottone blocca Pomeriggio
+  const btnP = document.getElementById('btn-blocca-p');
+  if (btnP) { const th = btnP.closest('th'); if (th) th.style.display = mostra ? '' : 'none'; }
+}
+
 function initPrimaNota() {
   const today = new Date().toISOString().split('T')[0];
   document.getElementById('pn-data').value = today;
@@ -1487,6 +1540,7 @@ function initPrimaNota() {
   _buildPNFornitoriSelects();
   populatePNBetSelect();
   calcPN2();
+  applicaTurniConfig(); // ★ applica configurazione turni
   loadNotaGiorno2();
 }
 
@@ -3342,6 +3396,9 @@ async function loadAzienda() {
   document.getElementById('az-tel').value = currentBusiness.phone || '';
   if (document.getElementById('az-email-report'))
     document.getElementById('az-email-report').value = currentBusiness.email_report || '';
+  // ★ leggi num_turni
+  const ntEl = document.getElementById('az-num-turni');
+  if (ntEl) ntEl.value = currentBusiness.num_turni || 3;
 }
 
 async function saveAzienda() {
@@ -3354,7 +3411,8 @@ async function saveAzienda() {
     email: document.getElementById('az-email').value.trim(),
     vat_number: document.getElementById('az-piva').value.trim(),
     phone: document.getElementById('az-tel').value.trim(),
-    email_report: document.getElementById('az-email-report')?.value.trim() || null
+    email_report: document.getElementById('az-email-report')?.value.trim() || null,
+    num_turni: parseInt(document.getElementById('az-num-turni')?.value) || 3 // ★
   }).eq('id', currentBusiness.id);
 
   if (error) { showToast('Errore: ' + error.message, 'error'); return; }
@@ -3367,6 +3425,12 @@ async function saveAzienda() {
   msgEl.className = 'auth-message success';
   setTimeout(() => msgEl.textContent = '', 3000);
   showToast('Azienda aggiornata ✓', 'success');
+  // ★ aggiorna variabile globale e ricalcola Prima Nota se aperta
+  numTurni = parseInt(document.getElementById('az-num-turni')?.value) || 3;
+  currentBusiness.num_turni = numTurni;
+  if (document.getElementById('view-primanota')?.classList.contains('active')) {
+    applicaTurniConfig();
+  }
 }
 
 // ============================================
