@@ -1323,125 +1323,11 @@ async function exportPDF() {
 // ============================================
 // PRIMA NOTA
 // ============================================
-let pnFornitoriRows = [];
-let pnPrelieviRows = [];
 
-// [rimossa versione obsoleta initPrimaNota v1]
 
-// ── RIGHE DINAMICHE ───────────────────────────────────────────────
-function buildFornitoriRows(n) {
-  pnFornitoriRows = [];
-  const tbody = document.getElementById('tbody-fornitori');
-  tbody.innerHTML = '';
-  for (let i = 0; i < n; i++) addFornitoreRow(false);
-}
 
-function buildPrelieviRows(n) {
-  pnPrelieviRows = [];
-  const tbody = document.getElementById('tbody-prelievi');
-  tbody.innerHTML = '';
-  for (let i = 0; i < n; i++) addPrelievRow(false);
-}
 
-function addFornitoreRow(recalc = true) {
-  const tbody = document.getElementById('tbody-fornitori');
-  const idx = pnFornitoriRows.length;
-  const tr = document.createElement('tr');
 
-  const desc = document.createElement('input');
-  desc.type = 'text'; desc.placeholder = 'Fornitore...'; desc.className = 'pn-desc-input';
-
-  const im = mkPNInput(); const ip = mkPNInput(); const is = mkPNInput();
-  pnFornitoriRows.push({ desc, im, ip, is });
-
-  const tdDesc = document.createElement('td'); tdDesc.className = 'td-desc';
-  const wrap = document.createElement('div');
-  wrap.style.cssText = 'display:flex;align-items:center;gap:4px';
-  wrap.appendChild(desc);
-  if (idx >= 5) {
-    const rm = document.createElement('button');
-    rm.textContent = '×'; rm.className = 'pn-remove-btn';
-    rm.onclick = () => {
-      const i = pnFornitoriRows.findIndex(r => r.im === im);
-      if (i >= 0) pnFornitoriRows.splice(i, 1);
-      tr.remove(); calcPN();
-    };
-    wrap.appendChild(rm);
-  }
-  tdDesc.appendChild(wrap);
-
-  const totEl = document.createElement('td');
-  totEl.className = 'td-tot'; totEl.textContent = '€ 0,00';
-
-  tr.appendChild(tdDesc);
-  tr.appendChild(mkPNTd(im)); tr.appendChild(mkPNTd(ip)); tr.appendChild(mkPNTd(is));
-  tr.appendChild(totEl);
-  tbody.appendChild(tr);
-
-  [im, ip, is].forEach(el => el.oninput = () => {
-    const tot = (parseFloat(im.value)||0) + (parseFloat(ip.value)||0) + (parseFloat(is.value)||0);
-    totEl.textContent = fmtPN(tot);
-    calcPN();
-  });
-
-  if (recalc) calcPN();
-}
-
-function addPrelievRow(recalc = true) {
-  const tbody = document.getElementById('tbody-prelievi');
-  const idx = pnPrelieviRows.length;
-  const tr = document.createElement('tr');
-
-  const desc = document.createElement('input');
-  desc.type = 'text'; desc.placeholder = 'Causale...'; desc.className = 'pn-desc-input';
-
-  const im = mkPNInput(); const ip = mkPNInput(); const is = mkPNInput();
-  pnPrelieviRows.push({ desc, im, ip, is });
-
-  const tdDesc = document.createElement('td'); tdDesc.className = 'td-desc';
-  const wrap = document.createElement('div');
-  wrap.style.cssText = 'display:flex;align-items:center;gap:4px';
-  wrap.appendChild(desc);
-  if (idx >= 3) {
-    const rm = document.createElement('button');
-    rm.textContent = '×'; rm.className = 'pn-remove-btn';
-    rm.onclick = () => {
-      const i = pnPrelieviRows.findIndex(r => r.im === im);
-      if (i >= 0) pnPrelieviRows.splice(i, 1);
-      tr.remove(); calcPN();
-    };
-    wrap.appendChild(rm);
-  }
-  tdDesc.appendChild(wrap);
-
-  const totEl = document.createElement('td');
-  totEl.className = 'td-tot'; totEl.textContent = '€ 0,00';
-
-  tr.appendChild(tdDesc);
-  tr.appendChild(mkPNTd(im)); tr.appendChild(mkPNTd(ip)); tr.appendChild(mkPNTd(is));
-  tr.appendChild(totEl);
-  tbody.appendChild(tr);
-
-  [im, ip, is].forEach(el => el.oninput = () => {
-    const tot = (parseFloat(im.value)||0) + (parseFloat(ip.value)||0) + (parseFloat(is.value)||0);
-    totEl.textContent = fmtPN(tot);
-    calcPN();
-  });
-
-  if (recalc) calcPN();
-}
-
-function mkPNInput() {
-  const i = document.createElement('input');
-  i.type = 'number'; i.step = '0.01'; i.placeholder = '—'; i.className = 'pn-input';
-  return i;
-}
-
-function mkPNTd(child) {
-  const td = document.createElement('td');
-  if (child) td.appendChild(child);
-  return td;
-}
 
 function fmtPN(n) {
   return '€ ' + Math.abs(n||0).toFixed(2).replace('.', ',');
@@ -1461,79 +1347,8 @@ function setPN(id, val) {
 // ── CALCOLO ───────────────────────────────────────────────────────
 
 // ── CARICA/SALVA ──────────────────────────────────────────────────
-async function loadNotaGiorno() {
-  if (!currentBusiness) return;
-  const data = document.getElementById('pn-data').value;
-  const locId = document.getElementById('pn-location').value || null;
-  if (!data) return;
-
-  let query = db.from('daily_notes').select('*, daily_note_rows(*)')
-    .eq('business_id', currentBusiness.id)
-    .eq('data', data);
-
-  if (locId) query = query.eq('location_id', locId);
-  // Non filtriamo per null esplicitamente — prendiamo il record e controlliamo
-  const { data: noteList } = await query.order('created_at', { ascending: false }).limit(10);
-  const nota = (noteList || []).find(n => locId ? n.location_id === locId : !n.location_id) || null;
-
-  resetPN(false);
-  if (!nota) return;
-
-  // Popola campi fissi
-  document.getElementById('pn-fc').value = nota.fondo_cassa || '';
-  const campi = ['incasso','money','sisal','fatture','giornali','pos','carte','bonifici','fc-usc'];
-  campi.forEach(k => {
-    const key = k.replace('-','_');
-    ['m','p','s'].forEach(t => {
-      const el = document.getElementById(k+'-'+t);
-      if (el) el.value = nota[key+'_'+t] || '';
-    });
-  });
-
-  document.getElementById('cm').value = nota.compilatore_m || '';
-  document.getElementById('cp').value = nota.compilatore_p || '';
-  document.getElementById('cs').value = nota.compilatore_s || '';
-  document.getElementById('pn-note').value = nota.note || '';
-
-  // Popola righe dinamiche
-  if (nota.daily_note_rows?.length) {
-    const fornitori = nota.daily_note_rows.filter(r => r.categoria === 'fornitore');
-    const prelievi = nota.daily_note_rows.filter(r => r.categoria === 'prelievo');
-
-    buildFornitoriRows(Math.max(5, fornitori.length));
-    fornitori.forEach((r, i) => {
-      if (pnFornitoriRows[i]) {
-        pnFornitoriRows[i].desc.value = r.descrizione || '';
-        pnFornitoriRows[i].im.value = r.importo_m || '';
-        pnFornitoriRows[i].ip.value = r.importo_p || '';
-        pnFornitoriRows[i].is.value = r.importo_s || '';
-      }
-    });
-
-    buildPrelieviRows(Math.max(3, prelievi.length));
-    prelievi.forEach((r, i) => {
-      if (pnPrelieviRows[i]) {
-        pnPrelieviRows[i].desc.value = r.descrizione || '';
-        pnPrelieviRows[i].im.value = r.importo_m || '';
-        pnPrelieviRows[i].ip.value = r.importo_p || '';
-        pnPrelieviRows[i].is.value = r.importo_s || '';
-      }
-    });
-  }
-
-  calcPN();
-}
 
 
-function resetPN(rebuild = true) {
-  const campi = ['pn-fc','incasso-m','incasso-p','incasso-s','money-m','money-p','money-s',
-    'grattavinci-m','grattavinci-p','grattavinci-s','sisal-m','sisal-p','sisal-s','fatture-m','fatture-p','fatture-s','giornali-m','giornali-p','giornali-s','conto-bet-m','conto-bet-p','conto-bet-s',
-    'pos-m','pos-p','pos-s','carte-m','carte-p','carte-s','bonifici-m','bonifici-p','bonifici-s',
-    'fc-usc-m','fc-usc-p','fc-usc-s','cm','cp','cs','pn-note'];
-  campi.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
-  if (rebuild) { buildFornitoriRows(5); buildPrelieviRows(3); }
-  calcPN();
-}
 
 function showPNMsg(msg, type) {
   const el = document.getElementById('pn-msg');
@@ -2331,70 +2146,7 @@ async function deleteVersamento(id) {
 }
 
 // ── ASSEGNI ───────────────────────────────────────────────────────
-async function saveAssegno() {
-  if (!currentBusiness) return;
-  const importo = parseFloat(document.getElementById('na-importo').value);
-  const scadenza = document.getElementById('na-scadenza').value;
-  const fornitoreId = document.getElementById('na-fornitore')?.value || null;
-  if (!importo || importo <= 0) { showToast('Inserisci un importo valido', 'error'); return; }
-  if (!scadenza) { showToast('Inserisci la data di scadenza', 'error'); return; }
 
-  // Auto-compila beneficiario dal fornitore selezionato
-  let beneficiario = '';
-  if (fornitoreId) { const f2 = fornitoriCache.find(x => x.id === fornitoreId); if (f2) beneficiario = f2.ragione_sociale; }
-
-
-  const { error } = await db.from('assegni').insert({
-    business_id: currentBusiness.id,
-    banca_id: document.getElementById('na-banca').value || null,
-    fornitore_id: fornitoreId,
-    numero: document.getElementById('na-numero').value.trim(),
-    beneficiario,
-    importo,
-    data_emissione: document.getElementById('na-emissione').value,
-    data_scadenza: scadenza,
-    stato: 'emesso',
-    note: document.getElementById('na-note').value
-  });
-  if (error) { showToast('Errore: ' + error.message, 'error'); return; }
-  showToast('Assegno registrato ✓', 'success');
-  ['na-numero','na-importo','na-note'].forEach(id => document.getElementById(id).value = '');
-  const naF = document.getElementById('na-fornitore'); if (naF) naF.value = '';
-  loadAssegni(); loadOverview();
-}
-
-async function loadAssegni(filter = null) {
-  if (!currentBusiness) return;
-  if (filter) currentAssegniFilter = filter;
-  let query = db.from('assegni').select('*').eq('business_id', currentBusiness.id).order('data_scadenza');
-  if (currentAssegniFilter === 'aperti') query = query.eq('incassato', false);
-  const { data } = await query;
-  const today = new Date().toISOString().split('T')[0];
-  const in7 = new Date(); in7.setDate(in7.getDate() + 7);
-  const in7str = in7.toISOString().split('T')[0];
-  const el = document.getElementById('assegni-list');
-  if (!data?.length) { el.innerHTML = '<div class="empty-state">Nessun assegno</div>'; return; }
-  el.innerHTML = data.map(a => {
-    const banca = bancheCache.find(b => b.id === a.banca_id);
-    let stato = 'aperto', badge = 'aperto';
-    if (a.incassato) { stato = 'incassato'; badge = 'incassato'; }
-    else if (a.data_scadenza < today) { stato = 'scaduto'; badge = 'scaduto'; }
-    else if (a.data_scadenza <= in7str) { stato = 'scadenza'; badge = 'scadenza'; }
-    return `<div class="assegno-item ${stato}">
-      <div class="ass-info">
-        <div class="ass-num">${a.numero ? 'N° ' + a.numero : ''}</div>
-        <div class="ass-benef">${a.beneficiario || 'N/D'}</div>
-        <div class="ass-meta">Scadenza: ${formatDate(a.data_scadenza)}${banca ? ' · ' + banca.nome : ''}</div>
-      </div>
-      <span class="ass-badge ${badge}">${{ aperto:'Aperto', scadenza:'In scadenza', scaduto:'Scaduto', incassato:'Incassato' }[badge]}</span>
-      <div class="ass-importo ${a.incassato ? 'incassato' : ''}">${formatEur(a.importo)}</div>
-      <div style="display:flex;gap:4px">
-        ${!a.incassato ? `<button class="btn-secondary sm" onclick="apriModalePagamento('${a.id}')">Paga</button>` : ''}
-        <button class="entry-del" onclick="deleteAssegno('${a.id}')">✕</button>
-      </div>
-    </div>`;
-  }).join('');
-}
 
 function filterAssegni(f) { loadAssegni(f); }
 
@@ -2829,39 +2581,6 @@ function closeModalAssegno() {
   currentAssegnoData = null;
 }
 
-async function confermaPagamentoAssegno() {
-  if (!currentAssegnoId) return;
-  const dataIncasso = document.getElementById('pag-data').value;
-  const bancaId = document.getElementById('pag-banca').value;
-  const note = document.getElementById('pag-note').value.trim();
-
-  if (!dataIncasso) { showToast('Inserisci la data di pagamento', 'error'); return; }
-
-  // Marca assegno come incassato
-  await db.from('assegni').update({
-    incassato: true,
-    data_incasso: dataIncasso,
-    note: note || currentAssegnoData.note
-  }).eq('id', currentAssegnoId);
-
-  // Registra movimento bancario in uscita se banca selezionata
-  if (bancaId && currentAssegnoData) {
-    await db.from('movimenti_banca').insert({
-      business_id: currentBusiness.id,
-      banca_id: bancaId,
-      data: dataIncasso,
-      segno: 'dare',
-      tipo: 'assegno',
-      descrizione: `Assegno ${currentAssegnoData.numero || ''} - ${currentAssegnoData.beneficiario || 'N/D'}`,
-      importo: currentAssegnoData.importo
-    });
-  }
-
-  closeModalAssegno();
-  showToast('Pagamento registrato ✓', 'success');
-  loadAssegni();
-  loadOverview();
-}
 
 // ============================================
 // ASSEGNI v2 — Logica postdatati
