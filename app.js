@@ -194,7 +194,7 @@ async function loadLocations() {
 }
 
 function populateLocationSelects() {
-  const selects = ['location-select', 'mov-location'];
+  const selects = ['mov-location'];
   selects.forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -207,10 +207,7 @@ function populateLocationSelects() {
   });
 }
 
-function onLocationChange() {
-  selectedLocation = document.getElementById('location-select').value || null;
-  loadDashboard();
-}
+function onLocationChange() { /* select topbar rimossa */ }
 
 // ============================================
 // CATEGORIES
