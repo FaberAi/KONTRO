@@ -184,13 +184,18 @@
         <div class="section-card">
           <div class="section-header"><h2>Gestione sedi</h2><button class="btn-primary sm" onclick="showAddLocation()">＋ Nuova sede</button></div>
           <div id="add-location-form" class="add-form hidden">
+            <h3 style="font-size:14px;font-weight:700;margin-bottom:16px;color:var(--text-primary)">＋ Nuova sede</h3>
+            <input type="hidden" id="new-loc-id" value="" />
             <div class="form-grid">
               <div class="field"><label>Nome sede</label><input type="text" id="new-loc-name" placeholder="Es. Bar Centro" /></div>
               <div class="field"><label>Indirizzo</label><input type="text" id="new-loc-address" placeholder="Via Roma 1, Milano" /></div>
             </div>
-            <div class="form-actions"><button class="btn-secondary" onclick="hideAddLocation()">Annulla</button><button class="btn-primary" onclick="saveLocation()">Aggiungi sede</button></div>
+            <div class="form-actions">
+              <button class="btn-secondary" onclick="hideAddLocation()">Annulla</button>
+              <button class="btn-primary" id="btn-save-location" onclick="saveLocation()">Aggiungi sede</button>
+            </div>
           </div>
-          <div id="locations-list" class="locations-grid"><div class="empty-state">Nessuna sede aggiuntiva</div></div>
+          <div id="locations-list" class="locations-grid"><div class="empty-state">Nessuna sede configurata</div></div>
         </div>
       </div>
 

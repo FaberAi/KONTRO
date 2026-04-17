@@ -651,41 +651,99 @@ async function loadReport() {
 // ============================================
 // SEDI
 // ============================================
-function showAddLocation() { document.getElementById('add-location-form').classList.remove('hidden'); }
+function showAddLocation() {
+  document.getElementById('add-location-form').classList.remove('hidden');
+  document.getElementById('new-loc-name').value = '';
+  document.getElementById('new-loc-address').value = '';
+  document.getElementById('new-loc-id').value = '';
+  document.querySelector('#add-location-form h3').textContent = '＋ Nuova sede';
+  document.getElementById('btn-save-location').textContent = 'Aggiungi sede';
+}
 function hideAddLocation() { document.getElementById('add-location-form').classList.add('hidden'); }
 
+function editLocation(id) {
+  const loc = currentLocations.find(l => l.id === id);
+  if (!loc) return;
+  document.getElementById('add-location-form').classList.remove('hidden');
+  document.getElementById('new-loc-id').value = id;
+  document.getElementById('new-loc-name').value = loc.name;
+  document.getElementById('new-loc-address').value = loc.address || '';
+  document.querySelector('#add-location-form h3').textContent = '✏ Modifica sede';
+  document.getElementById('btn-save-location').textContent = 'Salva modifiche';
+  document.getElementById('add-location-form').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
 async function saveLocation() {
-  const name = document.getElementById('new-loc-name').value.trim();
+  const id      = document.getElementById('new-loc-id').value.trim();
+  const name    = document.getElementById('new-loc-name').value.trim();
   const address = document.getElementById('new-loc-address').value.trim();
   if (!name) { showToast('Inserisci il nome della sede', 'error'); return; }
 
-  // Controllo limite piano Free
-  if (!await checkLimiteSedi()) return;
+  if (id) {
+    // MODIFICA sede esistente
+    const { error } = await db.from('locations').update({
+      name, address: address || null
+    }).eq('id', id);
+    if (error) { showToast('Errore: ' + error.message, 'error'); return; }
+    showToast('Sede aggiornata ✓', 'success');
+  } else {
+    // NUOVA sede
+    if (!await checkLimiteSedi()) return;
+    const { error } = await db.from('locations').insert({
+      business_id: currentBusiness.id,
+      name, address: address || null
+    });
+    if (error) { showToast('Errore: ' + error.message, 'error'); return; }
+    showToast('Sede aggiunta ✓', 'success');
+  }
 
-  const { error } = await db.from('locations').insert({
-    business_id: currentBusiness.id,
-    name, address: address || null
-  });
-
-  if (error) { showToast('Errore: ' + error.message, 'error'); return; }
-
-  showToast('Sede aggiunta ✓', 'success');
   hideAddLocation();
-  document.getElementById('new-loc-name').value = '';
-  document.getElementById('new-loc-address').value = '';
+  await loadLocations();
+}
+
+async function deleteLocation(id) {
+  const loc = currentLocations.find(l => l.id === id);
+  if (!confirm(`Eliminare la sede "${loc?.name}"?
+
+Le prime note associate rimarranno nello storico ma senza sede.`)) return;
+
+  // Controlla se ci sono operatori assegnati
+  const { count } = await db.from('user_roles')
+    .select('id', { count: 'exact', head: true })
+    .eq('business_id', currentBusiness.id)
+    .eq('location_id', id);
+
+  if (count > 0) {
+    if (!confirm(`Attenzione: ${count} operatore/i è assegnato a questa sede.
+Vuoi continuare? Gli operatori torneranno ad avere accesso a tutte le sedi.`)) return;
+    // Rimuove l'assegnazione sede dagli operatori
+    await db.from('user_roles').update({ location_id: null })
+      .eq('business_id', currentBusiness.id)
+      .eq('location_id', id);
+  }
+
+  const { error } = await db.from('locations').update({ active: false }).eq('id', id);
+  if (error) { showToast('Errore: ' + error.message, 'error'); return; }
+  showToast('Sede eliminata ✓', 'success');
   await loadLocations();
 }
 
 function renderLocationsList() {
   const el = document.getElementById('locations-list');
   if (!currentLocations.length) {
-    el.innerHTML = '<div class="empty-state">Nessuna sede aggiuntiva configurata</div>';
+    el.innerHTML = '<div class="empty-state">Nessuna sede configurata</div>';
     return;
   }
   el.innerHTML = currentLocations.map(l => `
     <div class="location-card">
-      <div class="loc-name">◉ ${l.name}</div>
-      ${l.address ? `<div class="loc-addr">${l.address}</div>` : ''}
+      <div class="loc-info">
+        <div class="loc-name">◉ ${l.name}</div>
+        ${l.address ? `<div class="loc-addr">📍 ${l.address}</div>` : ''}
+      </div>
+      <div class="loc-actions">
+        <button class="btn-secondary sm" onclick="editLocation('${l.id}')">✏ Modifica</button>
+        <button class="entry-del" onclick="deleteLocation('${l.id}')" title="Elimina sede">🗑</button>
+      </div>
     </div>`).join('');
 }
 
