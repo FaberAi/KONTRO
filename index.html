@@ -208,6 +208,12 @@
               <div class="field"><label>Email di accesso</label><input type="email" id="invite-email" placeholder="mario@esempio.it" /></div>
               <div class="field"><label>Password</label><input type="text" id="new-user-password" placeholder="Minimo 8 caratteri" /></div>
               <div class="field"><label>Ruolo</label><select id="invite-role"><option value="cashier">Cassiere — solo Prima Nota</option><option value="manager">Responsabile sede — Prima Nota, turni, acconti, fatture</option><option value="admin">Admin — accesso completo</option></select></div>
+              <div class="field">
+                <label>📍 Sede assegnata <span style="font-size:11px;color:var(--gray-400)">(opzionale — lascia vuoto per accesso a tutte le sedi)</span></label>
+                <select id="new-user-sede">
+                  <option value="">🌐 Tutte le sedi</option>
+                </select>
+              </div>
             </div>
             <div class="form-actions"><button class="btn-secondary" onclick="hideInviteForm()">Annulla</button><button class="btn-primary" onclick="createUser()">Crea account →</button></div>
             <div id="invite-message" class="auth-message"></div>

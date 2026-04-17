@@ -8,6 +8,7 @@ let currentLocations = [];
 let selectedLocation = null;
 let selectedType = 'entrata';
 let numTurni = 3; // ★ TURNI CONFIGURABILI: 2 o 3
+let currentUserLocationId = null; // sede assegnata all'operatore (null = tutte)
 
 // ============================================
 // INIT
@@ -166,13 +167,14 @@ let currentRole = null;
 async function loadBusiness() {
   const { data } = await db
     .from('user_roles')
-    .select('business_id, role, businesses(*)')
+    .select('business_id, role, location_id, businesses(*)')
     .eq('user_id', currentUser.id)
     .single();
 
   if (data) {
     currentBusiness = data.businesses;
     currentRole = data.role; // 'owner', 'admin', 'cashier'
+    currentUserLocationId = data.location_id || null; // sede assegnata, null = tutte
     numTurni = parseInt(currentBusiness.num_turni) || 3; // ★ carica num_turni
   }
 }
@@ -196,7 +198,9 @@ function populateLocationSelects() {
   selects.forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
-    const firstOption = id === 'pn-location' ? '<option value="">Riepilogo generale sedi</option>' : id === 'location-select' ? '<option value="">Tutte le sedi</option>' : '<option value="">Tutte le sedi</option>';
+    // location-select (topbar dashboard) mantiene "Tutte le sedi"
+    // pn-location è gestito da initPrimaNota con logica sede-utente
+    const firstOption = '<option value="">Tutte le sedi</option>';
     el.innerHTML = firstOption + currentLocations.map(l =>
       `<option value="${l.id}">${l.name}</option>`
     ).join('');
@@ -691,7 +695,15 @@ function renderLocationsList() {
 // ============================================
 // TEAM MANAGEMENT
 // ============================================
-function showInviteForm() { document.getElementById('invite-form').classList.remove('hidden'); }
+function showInviteForm() {
+  document.getElementById('invite-form').classList.remove('hidden');
+  // Popola select sedi per la sede assegnata
+  const sedeEl = document.getElementById('new-user-sede');
+  if (sedeEl) {
+    sedeEl.innerHTML = '<option value="">🌐 Tutte le sedi</option>' +
+      currentLocations.map(l => `<option value="${l.id}">${l.name}</option>`).join('');
+  }
+}
 function hideInviteForm() { document.getElementById('invite-form').classList.add('hidden'); }
 
 async function loadTeam() {
@@ -700,7 +712,7 @@ async function loadTeam() {
   // Carica membri attivi
   const { data: roles } = await db
     .from('user_roles')
-    .select('role, profiles(id, full_name, email)')
+    .select('role, location_id, profiles(id, full_name, email)')
     .eq('business_id', currentBusiness.id);
 
   const membersEl = document.getElementById('team-members');
@@ -712,12 +724,15 @@ async function loadTeam() {
       const initial = (p?.full_name || p?.email || '?')[0].toUpperCase();
       const isCashier = r.role === 'cashier';
       const isManager = r.role === 'manager';
+      const locNome = r.location_id
+        ? (currentLocations.find(l => l.id === r.location_id)?.name || '—')
+        : null;
       return `
         <div class="member-item">
           <div class="member-avatar">${initial}</div>
           <div class="member-info">
             <div class="member-name">${p?.full_name || '—'}</div>
-            <div class="member-email">${p?.email || '—'}</div>
+            <div class="member-email">${p?.email || '—'}${locNome ? ` · 📍 ${locNome}` : ' · 🌐 Tutte le sedi'}</div>
           </div>
           <span class="role-badge ${r.role}">${roleLabel(r.role)}</span>
           ${isCashier && currentRole === 'owner' ? `
@@ -1532,11 +1547,27 @@ function applicaTurniConfig() {
 function initPrimaNota() {
   const today = new Date().toISOString().split('T')[0];
   document.getElementById('pn-data').value = today;
+
+  // Sedi filtrate per ruolo: owner/admin vedono tutte, cassiere/manager vede solo la sua
   const sel = document.getElementById('pn-location');
   if (sel) {
-    sel.innerHTML = '<option value="">Riepilogo generale sedi</option>' +
-      currentLocations.map(l => `<option value="${l.id}">${l.name}</option>`).join('');
+    const sediVisibili = currentUserLocationId
+      ? currentLocations.filter(l => l.id === currentUserLocationId)
+      : currentLocations;
+
+    sel.innerHTML = sediVisibili.map(l =>
+      `<option value="${l.id}">${l.name}</option>`
+    ).join('');
+
+    // Auto-seleziona: se l'utente ha una sede assegnata la preseleziona,
+    // altrimenti seleziona la prima disponibile
+    if (currentUserLocationId) {
+      sel.value = currentUserLocationId;
+    } else if (sediVisibili.length === 1) {
+      sel.value = sediVisibili[0].id;
+    }
   }
+
   _buildPNFornitoriSelects();
   populatePNBetSelect();
   calcPN2();
@@ -7342,12 +7373,13 @@ function hexToRgb(hex) {
 async function createUser() {
   if (!currentBusiness) return;
 
-  const nome     = document.getElementById('new-user-nome')?.value.trim();
-  const cognome  = document.getElementById('new-user-cognome')?.value.trim();
-  const email    = document.getElementById('invite-email')?.value.trim();
-  const password = document.getElementById('new-user-password')?.value;
-  const role     = document.getElementById('invite-role')?.value || 'cashier';
-  const msgEl    = document.getElementById('invite-message');
+  const nome       = document.getElementById('new-user-nome')?.value.trim();
+  const cognome    = document.getElementById('new-user-cognome')?.value.trim();
+  const email      = document.getElementById('invite-email')?.value.trim();
+  const password   = document.getElementById('new-user-password')?.value;
+  const role       = document.getElementById('invite-role')?.value || 'cashier';
+  const locationId = document.getElementById('new-user-sede')?.value || null;
+  const msgEl      = document.getElementById('invite-message');
 
   if (!email || !password) {
     msgEl.textContent = 'Inserisci email e password'; msgEl.className = 'auth-message error'; return;
@@ -7366,6 +7398,7 @@ async function createUser() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       email, password, nome, cognome, role,
+      locationId: locationId || null,
       businessId: currentBusiness.id
     })
   });
@@ -7390,6 +7423,8 @@ async function createUser() {
     document.getElementById('new-user-cognome').value = '';
     document.getElementById('invite-email').value = '';
     document.getElementById('new-user-password').value = '';
+    const sedeEl = document.getElementById('new-user-sede');
+    if (sedeEl) sedeEl.value = '';
     msgEl.textContent = '';
     loadTeam();
   }, 3000);
