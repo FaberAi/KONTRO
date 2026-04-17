@@ -404,7 +404,7 @@ async function loadDashboard() {
   const recent = [...all].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 8);
   renderEntries(recent, 'recent-entries');
   loadCharts();
-  loadPrevisioni();
+  await loadPrevisioni();
 }
 
 // ============================================
@@ -4370,6 +4370,11 @@ async function buildFabbisognoFinanziario() {
   const in30 = new Date(); in30.setDate(in30.getDate() + 30);
   const in30str = in30.toISOString().split('T')[0];
 
+  // Ricarica banche fresche dal DB (evita dati stale dopo reset)
+  const { data: bancheFresche } = await db.from('banche').select('*')
+    .eq('business_id', currentBusiness.id).eq('attivo', true);
+  const bancheFabbisogno = bancheFresche || [];
+
   // Dati finanziari
   const [{ data: vers }, { data: movUsc }, { data: assegni }, { data: rid }, { data: fatture }, { data: noteStorico }] = await Promise.all([
     db.from('versamenti').select('importo_contante,importo_pos').eq('business_id', currentBusiness.id),
@@ -4380,8 +4385,8 @@ async function buildFabbisognoFinanziario() {
     db.from('daily_notes').select('data,incasso_giornaliero').eq('business_id', currentBusiness.id).gte('data', new Date(new Date().setDate(new Date().getDate()-28)).toISOString().split('T')[0]).order('data')
   ]);
 
-  // Saldo banche attuale
-  let saldoBanche = bancheCache.reduce((s,b) => s + Number(b.saldo_iniziale||0), 0);
+  // Saldo banche attuale calcolato solo dai movimenti (non da saldo_iniziale stale in cache)
+  let saldoBanche = bancheFabbisogno.reduce((s,b) => s + Number(b.saldo_iniziale||0), 0);
   saldoBanche += (vers||[]).reduce((s,v) => s + Number(v.importo_contante||0) + Number(v.importo_pos||0), 0);
   saldoBanche -= (movUsc||[]).reduce((s,m) => s + Number(m.importo||0), 0);
 
@@ -6058,36 +6063,39 @@ async function eseguiReset() {
     if (error) console.warn('Reset errore:', error.message);
   }
 
-  hideResetModal();
-  showToast('✅ Reset completato — dati contabili eliminati', 'success');
+  // Azzera saldo_iniziale di tutte le banche (è dato contabile — rappresenta il saldo di partenza)
+  await db.from('banche').update({ saldo_iniziale: 0 })
+    .eq('business_id', bid);
 
-  // Azzera subito i widget della dashboard prima del reload
-  const widgetIds = [
-    'kpi-entrate','kpi-uscite','kpi-saldo','kpi-mese',
-    'kpi-entrate-count','kpi-uscite-count'
-  ];
-  widgetIds.forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.textContent = id.includes('count') ? '0 movimenti' : '€ 0,00';
-  });
-  const fabEl = document.getElementById('prev-fabbisogno-content');
-  if (fabEl) fabEl.innerHTML = '<div class="empty-state">Nessuna uscita prevista nei prossimi 30 giorni 🎉</div>';
-  const prevEl = document.getElementById('prev-incasso-content');
-  if (prevEl) prevEl.innerHTML = '<div class="empty-state">Nessun dato storico disponibile</div>';
-  const conEl = document.getElementById('dash-conciliazione');
-  if (conEl) conEl.innerHTML = '';
-  const recEl = document.getElementById('recent-entries');
-  if (recEl) recEl.innerHTML = '<div class="empty-state">Nessun movimento oggi</div>';
-  const badge = document.getElementById('fab-status');
-  if (badge) { badge.textContent = 'prossimi 30 giorni'; badge.className = 'prev-badge'; }
-
-  // Ricarica bancheCache (saldo iniziale banche rimane — è anagrafica)
+  // Ricarica bancheCache aggiornata (saldo_iniziale ora = 0)
   if (currentBusiness) {
     const { data: banche } = await db.from('banche').select('*')
       .eq('business_id', currentBusiness.id).eq('attivo', true).order('nome');
     bancheCache = banche || [];
   }
 
+  hideResetModal();
+
+  // Azzera immediatamente tutti i widget della dashboard
+  const toZero = ['kpi-entrate','kpi-uscite','kpi-saldo','kpi-mese'];
+  toZero.forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '€ 0,00'; });
+  ['kpi-entrate-count','kpi-uscite-count'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '0 movimenti'; });
+
+  const widgetsVuoti = {
+    'prev-fabbisogno-content': '<div class="empty-state">Nessuna uscita prevista nei prossimi 30 giorni 🎉</div>',
+    'prev-incasso-content':    '<div class="empty-state">Nessun dato storico disponibile</div>',
+    'dash-conciliazione':      '',
+    'recent-entries':          '<div class="empty-state">Nessun movimento oggi</div>',
+  };
+  Object.entries(widgetsVuoti).forEach(([id, html]) => {
+    const el = document.getElementById(id); if (el) el.innerHTML = html;
+  });
+  const badge = document.getElementById('fab-status');
+  if (badge) { badge.textContent = 'prossimi 30 giorni'; badge.className = 'prev-badge'; }
+
+  showToast('✅ Reset completato — dati contabili eliminati', 'success');
+
+  // Ricarica dashboard completa (ora con dati azzerati)
   await loadDashboard();
   showView('dashboard');
 }
