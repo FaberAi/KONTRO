@@ -4,28 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>KONTRO — Prima Nota Digitale</title>
-
-  <!-- ============= PWA Configuration ============= -->
-  <link rel="manifest" href="/manifest.json" />
-  <meta name="theme-color" content="#0d1526" />
-  <meta name="description" content="Prima nota digitale per bar, ristoranti e pubblici esercizi. Gestione cassa a 3 turni, banca, dipendenti, fornitori." />
-
-  <!-- Favicon browser -->
-  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
-  <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
-
-  <!-- iOS: icona "Aggiungi a Home" e comportamento app-like -->
-  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-title" content="KONTRO" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <!-- =============================================== -->
-
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-NNNNWB1DEJ"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
@@ -48,26 +31,50 @@
         <span class="logo-text">KONTRO</span>
       </div>
       <p class="login-tagline">Prima nota digitale per la tua attività</p>
+
       <div class="tab-row">
         <button class="tab-btn active" onclick="switchTab('login')">Accedi</button>
         <button class="tab-btn" onclick="switchTab('register')">Registrati</button>
       </div>
+
+      <!-- LOGIN -->
       <div id="tab-login" class="tab-content active">
-        <div class="field"><label>Email</label><input type="email" id="login-email" placeholder="nome@azienda.it" /></div>
-        <div class="field"><label>Password</label><input type="password" id="login-password" placeholder="••••••••" /></div>
+        <div class="field">
+          <label>Email</label>
+          <input type="email" id="login-email" placeholder="nome@azienda.it" />
+        </div>
+        <div class="field">
+          <label>Password</label>
+          <input type="password" id="login-password" placeholder="••••••••" />
+        </div>
         <button class="btn-primary" onclick="doLogin()">Entra →</button>
       </div>
+
+      <!-- REGISTER -->
       <div id="tab-register" class="tab-content">
-        <div class="field"><label>Nome completo</label><input type="text" id="reg-name" placeholder="Mario Rossi" /></div>
-        <div class="field"><label>Email</label><input type="email" id="reg-email" placeholder="nome@azienda.it" /></div>
-        <div class="field"><label>Password</label><input type="password" id="reg-password" placeholder="min. 8 caratteri" /></div>
-        <div class="field"><label>Nome attività</label><input type="text" id="reg-business" placeholder="Es. Bar Roma" /></div>
+        <div class="field">
+          <label>Nome completo</label>
+          <input type="text" id="reg-name" placeholder="Mario Rossi" />
+        </div>
+        <div class="field">
+          <label>Email</label>
+          <input type="email" id="reg-email" placeholder="nome@azienda.it" />
+        </div>
+        <div class="field">
+          <label>Password</label>
+          <input type="password" id="reg-password" placeholder="min. 8 caratteri" />
+        </div>
+        <div class="field">
+          <label>Nome attività</label>
+          <input type="text" id="reg-business" placeholder="Es. Bar Roma" />
+        </div>
         <button class="btn-primary" onclick="doRegister()">Crea account →</button>
         <p style="font-size:12px;color:var(--gray-500);text-align:center;margin-top:12px;line-height:1.6">
-          Registrandoti accetti i <a href="/termini" target="_blank" style="color:var(--gray-400);text-decoration:underline">Termini di servizio</a>
+          Registrandoti accetti i <a href="/termini" target="_blank" style="color:var(--gray-400);text-decoration:underline">Termini di servizio</a> 
           e la <a href="/privacy" target="_blank" style="color:var(--gray-400);text-decoration:underline">Privacy Policy</a>
         </p>
       </div>
+
       <div id="auth-message" class="auth-message"></div>
     </div>
   </div>
@@ -75,27 +82,59 @@
   <!-- ========== APP SCREEN ========== -->
   <div id="screen-app" class="screen">
 
+    <!-- SIDEBAR -->
     <aside class="sidebar">
       <div class="sidebar-logo">
         <span class="logo-icon sm">K</span>
         <span class="logo-text">KONTRO</span>
       </div>
+
       <nav class="sidebar-nav">
-        <button class="nav-item active" onclick="showView('dashboard')" data-view="dashboard"><span class="nav-icon">◈</span> Dashboard</button>
-        <button class="nav-item" onclick="showView('primanota')" data-view="primanota"><span class="nav-icon">✎</span> Prima Nota</button>
-        <button class="nav-item" onclick="showView('storico')" data-view="storico"><span class="nav-icon">◷</span> Storico</button>
-        <button class="nav-item" onclick="showView('banca')" data-view="banca"><span class="nav-icon">🏦</span> Banca &amp; Finanza<span id="badge-scadenze" class="nav-badge" style="display:none"></span></button>
-        <button class="nav-item" onclick="showView('fornitori')" data-view="fornitori"><span class="nav-icon">📦</span> Fornitori<span id="badge-fatture" class="nav-badge" style="display:none"></span></button>
-        <button class="nav-item" onclick="showView('impostazioni')" data-view="impostazioni"><span class="nav-icon">⚙</span> Impostazioni</button>
-        <button class="nav-item" onclick="showView('hr')" data-view="hr"><span class="nav-icon">👥</span> Dipendenti</button>
-        <button class="nav-item" onclick="showView('nuovo')" data-view="nuovo"><span class="nav-icon">＋</span> Movimenti extra cassa</button>
-        <button class="nav-item" onclick="showView('movimenti')" data-view="movimenti"><span class="nav-icon">≡</span> Movimenti</button>
-        <button class="nav-item" onclick="showView('report')" data-view="report"><span class="nav-icon">◎</span> Report</button>
-        <button class="nav-item" onclick="showView('sedi')" data-view="sedi"><span class="nav-icon">◉</span> Sedi</button>
-        <button class="nav-item" onclick="showView('team')" data-view="team"><span class="nav-icon">◈</span> Team</button>
+        <button class="nav-item active" onclick="showView('dashboard')" data-view="dashboard">
+          <span class="nav-icon">◈</span> Dashboard
+        </button>
+        <button class="nav-item" onclick="showView('primanota')" data-view="primanota">
+          <span class="nav-icon">✎</span> Prima Nota
+        </button>
+        <button class="nav-item" onclick="showView('storico')" data-view="storico">
+          <span class="nav-icon">◷</span> Storico
+        </button>
+        <button class="nav-item" onclick="showView('banca')" data-view="banca">
+          <span class="nav-icon">🏦</span> Banca & Finanza
+          <span id="badge-scadenze" class="nav-badge" style="display:none"></span>
+        </button>
+        <button class="nav-item" onclick="showView('fornitori')" data-view="fornitori">
+          <span class="nav-icon">📦</span> Fornitori
+          <span id="badge-fatture" class="nav-badge" style="display:none"></span>
+        </button>
+        <button class="nav-item" onclick="showView('impostazioni')" data-view="impostazioni">
+          <span class="nav-icon">⚙</span> Impostazioni
+        </button>
+        <button class="nav-item" onclick="showView('hr')" data-view="hr">
+          <span class="nav-icon">👥</span> Dipendenti
+        </button>
+        <button class="nav-item" onclick="showView('nuovo')" data-view="nuovo">
+          <span class="nav-icon">＋</span> Movimenti extra cassa
+        </button>
+        <button class="nav-item" onclick="showView('movimenti')" data-view="movimenti">
+          <span class="nav-icon">≡</span> Movimenti
+        </button>
+        <button class="nav-item" onclick="showView('report')" data-view="report">
+          <span class="nav-icon">◎</span> Report
+        </button>
+        <button class="nav-item" onclick="showView('sedi')" data-view="sedi">
+          <span class="nav-icon">◉</span> Sedi
+        </button>
+        <button class="nav-item" onclick="showView('team')" data-view="team">
+          <span class="nav-icon">◈</span> Team
+        </button>
       </nav>
+
       <div class="sidebar-footer">
-        <button class="nav-item" onclick="toggleHelp();closeMobileMenu()" style="margin-bottom:8px;color:#60a5fa;border:1px solid rgba(99,130,200,0.2)"><span class="nav-icon">?</span> Centro assistenza</button>
+        <!-- Bottone aiuto nella sidebar -->
+        <button class="nav-item" onclick="toggleHelp();closeMobileMenu()" style="margin-bottom:8px;color:#60a5fa;border:1px solid rgba(99,130,200,0.2)">
+          <span class="nav-icon">?</span> Centro assistenza
+        </button>
         <div class="user-chip">
           <span class="user-avatar" id="user-avatar">?</span>
           <div class="user-info">
@@ -107,14 +146,25 @@
       </div>
     </aside>
 
+    <!-- MAIN CONTENT -->
     <main class="main-content">
+
+      <!-- TOPBAR MOBILE -->
       <div class="mobile-topbar">
-        <button class="hamburger" onclick="toggleMobileMenu()" id="hamburger-btn"><span></span><span></span><span></span></button>
-        <div class="mobile-logo"><span class="logo-icon sm">K</span><span class="logo-text">KONTRO</span></div>
+        <button class="hamburger" onclick="toggleMobileMenu()" id="hamburger-btn">
+          <span></span><span></span><span></span>
+        </button>
+        <div class="mobile-logo">
+          <span class="logo-icon sm">K</span>
+          <span class="logo-text">KONTRO</span>
+        </div>
         <div style="width:40px"></div>
       </div>
+
+      <!-- OVERLAY MENU MOBILE -->
       <div class="mobile-overlay hidden" id="mobile-overlay" onclick="closeMobileMenu()"></div>
 
+      <!-- TOPBAR -->
       <header class="topbar">
         <div class="topbar-left">
           <h1 id="page-title">Dashboard</h1>
@@ -123,140 +173,346 @@
 
       </header>
 
-      <!-- DASHBOARD -->
+      <!-- ====== VIEW: DASHBOARD ====== -->
       <div id="view-dashboard" class="view active">
+
+        <!-- KPI Cards -->
         <div class="kpi-grid">
-          <div class="kpi-card entrate"><div class="kpi-label">Entrate oggi</div><div class="kpi-value" id="kpi-entrate">€ 0,00</div><div class="kpi-sub" id="kpi-entrate-count">0 movimenti</div></div>
-          <div class="kpi-card uscite"><div class="kpi-label">Uscite oggi</div><div class="kpi-value" id="kpi-uscite">€ 0,00</div><div class="kpi-sub" id="kpi-uscite-count">0 movimenti</div></div>
-          <div class="kpi-card saldo"><div class="kpi-label">Saldo del giorno</div><div class="kpi-value" id="kpi-saldo">€ 0,00</div><div class="kpi-sub" id="kpi-saldo-trend">—</div></div>
-          <div class="kpi-card mese"><div class="kpi-label">Saldo del mese</div><div class="kpi-value" id="kpi-mese">€ 0,00</div><div class="kpi-sub" id="kpi-mese-label">mese corrente</div></div>
+          <div class="kpi-card entrate">
+            <div class="kpi-label">Entrate oggi</div>
+            <div class="kpi-value" id="kpi-entrate">€ 0,00</div>
+            <div class="kpi-sub" id="kpi-entrate-count">0 movimenti</div>
+          </div>
+          <div class="kpi-card uscite">
+            <div class="kpi-label">Uscite oggi</div>
+            <div class="kpi-value" id="kpi-uscite">€ 0,00</div>
+            <div class="kpi-sub" id="kpi-uscite-count">0 movimenti</div>
+          </div>
+          <div class="kpi-card saldo">
+            <div class="kpi-label">Saldo del giorno</div>
+            <div class="kpi-value" id="kpi-saldo">€ 0,00</div>
+            <div class="kpi-sub" id="kpi-saldo-trend">—</div>
+          </div>
+          <div class="kpi-card mese">
+            <div class="kpi-label">Saldo del mese</div>
+            <div class="kpi-value" id="kpi-mese">€ 0,00</div>
+            <div class="kpi-sub" id="kpi-mese-label">mese corrente</div>
+          </div>
         </div>
+
+        <!-- Grafici -->
         <div class="charts-grid">
-          <div class="section-card"><div class="section-header"><h2>Ultimi 7 giorni</h2></div><canvas id="chart-weekly" height="200"></canvas></div>
-          <div class="section-card"><div class="section-header"><h2>Per categoria</h2></div><canvas id="chart-categories" height="200"></canvas></div>
+          <div class="section-card">
+            <div class="section-header">
+              <h2>Ultimi 7 giorni</h2>
+            </div>
+            <canvas id="chart-weekly" height="200"></canvas>
+          </div>
+          <div class="section-card">
+            <div class="section-header">
+              <h2>Per categoria</h2>
+            </div>
+            <canvas id="chart-categories" height="200"></canvas>
+          </div>
         </div>
+
+        <!-- Previsioni -->
         <div class="prev-dashboard-grid">
-          <div class="section-card"><div class="section-header"><h2>📈 Previsione incasso</h2><span class="prev-badge" id="prev-accuracy">basata su storico</span></div><div id="prev-incasso-content"><div class="empty-state">Caricamento...</div></div></div>
-          <div class="section-card"><div class="section-header"><h2>💰 Fabbisogno finanziario</h2><span class="prev-badge warning" id="fab-status">prossimi 30 giorni</span></div><div id="prev-fabbisogno-content"><div class="empty-state">Caricamento...</div></div></div>
+          <!-- Previsione incasso -->
+          <div class="section-card">
+            <div class="section-header">
+              <h2>📈 Previsione incasso</h2>
+              <span class="prev-badge" id="prev-accuracy">basata su storico</span>
+            </div>
+            <div id="prev-incasso-content">
+              <div class="empty-state">Caricamento...</div>
+            </div>
+          </div>
+
+          <!-- Fabbisogno finanziario -->
+          <div class="section-card">
+            <div class="section-header">
+              <h2>💰 Fabbisogno finanziario</h2>
+              <span class="prev-badge warning" id="fab-status">prossimi 30 giorni</span>
+            </div>
+            <div id="prev-fabbisogno-content">
+              <div class="empty-state">Caricamento...</div>
+            </div>
+          </div>
         </div>
-        <div class="section-card"><div class="section-header"><h2>Ultimi movimenti</h2><button class="btn-link" onclick="showView('movimenti')">Vedi tutti →</button></div><div id="recent-entries" class="entries-list"><div class="empty-state">Nessun movimento oggi</div></div></div>
-        <div id="dash-conciliazione"><div class="empty-state">Caricamento conciliazione...</div></div>
+
+        <!-- Ultimi movimenti -->
+        <div class="section-card">
+          <div class="section-header">
+            <h2>Ultimi movimenti</h2>
+            <button class="btn-link" onclick="showView('movimenti')">Vedi tutti →</button>
+          </div>
+          <div id="recent-entries" class="entries-list">
+            <div class="empty-state">Nessun movimento oggi</div>
+          </div>
+        </div>
+
+        <!-- Conciliazione fiscale -->
+        <div id="dash-conciliazione">
+          <div class="empty-state">Caricamento conciliazione...</div>
+        </div>
+
+        <!-- Quick add button -->
         <button class="fab" onclick="showView('nuovo')" title="Movimenti extra cassa">＋</button>
       </div>
 
-      <!-- NUOVO MOVIMENTO -->
+      <!-- ====== VIEW: NUOVO MOVIMENTO ====== -->
       <div id="view-nuovo" class="view">
         <div class="form-card">
           <h2>Movimenti extra cassa</h2>
+
+          <!-- Tipo -->
           <div class="type-toggle">
-            <button class="type-btn entrata active" id="btn-entrata" onclick="setType('entrata')">↑ Entrata</button>
-            <button class="type-btn uscita" id="btn-uscita" onclick="setType('uscita')">↓ Uscita</button>
+            <button class="type-btn entrata active" id="btn-entrata" onclick="setType('entrata')">
+              ↑ Entrata
+            </button>
+            <button class="type-btn uscita" id="btn-uscita" onclick="setType('uscita')">
+              ↓ Uscita
+            </button>
           </div>
+
           <div class="form-grid">
-            <div class="field"><label>Importo (€)</label><input type="number" id="mov-amount" placeholder="0,00" step="0.01" min="0" class="amount-input" /></div>
-            <div class="field"><label>Data</label><input type="date" id="mov-date" /></div>
-            <div class="field"><label>Categoria</label><select id="mov-category"><option value="">Seleziona categoria</option></select></div>
-            <div class="field"><label>Metodo di pagamento</label><select id="mov-payment"><option value="contanti">💵 Contanti</option><option value="carta">💳 Carta</option><option value="bonifico">🏦 Bonifico</option><option value="assegno">📝 Assegno</option><option value="altro">📌 Altro</option></select></div>
-            <div class="field"><label>Sede</label><select id="mov-location"><option value="">Tutte le sedi</option></select></div>
-            <div class="field"><label>Descrizione</label><input type="text" id="mov-description" placeholder="Es. Fornitura caffè" /></div>
-            <div class="field full"><label>Note aggiuntive</label><textarea id="mov-notes" placeholder="Note opzionali..." rows="2"></textarea></div>
+            <div class="field">
+              <label>Importo (€)</label>
+              <input type="number" id="mov-amount" placeholder="0,00" step="0.01" min="0" class="amount-input" />
+            </div>
+            <div class="field">
+              <label>Data</label>
+              <input type="date" id="mov-date" />
+            </div>
+            <div class="field">
+              <label>Categoria</label>
+              <select id="mov-category">
+                <option value="">Seleziona categoria</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Metodo di pagamento</label>
+              <select id="mov-payment">
+                <option value="contanti">💵 Contanti</option>
+                <option value="carta">💳 Carta</option>
+                <option value="bonifico">🏦 Bonifico</option>
+                <option value="assegno">📝 Assegno</option>
+                <option value="altro">📌 Altro</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Sede</label>
+              <select id="mov-location">
+                <option value="">Tutte le sedi</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Descrizione</label>
+              <input type="text" id="mov-description" placeholder="Es. Fornitura caffè" />
+            </div>
+            <div class="field full">
+              <label>Note aggiuntive</label>
+              <textarea id="mov-notes" placeholder="Note opzionali..." rows="2"></textarea>
+            </div>
           </div>
+
           <div class="form-actions">
             <button class="btn-secondary" onclick="showView('dashboard')">Annulla</button>
             <button class="btn-primary" onclick="saveMovimento()">Salva movimento →</button>
           </div>
+
           <div id="mov-message" class="auth-message"></div>
         </div>
       </div>
 
-      <!-- MOVIMENTI -->
+      <!-- ====== VIEW: MOVIMENTI ====== -->
       <div id="view-movimenti" class="view">
         <div class="section-card">
+          <!-- Filtri -->
           <div class="filters-row">
             <input type="date" id="filter-from" class="filter-input" />
             <input type="date" id="filter-to" class="filter-input" />
-            <select id="filter-type" class="filter-input"><option value="">Tutti</option><option value="entrata">Entrate</option><option value="uscita">Uscite</option></select>
-            <select id="filter-payment" class="filter-input"><option value="">Tutti i pagamenti</option><option value="contanti">Contanti</option><option value="carta">Carta</option><option value="bonifico">Bonifico</option><option value="assegno">Assegno</option></select>
+            <select id="filter-type" class="filter-input">
+              <option value="">Tutti</option>
+              <option value="entrata">Entrate</option>
+              <option value="uscita">Uscite</option>
+            </select>
+            <select id="filter-payment" class="filter-input">
+              <option value="">Tutti i pagamenti</option>
+              <option value="contanti">Contanti</option>
+              <option value="carta">Carta</option>
+              <option value="bonifico">Bonifico</option>
+              <option value="assegno">Assegno</option>
+            </select>
             <button class="btn-primary sm" onclick="loadMovimenti()">Filtra</button>
             <button class="btn-secondary sm" onclick="exportCSV()">↓ CSV</button>
           </div>
+
+          <!-- Totali filtrati -->
           <div class="filter-totals">
             <span class="ft-item entrate">Entrate: <strong id="ft-entrate">€ 0,00</strong></span>
             <span class="ft-item uscite">Uscite: <strong id="ft-uscite">€ 0,00</strong></span>
             <span class="ft-item saldo">Saldo: <strong id="ft-saldo">€ 0,00</strong></span>
           </div>
-          <div id="all-entries" class="entries-list"><div class="empty-state">Nessun movimento trovato</div></div>
+
+          <div id="all-entries" class="entries-list">
+            <div class="empty-state">Nessun movimento trovato</div>
+          </div>
         </div>
       </div>
 
-      <!-- REPORT -->
+      <!-- ====== VIEW: REPORT ====== -->
       <div id="view-report" class="view">
         <div class="report-grid">
-          <div class="section-card"><div class="section-header"><h2>Report mensile</h2><button class="btn-primary sm" onclick="exportPDF()">↓ PDF</button></div><div class="report-month-select"><select id="report-month" onchange="loadReport()"></select><select id="report-year" onchange="loadReport()"></select></div><div id="report-content" class="report-content"><div class="empty-state">Seleziona mese e anno</div></div></div>
-          <div class="section-card"><h2>Per categoria</h2><div id="report-categories" class="category-report"><div class="empty-state">—</div></div></div>
+          <div class="section-card">
+            <div class="section-header">
+              <h2>Report mensile</h2>
+              <button class="btn-primary sm" onclick="exportPDF()">↓ PDF</button>
+            </div>
+            <div class="report-month-select">
+              <select id="report-month" onchange="loadReport()"></select>
+              <select id="report-year" onchange="loadReport()"></select>
+            </div>
+            <div id="report-content" class="report-content">
+              <div class="empty-state">Seleziona mese e anno</div>
+            </div>
+          </div>
+
+          <div class="section-card">
+            <h2>Per categoria</h2>
+            <div id="report-categories" class="category-report">
+              <div class="empty-state">—</div>
+            </div>
+          </div>
         </div>
       </div>
 
-      <!-- SEDI -->
+      <!-- ====== VIEW: SEDI ====== -->
       <div id="view-sedi" class="view">
         <div class="section-card">
-          <div class="section-header"><h2>Gestione sedi</h2><button class="btn-primary sm" onclick="showAddLocation()">＋ Nuova sede</button></div>
+          <div class="section-header">
+            <h2>Gestione sedi</h2>
+            <button class="btn-primary sm" onclick="showAddLocation()">＋ Nuova sede</button>
+          </div>
+
           <div id="add-location-form" class="add-form hidden">
             <h3 style="font-size:14px;font-weight:700;margin-bottom:16px;color:var(--text-primary)">＋ Nuova sede</h3>
             <input type="hidden" id="new-loc-id" value="" />
             <div class="form-grid">
-              <div class="field"><label>Nome sede</label><input type="text" id="new-loc-name" placeholder="Es. Bar Centro" /></div>
-              <div class="field"><label>Indirizzo</label><input type="text" id="new-loc-address" placeholder="Via Roma 1, Milano" /></div>
+              <div class="field">
+                <label>Nome sede</label>
+                <input type="text" id="new-loc-name" placeholder="Es. Bar Centro" />
+              </div>
+              <div class="field">
+                <label>Indirizzo</label>
+                <input type="text" id="new-loc-address" placeholder="Via Roma 1, Milano" />
+              </div>
             </div>
             <div class="form-actions">
               <button class="btn-secondary" onclick="hideAddLocation()">Annulla</button>
               <button class="btn-primary" id="btn-save-location" onclick="saveLocation()">Aggiungi sede</button>
             </div>
           </div>
-          <div id="locations-list" class="locations-grid"><div class="empty-state">Nessuna sede configurata</div></div>
+
+          <div id="locations-list" class="locations-grid">
+            <div class="empty-state">Nessuna sede aggiuntiva</div>
+          </div>
         </div>
       </div>
 
-      <!-- TEAM -->
+      <!-- ====== VIEW: TEAM ====== -->
       <div id="view-team" class="view">
         <div class="section-card">
-          <div class="section-header"><h2>Gestione team</h2><button class="btn-primary sm" onclick="showInviteForm()">＋ Aggiungi utente</button></div>
+          <div class="section-header">
+            <h2>Gestione team</h2>
+            <button class="btn-primary sm" onclick="showInviteForm()">＋ Aggiungi utente</button>
+          </div>
+
+          <!-- Form creazione utente diretta -->
           <div id="invite-form" class="add-form hidden">
-            <div style="font-size:13px;color:var(--gray-400);margin-bottom:16px">Crea le credenziali di accesso — poi comunica email e password al collaboratore.</div>
+            <div style="font-size:13px;color:var(--gray-400);margin-bottom:16px">
+              Crea le credenziali di accesso — poi comunica email e password al collaboratore.
+            </div>
             <div class="form-grid">
-              <div class="field"><label>Nome</label><input type="text" id="new-user-nome" placeholder="Mario" /></div>
-              <div class="field"><label>Cognome</label><input type="text" id="new-user-cognome" placeholder="Rossi" /></div>
-              <div class="field"><label>Email di accesso</label><input type="email" id="invite-email" placeholder="mario@esempio.it" /></div>
-              <div class="field"><label>Password</label><input type="text" id="new-user-password" placeholder="Minimo 8 caratteri" /></div>
-              <div class="field"><label>Ruolo</label><select id="invite-role"><option value="cashier">Cassiere — solo Prima Nota</option><option value="manager">Responsabile sede — Prima Nota, turni, acconti, fatture</option><option value="admin">Admin — accesso completo</option></select></div>
               <div class="field">
-                <label>📍 Sede assegnata <span style="font-size:11px;color:var(--gray-400)">(opzionale — lascia vuoto per accesso a tutte le sedi)</span></label>
+                <label>Nome</label>
+                <input type="text" id="new-user-nome" placeholder="Mario" />
+              </div>
+              <div class="field">
+                <label>Cognome</label>
+                <input type="text" id="new-user-cognome" placeholder="Rossi" />
+              </div>
+              <div class="field">
+                <label>Email di accesso</label>
+                <input type="email" id="invite-email" placeholder="mario@esempio.it" />
+              </div>
+              <div class="field">
+                <label>Password</label>
+                <input type="text" id="new-user-password" placeholder="Minimo 8 caratteri" />
+              </div>
+              <div class="field">
+                <label>Ruolo</label>
+                <select id="invite-role">
+                  <option value="cashier">Cassiere — solo Prima Nota</option>
+                  <option value="manager">Responsabile sede — Prima Nota, turni, acconti, fatture</option>
+                  <option value="admin">Admin — accesso completo</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>📍 Sede assegnata <span style="font-size:11px;color:var(--gray-400)">(opzionale — lascia vuoto per tutte le sedi)</span></label>
                 <select id="new-user-sede">
                   <option value="">🌐 Tutte le sedi</option>
                 </select>
               </div>
             </div>
-            <div class="form-actions"><button class="btn-secondary" onclick="hideInviteForm()">Annulla</button><button class="btn-primary" onclick="createUser()">Crea account →</button></div>
+            <div class="form-actions">
+              <button class="btn-secondary" onclick="hideInviteForm()">Annulla</button>
+              <button class="btn-primary" onclick="createUser()">Crea account →</button>
+            </div>
             <div id="invite-message" class="auth-message"></div>
           </div>
+
+          <!-- Lista membri -->
           <div class="team-section-title">Membri attivi</div>
-          <div id="team-members" class="entries-list"><div class="empty-state">Caricamento...</div></div>
+          <div id="team-members" class="entries-list">
+            <div class="empty-state">Caricamento...</div>
+          </div>
+
+          <!-- Lista inviti pendenti -->
           <div class="team-section-title" style="margin-top:24px">Inviti in attesa</div>
-          <div id="team-invites" class="entries-list"><div class="empty-state">Nessun invito pendente</div></div>
+          <div id="team-invites" class="entries-list">
+            <div class="empty-state">Nessun invito pendente</div>
+          </div>
         </div>
       </div>
 
-      <!-- ====== PRIMA NOTA ====== -->
+      <!-- ====== VIEW: PRIMA NOTA ====== -->
       <div id="view-primanota" class="view">
+
+        <!-- Topbar Prima Nota -->
         <div class="pn-header-card">
           <div class="pn-header-left">
-            <div class="pn-field-wrap"><label>📅 Data</label><input type="date" id="pn-data" onchange="loadNotaGiorno()" /></div>
-            <div class="pn-field-wrap"><label>📍 Sede</label><select id="pn-location" onchange="loadNotaGiorno()"><option value="">Riepilogo generale sedi</option></select></div>
+            <div class="pn-field-wrap">
+              <label>📅 Data</label>
+              <input type="date" id="pn-data" onchange="loadNotaGiorno()" />
+            </div>
+            <div class="pn-field-wrap">
+              <label>📍 Sede</label>
+              <select id="pn-location" onchange="loadNotaGiorno()">
+                
+              </select>
+            </div>
           </div>
-          <div class="pn-fc-box"><label>💰 Fondo cassa apertura</label><input type="number" id="pn-fc" step="0.01" placeholder="0,00" oninput="calcPN()" class="pn-fc-input" /></div>
+          <div class="pn-fc-box">
+            <label>💰 Fondo cassa apertura</label>
+            <input type="number" id="pn-fc" step="0.01" placeholder="0,00" oninput="calcPN()" class="pn-fc-input" />
+          </div>
         </div>
 
+        <!-- Tabella Prima Nota -->
         <div class="section-card pn-card">
+          <!-- Tab turni solo su mobile -->
           <div class="pn-mobile-tabs" id="pn-mobile-tabs">
             <button class="pn-mobile-tab active" onclick="scrollToTurno('m')">☀ Mattina</button>
             <button class="pn-mobile-tab" onclick="scrollToTurno('p')">🌤 Pomeriggio</button>
@@ -267,61 +523,212 @@
               <thead>
                 <tr>
                   <th class="th-desc">Voce</th>
-                  <th class="th-turno">☀️ MAT<br><button id="btn-blocca-m" onclick="bloccaTurno('m')" class="btn-blocca" title="Blocca turno mattina">🔓</button></th>
-                  <th class="th-turno">🌤 POM<br><button id="btn-blocca-p" onclick="bloccaTurno('p')" class="btn-blocca" title="Blocca turno pomeriggio">🔓</button></th>
-                  <th class="th-turno">🌙 SER<br><button id="btn-blocca-s" onclick="bloccaTurno('s')" class="btn-blocca" title="Blocca turno sera">🔓</button></th>
-                </tr>
+                  <th class="th-turno">
+                    ☀️ MAT<br>
+                    <button id="btn-blocca-m" onclick="bloccaTurno('m')" class="btn-blocca" title="Blocca turno mattina">🔓</button>
+                  </th>
+                  <th class="th-turno">
+                    🌤 POM<br>
+                    <button id="btn-blocca-p" onclick="bloccaTurno('p')" class="btn-blocca" title="Blocca turno pomeriggio">🔓</button>
+                  </th>
+                  <th class="th-turno">
+                    🌙 SER<br>
+                    <button id="btn-blocca-s" onclick="bloccaTurno('s')" class="btn-blocca" title="Blocca turno sera">🔓</button>
+                  </th>
+                  </tr>
               </thead>
               <tbody id="pn-tbody">
-                <tr class="pn-section-row entrate"><td colspan="3">▲ ENTRATE</td></tr>
-                <tr class="pn-row-even"><td class="td-desc">Incasso cassa</td><td><input type="number" id="incasso-m" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td><td><input type="number" id="incasso-p" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td><td><input type="number" id="incasso-s" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td></tr>
-                <tr><td class="td-desc">Servizi, Ricariche e Pagamenti</td><td><input type="number" id="money-m" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td><td><input type="number" id="money-p" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td><td><input type="number" id="money-s" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td></tr>
-                <tr class="pn-row-even"><td class="td-desc">Gratta e Vinci</td><td><input type="number" id="grattavinci-m" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td><td><input type="number" id="grattavinci-p" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td><td><input type="number" id="grattavinci-s" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td></tr>
-                <tr><td class="td-desc">Sisal</td><td><input type="number" id="sisal-m" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td><td><input type="number" id="sisal-p" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td><td><input type="number" id="sisal-s" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td></tr>
-                <tr><td class="td-desc"><div style="display:flex;flex-direction:column;gap:4px"><span>Conto Bet</span><select id="pn-bet-banca" class="pn-desc-input" style="font-size:11px;margin-top:2px"><option value="">— Seleziona conto bet —</option></select></div></td><td><input type="number" id="conto-bet-m" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td><td><input type="number" id="conto-bet-p" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td><td><input type="number" id="conto-bet-s" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td></tr>
-                <tr><td class="td-desc">Fatture Clienti</td><td><input type="number" id="fatture-m" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td><td><input type="number" id="fatture-p" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td><td><input type="number" id="fatture-s" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td></tr>
-                <tr class="pn-row-even"><td class="td-desc">Edicola</td><td><input type="number" id="giornali-m" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td><td><input type="number" id="giornali-p" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td><td><input type="number" id="giornali-s" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td></tr>
-                <tr class="pn-subtot-row"><td class="td-desc">TOT. ENTRATE</td><td class="td-tot" id="tot-ent-m">€ 0,00</td><td class="td-tot" id="tot-ent-p">€ 0,00</td><td class="td-tot" id="tot-ent-s">€ 0,00</td></tr>
 
-                <tr class="pn-section-row uscite"><td colspan="3">▼ USCITE</td></tr>
-                <tr class="pn-row-even"><td class="td-desc">POS</td><td><input type="number" id="pos-m" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td><td><input type="number" id="pos-p" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td><td><input type="number" id="pos-s" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td></tr>
-                <tr><td class="td-desc">Carte di credito</td><td><input type="number" id="carte-m" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td><td><input type="number" id="carte-p" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td><td><input type="number" id="carte-s" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td></tr>
-                <tr class="pn-row-even"><td class="td-desc">Bonifici bancari</td><td><input type="number" id="bonifici-m" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td><td><input type="number" id="bonifici-p" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td><td><input type="number" id="bonifici-s" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td></tr>
+                <!-- ENTRATE -->
+                <tr class="pn-section-row entrate">
+                  <td colspan="3">▲ ENTRATE</td>
+                </tr>
+                <tr class="pn-row-even">
+                  <td class="td-desc">Incasso cassa</td>
+                  <td><input type="number" id="incasso-m" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
+                  <td><input type="number" id="incasso-p" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
+                  <td><input type="number" id="incasso-s" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
+                </tr>
+                <tr>
+                  <td class="td-desc">Servizi, Ricariche e Pagamenti</td>
+                  <td><input type="number" id="money-m" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
+                  <td><input type="number" id="money-p" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
+                  <td><input type="number" id="money-s" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
+                </tr>
+                <tr class="pn-row-even">
+                  <td class="td-desc">Gratta e Vinci</td>
+                  <td><input type="number" id="grattavinci-m" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
+                  <td><input type="number" id="grattavinci-p" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
+                  <td><input type="number" id="grattavinci-s" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
+                </tr>
+                <tr>
+                  <td class="td-desc">Sisal</td>
+                  <td><input type="number" id="sisal-m" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
+                  <td><input type="number" id="sisal-p" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
+                  <td><input type="number" id="sisal-s" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
+                </tr>
+                <tr>
+                  <td class="td-desc">
+                    <div style="display:flex;flex-direction:column;gap:4px">
+                      <span>Conto Bet</span>
+                      <select id="pn-bet-banca" class="pn-desc-input" style="font-size:11px;margin-top:2px">
+                        <option value="">— Seleziona conto bet —</option>
+                      </select>
+                    </div>
+                  </td>
+                  <td><input type="number" id="conto-bet-m" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
+                  <td><input type="number" id="conto-bet-p" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
+                  <td><input type="number" id="conto-bet-s" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
+                </tr>
+                <tr>
+                  <td class="td-desc">Fatture Clienti</td>
+                  <td><input type="number" id="fatture-m" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
+                  <td><input type="number" id="fatture-p" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
+                  <td><input type="number" id="fatture-s" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
+                </tr>
+                <tr class="pn-row-even">
+                  <td class="td-desc">Edicola</td>
+                  <td><input type="number" id="giornali-m" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
+                  <td><input type="number" id="giornali-p" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
+                  <td><input type="number" id="giornali-s" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
+                </tr>
+                <tr class="pn-subtot-row">
+                  <td class="td-desc">TOT. ENTRATE</td>
+                  <td class="td-tot" id="tot-ent-m">€ 0,00</td>
+                  <td class="td-tot" id="tot-ent-p">€ 0,00</td>
+                  <td class="td-tot" id="tot-ent-s">€ 0,00</td>
+                </tr>
 
-                <tr class="pn-section-row fornitori" id="fornitori-header"><td colspan="3">📦 FORNITORI <button class="pn-add-btn" onclick="addFornitoreRow()">＋ aggiungi riga</button></td></tr>
+                <!-- USCITE -->
+                <tr class="pn-section-row uscite">
+                  <td colspan="3">▼ USCITE</td>
+                </tr>
+                <tr class="pn-row-even">
+                  <td class="td-desc">POS</td>
+                  <td><input type="number" id="pos-m" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
+                  <td><input type="number" id="pos-p" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
+                  <td><input type="number" id="pos-s" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
+                </tr>
+                <tr>
+                  <td class="td-desc">Carte di credito</td>
+                  <td><input type="number" id="carte-m" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
+                  <td><input type="number" id="carte-p" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
+                  <td><input type="number" id="carte-s" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
+                </tr>
+                <tr class="pn-row-even">
+                  <td class="td-desc">Bonifici bancari</td>
+                  <td><input type="number" id="bonifici-m" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
+                  <td><input type="number" id="bonifici-p" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
+                  <td><input type="number" id="bonifici-s" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
+                </tr>
+
+                <!-- FORNITORI -->
+                <tr class="pn-section-row fornitori" id="fornitori-header">
+                  <td colspan="3">
+                    📦 FORNITORI
+                    <button class="pn-add-btn" onclick="addFornitoreRow()">＋ aggiungi riga</button>
+                  </td>
+                </tr>
                 <tr id="fornitori-r0" class="pn-dyn-row"><td class="td-desc"><input type="text" placeholder="Fornitore..." class="pn-desc-input" id="fdesc-0"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fm-0" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fp-0" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fs-0" oninput="calcPN()"/></td></tr>
                 <tr id="fornitori-r1" class="pn-dyn-row pn-row-even"><td class="td-desc"><input type="text" placeholder="Fornitore..." class="pn-desc-input" id="fdesc-1"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fm-1" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fp-1" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fs-1" oninput="calcPN()"/></td></tr>
                 <tr id="fornitori-r2" class="pn-dyn-row"><td class="td-desc"><input type="text" placeholder="Fornitore..." class="pn-desc-input" id="fdesc-2"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fm-2" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fp-2" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fs-2" oninput="calcPN()"/></td></tr>
                 <tr id="fornitori-r3" class="pn-dyn-row pn-row-even"><td class="td-desc"><input type="text" placeholder="Fornitore..." class="pn-desc-input" id="fdesc-3"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fm-3" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fp-3" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fs-3" oninput="calcPN()"/></td></tr>
                 <tr id="fornitori-r4" class="pn-dyn-row"><td class="td-desc"><input type="text" placeholder="Fornitore..." class="pn-desc-input" id="fdesc-4"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fm-4" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fp-4" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="fs-4" oninput="calcPN()"/></td></tr>
 
-                <tr class="pn-section-row prelievi" id="prelievi-header"><td colspan="3">💸 PRELIEVI / VARIE <button class="pn-add-btn" onclick="addPrelievRow()">＋ aggiungi riga</button></td></tr>
+                <!-- PRELIEVI -->
+                <tr class="pn-section-row prelievi" id="prelievi-header">
+                  <td colspan="3">
+                    💸 PRELIEVI / VARIE
+                    <button class="pn-add-btn" onclick="addPrelievRow()">＋ aggiungi riga</button>
+                  </td>
+                </tr>
                 <tr id="prelievi-r0" class="pn-dyn-row"><td class="td-desc"><select class="pn-desc-input" id="pdesc-0"><option value="">— Causale —</option></select></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="pm-0" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="pp-0" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="ps-0" oninput="calcPN()"/></td></tr>
                 <tr id="prelievi-r1" class="pn-dyn-row pn-row-even"><td class="td-desc"><select class="pn-desc-input" id="pdesc-1"><option value="">— Causale —</option></select></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="pm-1" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="pp-1" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="ps-1" oninput="calcPN()"/></td></tr>
                 <tr id="prelievi-r2" class="pn-dyn-row"><td class="td-desc"><select class="pn-desc-input" id="pdesc-2"><option value="">— Causale —</option></select></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="pm-2" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="pp-2" oninput="calcPN()"/></td><td><input type="number" step="0.01" placeholder="—" class="pn-input" id="ps-2" oninput="calcPN()"/></td></tr>
 
-                <tr class="pn-section-row chiusura"><td colspan="3">◎ FONDO CASSA CHIUSURA</td></tr>
-                <tr class="pn-row-even"><td class="td-desc">Fondo chiusura<span class="tooltip-wrap"><span class="tooltip-icon">?</span><span class="tooltip-text">Soldi lasciati in cassa per il giorno dopo.</span></span></td><td><input type="number" id="fc-usc-m" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td><td><input type="number" id="fc-usc-p" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td><td><input type="number" id="fc-usc-s" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td></tr>
-                <tr class="pn-subtot-row uscite"><td class="td-desc">TOT. USCITE</td><td class="td-tot" id="tot-usc-m">€ 0,00</td><td class="td-tot" id="tot-usc-p">€ 0,00</td><td class="td-tot" id="tot-usc-s">€ 0,00</td></tr>
-                <tr class="pn-diff-row"><td class="td-desc">DIFFERENZA<span class="tooltip-wrap"><span class="tooltip-icon">?</span><span class="tooltip-text">Entrate − Uscite.</span></span></td><td class="td-tot" id="diff-m">+ € 0,00</td><td class="td-tot" id="diff-p">+ € 0,00</td><td class="td-tot" id="diff-s">+ € 0,00</td></tr>
+                <!-- FONDO CHIUSURA -->
+                <tr class="pn-section-row chiusura">
+                  <td colspan="3">◎ FONDO CASSA CHIUSURA</td>
+                </tr>
+                <tr class="pn-row-even">
+                  <td class="td-desc">
+                    Fondo chiusura
+                    <span class="tooltip-wrap">
+                      <span class="tooltip-icon">?</span>
+                      <span class="tooltip-text">Soldi lasciati in cassa per il giorno dopo. Vengono aggiunti all'incasso calcolato.</span>
+                    </span>
+                  </td>
+                  <td><input type="number" id="fc-usc-m" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
+                  <td><input type="number" id="fc-usc-p" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
+                  <td><input type="number" id="fc-usc-s" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
+                </tr>
+                <tr class="pn-subtot-row uscite">
+                  <td class="td-desc">TOT. USCITE</td>
+                  <td class="td-tot" id="tot-usc-m">€ 0,00</td>
+                  <td class="td-tot" id="tot-usc-p">€ 0,00</td>
+                  <td class="td-tot" id="tot-usc-s">€ 0,00</td>
+                </tr>
+                <tr class="pn-diff-row">
+                  <td class="td-desc">
+                    DIFFERENZA
+                    <span class="tooltip-wrap">
+                      <span class="tooltip-icon">?</span>
+                      <span class="tooltip-text">Entrate − Uscite. Se è positiva (rosso) le uscite superano le entrate — da verificare.</span>
+                    </span>
+                  </td>
+                  <td class="td-tot" id="diff-m">+ € 0,00</td>
+                  <td class="td-tot" id="diff-p">+ € 0,00</td>
+                  <td class="td-tot" id="diff-s">+ € 0,00</td>
+                </tr>
+
               </tbody>
             </table>
           </div>
 
+          <!-- RIEPILOGO -->
           <div class="pn-riepilogo">
             <div class="pn-kpi-row">
-              <div class="pn-kpi"><div class="pn-kpi-label">☀️ Incasso mattina</div><div class="pn-kpi-val green" id="r-inc-m">€ 0,00</div></div>
-              <div class="pn-kpi"><div class="pn-kpi-label">🌤 Incasso pomeriggio</div><div class="pn-kpi-val green" id="r-inc-p">€ 0,00</div></div>
-              <div class="pn-kpi"><div class="pn-kpi-label">🌙 Incasso sera</div><div class="pn-kpi-val green" id="r-inc-s">€ 0,00</div></div>
-              <div class="pn-kpi highlight"><div class="pn-kpi-label">💰 Incasso giornaliero</div><div class="pn-kpi-val" id="r-inc-tot">€ 0,00</div></div>
+              <div class="pn-kpi">
+                <div class="pn-kpi-label">☀️ Incasso mattina</div>
+                <div class="pn-kpi-val green" id="r-inc-m">€ 0,00</div>
+              </div>
+              <div class="pn-kpi">
+                <div class="pn-kpi-label">🌤 Incasso pomeriggio</div>
+                <div class="pn-kpi-val green" id="r-inc-p">€ 0,00</div>
+              </div>
+              <div class="pn-kpi">
+                <div class="pn-kpi-label">🌙 Incasso sera</div>
+                <div class="pn-kpi-val green" id="r-inc-s">€ 0,00</div>
+              </div>
+              <div class="pn-kpi highlight">
+                <div class="pn-kpi-label">💰 Incasso giornaliero</div>
+                <div class="pn-kpi-val" id="r-inc-tot">€ 0,00</div>
+              </div>
             </div>
-            <div id="pn-allarme" class="pn-allarme hidden">⚠️ Differenza positiva — verificare la cassa prima di chiudere</div>
+
+            <div id="pn-allarme" class="pn-allarme hidden">
+              ⚠️ Differenza positiva — verificare la cassa prima di chiudere
+            </div>
+
             <div class="pn-compilatori">
-              <div class="field"><label>☀ Compilatore mat.</label><input type="text" id="cm" placeholder="Nome..." /></div>
-              <div class="field"><label>🌤 Compilatore pom.</label><input type="text" id="cp" placeholder="Nome..." /></div>
-              <div class="field"><label>🌙 Compilatore sera</label><input type="text" id="cs" placeholder="Nome..." /></div>
-              <div class="field"><label>Note giornaliere</label><input type="text" id="pn-note" placeholder="Note..." /></div>
+              <div class="field">
+                <label>☀ Compilatore mat.</label>
+                <input type="text" id="cm" placeholder="Nome..." />
+              </div>
+              <div class="field">
+                <label>🌤 Compilatore pom.</label>
+                <input type="text" id="cp" placeholder="Nome..." />
+              </div>
+              <div class="field">
+                <label>🌙 Compilatore sera</label>
+                <input type="text" id="cs" placeholder="Nome..." />
+              </div>
+              <div class="field">
+                <label>Note giornaliere</label>
+                <input type="text" id="pn-note" placeholder="Note..." />
+              </div>
             </div>
+
             <div class="form-actions">
               <button class="btn-secondary" onclick="resetPN()">Reset</button>
               <button class="btn-secondary" onclick="exportPrimaNota()">📄 PDF</button>
@@ -334,31 +741,58 @@
         </div>
       </div>
 
-      <!-- STORICO -->
+      <!-- ====== VIEW: STORICO ====== -->
       <div id="view-storico" class="view">
+
+        <!-- Filtri -->
         <div class="section-card" style="margin-bottom:16px">
           <div class="filters-row">
             <input type="date" id="storico-from" class="filter-input" />
             <input type="date" id="storico-to" class="filter-input" />
-            <select id="storico-location" class="filter-input"><option value="">Tutte le sedi</option></select>
+            <select id="storico-location" class="filter-input">
+              <option value="">Tutte le sedi</option>
+            </select>
             <button class="btn-primary sm" onclick="loadStorico()">Filtra</button>
             <button class="btn-secondary sm" onclick="exportReportMensile()">📄 Export PDF</button>
           </div>
+
+          <!-- KPI storico -->
           <div class="storico-kpi-row">
-            <div class="storico-kpi"><div class="kpi-label">Giorni registrati</div><div class="kpi-value" id="st-giorni" style="color:var(--blue-300)">0</div></div>
-            <div class="storico-kpi"><div class="kpi-label">Totale entrate</div><div class="kpi-value" id="st-entrate" style="color:var(--green-400)">€ 0,00</div></div>
-            <div class="storico-kpi"><div class="kpi-label">Totale uscite</div><div class="kpi-value" id="st-uscite" style="color:var(--red-400)">€ 0,00</div></div>
-            <div class="storico-kpi"><div class="kpi-label">Incasso periodo</div><div class="kpi-value" id="st-incasso" style="color:var(--gold-light)">€ 0,00</div></div>
+            <div class="storico-kpi">
+              <div class="kpi-label">Giorni registrati</div>
+              <div class="kpi-value" id="st-giorni" style="color:var(--blue-300)">0</div>
+            </div>
+            <div class="storico-kpi">
+              <div class="kpi-label">Totale entrate</div>
+              <div class="kpi-value" id="st-entrate" style="color:var(--green-400)">€ 0,00</div>
+            </div>
+            <div class="storico-kpi">
+              <div class="kpi-label">Totale uscite</div>
+              <div class="kpi-value" id="st-uscite" style="color:var(--red-400)">€ 0,00</div>
+            </div>
+            <div class="storico-kpi">
+              <div class="kpi-label">Incasso periodo</div>
+              <div class="kpi-value" id="st-incasso" style="color:var(--gold-light)">€ 0,00</div>
+            </div>
           </div>
         </div>
+
+        <!-- Lista giorni -->
         <div class="section-card">
-          <div class="section-header"><h2>Giorni registrati</h2><span style="font-size:12px;color:var(--gray-400);font-family:var(--font-mono)">Clicca su un giorno per modificarlo</span></div>
-          <div id="storico-list" class="storico-list"><div class="empty-state">Nessun giorno registrato</div></div>
+          <div class="section-header">
+            <h2>Giorni registrati</h2>
+            <span style="font-size:12px;color:var(--gray-400);font-family:var(--font-mono)">Clicca su un giorno per modificarlo</span>
+          </div>
+          <div id="storico-list" class="storico-list">
+            <div class="empty-state">Nessun giorno registrato</div>
+          </div>
         </div>
       </div>
 
-      <!-- BANCA & FINANZA -->
+      <!-- ====== VIEW: BANCA & FINANZA ====== -->
       <div id="view-banca" class="view">
+
+        <!-- Sub-tabs -->
         <div class="banca-tabs">
           <button class="banca-tab active" onclick="switchBancaTab('overview')" id="btab-overview">📊 Overview</button>
           <button class="banca-tab" onclick="switchBancaTab('banche')" id="btab-banche">🏦 Banche</button>
@@ -367,32 +801,80 @@
           <button class="banca-tab" onclick="switchBancaTab('rid')" id="btab-rid">🔄 RID/SDD</button>
           <button class="banca-tab" onclick="switchBancaTab('estratto')" id="btab-estratto">📋 Estratto banca</button>
         </div>
+
+        <!-- ── OVERVIEW ── -->
         <div id="bpanel-overview" class="banca-panel active">
           <div class="kpi-grid" style="margin-bottom:20px">
-            <div class="kpi-card saldo"><div class="kpi-label">Saldo banche</div><div class="kpi-value" id="ov-saldo-banche">€ 0,00</div><div class="kpi-sub" id="ov-saldo-sub">0 conti attivi</div></div>
-            <div class="kpi-card uscite"><div class="kpi-label">Assegni aperti</div><div class="kpi-value" id="ov-assegni">€ 0,00</div><div class="kpi-sub" id="ov-assegni-sub">0 assegni</div></div>
-            <div class="kpi-card uscite"><div class="kpi-label">RID mensili</div><div class="kpi-value" id="ov-rid">€ 0,00</div><div class="kpi-sub" id="ov-rid-sub">0 addebiti attivi</div></div>
-            <div class="kpi-card mese"><div class="kpi-label">Disponibilità reale</div><div class="kpi-value" id="ov-disp">€ 0,00</div><div class="kpi-sub">Saldo - assegni aperti</div></div>
+            <div class="kpi-card saldo">
+              <div class="kpi-label">Saldo banche</div>
+              <div class="kpi-value" id="ov-saldo-banche">€ 0,00</div>
+              <div class="kpi-sub" id="ov-saldo-sub">0 conti attivi</div>
+            </div>
+            <div class="kpi-card uscite">
+              <div class="kpi-label">Assegni aperti</div>
+              <div class="kpi-value" id="ov-assegni">€ 0,00</div>
+              <div class="kpi-sub" id="ov-assegni-sub">0 assegni</div>
+            </div>
+            <div class="kpi-card uscite">
+              <div class="kpi-label">RID mensili</div>
+              <div class="kpi-value" id="ov-rid">€ 0,00</div>
+              <div class="kpi-sub" id="ov-rid-sub">0 addebiti attivi</div>
+            </div>
+            <div class="kpi-card mese">
+              <div class="kpi-label">Disponibilità reale</div>
+              <div class="kpi-value" id="ov-disp">€ 0,00</div>
+              <div class="kpi-sub">Saldo - assegni aperti</div>
+            </div>
           </div>
+
+          <!-- Alert scadenze -->
           <div id="ov-alerts" class="ov-alerts"></div>
-          <div class="section-card"><div class="section-header"><h2>Previsione fabbisogno 30 giorni</h2></div><div id="ov-previsione" class="ov-previsione"><div class="empty-state">Caricamento...</div></div></div>
+
+          <!-- Previsione 30 giorni -->
+          <div class="section-card">
+            <div class="section-header">
+              <h2>Previsione fabbisogno 30 giorni</h2>
+            </div>
+            <div id="ov-previsione" class="ov-previsione">
+              <div class="empty-state">Caricamento...</div>
+            </div>
+          </div>
         </div>
+
+        <!-- ── BANCHE ── -->
         <div id="bpanel-banche" class="banca-panel">
           <div class="section-card">
-            <div class="section-header"><h2>Conti correnti</h2><button class="btn-primary sm" onclick="showAddBanca()">＋ Aggiungi conto</button></div>
+            <div class="section-header">
+              <h2>Conti correnti</h2>
+              <button class="btn-primary sm" onclick="showAddBanca()">＋ Aggiungi conto</button>
+            </div>
             <div id="add-banca-form" class="add-form hidden">
               <div class="form-grid">
                 <div class="field"><label>Nome conto</label><input type="text" id="nb-nome" placeholder="Es. Conto principale" /></div>
                 <div class="field"><label>Istituto bancario</label><input type="text" id="nb-istituto" placeholder="Es. Intesa Sanpaolo" /></div>
                 <div class="field"><label>IBAN</label><input type="text" id="nb-iban" placeholder="IT60 X054 2811 1010 0000 0123 456" /></div>
-                <div class="field"><label>Tipo</label><select id="nb-tipo"><option value="corrente">Conto corrente</option><option value="deposito">Conto deposito</option><option value="postale">Conto postale</option><option value="bet">Conto scommesse (Bet)</option></select></div>
+                <div class="field"><label>Tipo</label>
+                  <select id="nb-tipo">
+                    <option value="corrente">Conto corrente</option>
+                    <option value="deposito">Conto deposito</option>
+                    <option value="postale">Conto postale</option>
+                    <option value="bet">Conto scommesse (Bet)</option>
+                  </select>
+                </div>
                 <div class="field"><label>Saldo iniziale (€)</label><input type="number" id="nb-saldo" step="0.01" placeholder="0,00" /></div>
               </div>
-              <div class="form-actions"><button class="btn-secondary" onclick="hideAddBanca()">Annulla</button><button class="btn-primary" onclick="saveBanca()">Aggiungi</button></div>
+              <div class="form-actions">
+                <button class="btn-secondary" onclick="hideAddBanca()">Annulla</button>
+                <button class="btn-primary" onclick="saveBanca()">Aggiungi</button>
+              </div>
             </div>
-            <div id="banche-list" class="banche-grid"><div class="empty-state">Nessun conto configurato</div></div>
+            <div id="banche-list" class="banche-grid">
+              <div class="empty-state">Nessun conto configurato</div>
+            </div>
           </div>
         </div>
+
+        <!-- ── VERSAMENTI ── -->
         <div id="bpanel-versamenti" class="banca-panel">
           <div class="section-card" style="margin-bottom:16px">
             <h2 style="margin-bottom:16px">Nuovo versamento</h2>
@@ -403,29 +885,53 @@
               <div class="field"><label>POS (€)</label><input type="number" id="nv-pos" step="0.01" placeholder="0,00" /></div>
               <div class="field full"><label>Note</label><input type="text" id="nv-note" placeholder="Note..." /></div>
             </div>
-            <div class="form-actions"><button class="btn-primary" onclick="saveVersamento()">Registra versamento →</button></div>
+            <div class="form-actions">
+              <button class="btn-primary" onclick="saveVersamento()">Registra versamento →</button>
+            </div>
             <div id="nv-msg" class="auth-message"></div>
           </div>
-          <div class="section-card"><div class="section-header"><h2>Ultimi versamenti</h2></div><div id="versamenti-list" class="entries-list"><div class="empty-state">Nessun versamento</div></div></div>
+          <div class="section-card">
+            <div class="section-header"><h2>Ultimi versamenti</h2></div>
+            <div id="versamenti-list" class="entries-list"><div class="empty-state">Nessun versamento</div></div>
+          </div>
         </div>
+
+        <!-- ── ASSEGNI ── -->
         <div id="bpanel-assegni" class="banca-panel">
           <div class="section-card" style="margin-bottom:16px">
             <h2 style="margin-bottom:16px">Nuovo assegno</h2>
             <div class="form-grid">
               <div class="field"><label>Numero assegno</label><input type="text" id="na-numero" placeholder="Es. 001234" /></div>
               <div class="field"><label>Fornitore</label><select id="na-fornitore" onchange="loadFattureFornitoreAssegno()"><option value="">Seleziona o lascia libero</option></select></div>
-              <div class="field full" id="na-fatture-wrap" style="display:none"><label>Fatture aperte — seleziona quelle che stai pagando</label><div id="na-fatture-list" class="fatture-assegno-list"></div></div>
+              <!-- Fatture aperte del fornitore -->
+              <div class="field full" id="na-fatture-wrap" style="display:none">
+                <label>Fatture aperte — seleziona quelle che stai pagando</label>
+                <div id="na-fatture-list" class="fatture-assegno-list"></div>
+              </div>
+              <div id="na-data-consigliata" style="display:none;background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.3);border-radius:8px;padding:10px 14px;font-size:13px;color:#a5b4fc;font-weight:600;margin-top:-8px;line-height:1.6"></div>
               <div class="field"><label>Importo (€)</label><input type="number" id="na-importo" step="0.01" placeholder="0,00" /></div>
               <div class="field"><label>Banca</label><select id="na-banca"><option value="">Seleziona banca</option></select></div>
               <div class="field"><label>Data emissione</label><input type="date" id="na-emissione" /></div>
               <div class="field"><label>Data scadenza</label><input type="date" id="na-scadenza" /></div>
               <div class="field full"><label>Note</label><input type="text" id="na-note" placeholder="Note..." /></div>
             </div>
-            <div class="form-actions"><button class="btn-primary" onclick="saveAssegno()">Registra assegno →</button></div>
+            <div class="form-actions">
+              <button class="btn-primary" onclick="saveAssegno()">Registra assegno →</button>
+            </div>
             <div id="na-msg" class="auth-message"></div>
           </div>
-          <div class="section-card"><div class="section-header"><h2>Assegni</h2><div style="display:flex;gap:8px"><button class="btn-secondary sm" onclick="filterAssegni('aperti')">Aperti</button><button class="btn-secondary sm" onclick="filterAssegni('tutti')">Tutti</button></div></div><div id="assegni-list" class="entries-list"><div class="empty-state">Nessun assegno</div></div></div>
+          <div class="section-card">
+            <div class="section-header"><h2>Assegni</h2>
+              <div style="display:flex;gap:8px">
+                <button class="btn-secondary sm" onclick="filterAssegni('aperti')">Aperti</button>
+                <button class="btn-secondary sm" onclick="filterAssegni('tutti')">Tutti</button>
+              </div>
+            </div>
+            <div id="assegni-list" class="entries-list"><div class="empty-state">Nessun assegno</div></div>
+          </div>
         </div>
+
+        <!-- ── RID/SDD ── -->
         <div id="bpanel-rid" class="banca-panel">
           <div class="section-card" style="margin-bottom:16px">
             <h2 style="margin-bottom:16px">Nuovo RID/SDD</h2>
@@ -433,45 +939,94 @@
               <div class="field"><label>Nome</label><input type="text" id="nr-nome" placeholder="Es. Affitto locale" /></div>
               <div class="field"><label>Banca</label><select id="nr-banca"><option value="">Seleziona banca</option></select></div>
               <div class="field"><label>Importo (€)</label><input type="number" id="nr-importo" step="0.01" placeholder="0,00" /></div>
-              <div class="field"><label>Frequenza</label><select id="nr-frequenza"><option value="mensile">Mensile</option><option value="bimestrale">Bimestrale</option><option value="trimestrale">Trimestrale</option><option value="semestrale">Semestrale</option><option value="annuale">Annuale</option></select></div>
+              <div class="field"><label>Frequenza</label>
+                <select id="nr-frequenza">
+                  <option value="mensile">Mensile</option>
+                  <option value="bimestrale">Bimestrale</option>
+                  <option value="trimestrale">Trimestrale</option>
+                  <option value="semestrale">Semestrale</option>
+                  <option value="annuale">Annuale</option>
+                </select>
+              </div>
               <div class="field"><label>Giorno addebito</label><input type="number" id="nr-giorno" min="1" max="31" placeholder="Es. 15" /></div>
               <div class="field"><label>Prossimo addebito</label><input type="date" id="nr-prossimo" /></div>
               <div class="field full"><label>Descrizione</label><input type="text" id="nr-desc" placeholder="Note..." /></div>
             </div>
-            <div class="form-actions"><button class="btn-primary" onclick="saveRid()">Aggiungi RID →</button></div>
+            <div class="form-actions">
+              <button class="btn-primary" onclick="saveRid()">Aggiungi RID →</button>
+            </div>
             <div id="nr-msg" class="auth-message"></div>
           </div>
-          <div class="section-card"><div class="section-header"><h2>RID/SDD attivi</h2></div><div id="rid-list" class="entries-list"><div class="empty-state">Nessun RID configurato</div></div></div>
+          <div class="section-card">
+            <div class="section-header"><h2>RID/SDD attivi</h2></div>
+            <div id="rid-list" class="entries-list"><div class="empty-state">Nessun RID configurato</div></div>
+          </div>
         </div>
+
+        <!-- ── ESTRATTO CONTO BANCA ── -->
         <div id="bpanel-estratto" class="banca-panel">
           <div class="section-card" style="margin-bottom:16px">
             <div class="form-grid">
-              <div class="field"><label>Banca</label><select id="eb-banca" onchange="loadEstrattoBanca()"><option value="">Seleziona banca</option></select></div>
+              <div class="field">
+                <label>Banca</label>
+                <select id="eb-banca" onchange="loadEstrattoBanca()"><option value="">Seleziona banca</option></select>
+              </div>
               <div class="field"><label>Da</label><input type="date" id="eb-from" onchange="loadEstrattoBanca()" /></div>
               <div class="field"><label>A</label><input type="date" id="eb-to" onchange="loadEstrattoBanca()" /></div>
-              <div class="field" style="display:flex;align-items:flex-end"><button class="btn-primary sm" onclick="exportEstrattoBancaPDF()">↓ PDF</button></div>
+              <div class="field" style="display:flex;align-items:flex-end">
+                <button class="btn-primary sm" onclick="exportEstrattoBancaPDF()">↓ PDF</button>
+              </div>
             </div>
           </div>
           <div class="kpi-grid" style="margin-bottom:16px">
-            <div class="kpi-card saldo"><div class="kpi-label">Saldo iniziale</div><div class="kpi-value" id="eb-saldo-iniziale" style="color:var(--blue-300)">€ 0,00</div></div>
-            <div class="kpi-card entrate"><div class="kpi-label">Totale entrate</div><div class="kpi-value" id="eb-tot-entrate">€ 0,00</div></div>
-            <div class="kpi-card uscite"><div class="kpi-label">Totale uscite</div><div class="kpi-value" id="eb-tot-uscite">€ 0,00</div></div>
-            <div class="kpi-card mese"><div class="kpi-label">Saldo finale</div><div class="kpi-value" id="eb-saldo-finale">€ 0,00</div></div>
+            <div class="kpi-card saldo">
+              <div class="kpi-label">Saldo iniziale</div>
+              <div class="kpi-value" id="eb-saldo-iniziale" style="color:var(--blue-300)">€ 0,00</div>
+            </div>
+            <div class="kpi-card entrate">
+              <div class="kpi-label">Totale entrate</div>
+              <div class="kpi-value" id="eb-tot-entrate">€ 0,00</div>
+            </div>
+            <div class="kpi-card uscite">
+              <div class="kpi-label">Totale uscite</div>
+              <div class="kpi-value" id="eb-tot-uscite">€ 0,00</div>
+            </div>
+            <div class="kpi-card mese">
+              <div class="kpi-label">Saldo finale</div>
+              <div class="kpi-value" id="eb-saldo-finale">€ 0,00</div>
+            </div>
           </div>
-          <div class="section-card"><div class="section-header"><h2>Movimenti</h2><span id="eb-count" style="font-size:12px;color:var(--gray-400);font-family:var(--font-mono)"></span></div><div id="estratto-banca-list" class="entries-list"><div class="empty-state">Seleziona una banca</div></div></div>
+          <div class="section-card">
+            <div class="section-header">
+              <h2>Movimenti</h2>
+              <span id="eb-count" style="font-size:12px;color:var(--gray-400);font-family:var(--font-mono)"></span>
+            </div>
+            <div id="estratto-banca-list" class="entries-list">
+              <div class="empty-state">Seleziona una banca</div>
+            </div>
+          </div>
         </div>
+
       </div>
 
-      <!-- FORNITORI -->
+      <!-- ====== VIEW: FORNITORI ====== -->
       <div id="view-fornitori" class="view">
+
+        <!-- Sub-tabs -->
         <div class="banca-tabs">
           <button class="banca-tab active" onclick="switchFornitoriTab('anagrafica')" id="ftab-anagrafica">📦 Anagrafica</button>
           <button class="banca-tab" onclick="switchFornitoriTab('fatture')" id="ftab-fatture">🧾 Fatture</button>
           <button class="banca-tab" onclick="switchFornitoriTab('estratto')" id="ftab-estratto">📋 Estratto conto</button>
         </div>
+
+        <!-- ── ANAGRAFICA ── -->
         <div id="fpanel-anagrafica" class="banca-panel active">
           <div class="section-card">
-            <div class="section-header"><h2>Fornitori</h2><button class="btn-primary sm" onclick="showAddFornitore()">＋ Nuovo fornitore</button></div>
+            <div class="section-header">
+              <h2>Fornitori</h2>
+              <button class="btn-primary sm" onclick="showAddFornitore()">＋ Nuovo fornitore</button>
+            </div>
+
             <div id="add-fornitore-form" class="add-form hidden">
               <div class="form-grid">
                 <div class="field full"><label>Ragione sociale</label><input type="text" id="nf-nome" placeholder="Es. Mario Rossi S.r.l." /></div>
@@ -482,19 +1037,46 @@
                 <div class="field full"><label>Indirizzo</label><input type="text" id="nf-indirizzo" placeholder="Via Roma 1, Milano" /></div>
                 <div class="field full"><label>Note</label><input type="text" id="nf-note" placeholder="Note..." /></div>
               </div>
-              <div class="form-actions"><button class="btn-secondary" onclick="hideAddFornitore()">Annulla</button><button class="btn-primary" onclick="saveFornitore()">Salva fornitore</button></div>
+              <div class="form-actions">
+                <button class="btn-secondary" onclick="hideAddFornitore()">Annulla</button>
+                <button class="btn-primary" onclick="saveFornitore()">Salva fornitore</button>
+              </div>
               <div id="nf-msg" class="auth-message"></div>
             </div>
-            <div id="fornitori-list" class="fornitori-list"><div class="empty-state">Nessun fornitore</div></div>
+
+            <div id="fornitori-list" class="fornitori-list">
+              <div class="empty-state">Nessun fornitore</div>
+            </div>
           </div>
         </div>
+
+        <!-- ── FATTURE ── -->
         <div id="fpanel-fatture" class="banca-panel">
+          <!-- KPI fatture -->
           <div class="kpi-grid" style="margin-bottom:20px">
-            <div class="kpi-card uscite"><div class="kpi-label">Fatture aperte</div><div class="kpi-value" id="ft-aperte">€ 0,00</div><div class="kpi-sub" id="ft-aperte-n">0 fatture</div></div>
-            <div class="kpi-card uscite"><div class="kpi-label">In scadenza 30gg</div><div class="kpi-value" id="ft-scadenza">€ 0,00</div><div class="kpi-sub" id="ft-scadenza-n">0 fatture</div></div>
-            <div class="kpi-card mese"><div class="kpi-label">Pagate questo mese</div><div class="kpi-value" id="ft-pagate">€ 0,00</div><div class="kpi-sub" id="ft-pagate-n">0 fatture</div></div>
-            <div class="kpi-card saldo"><div class="kpi-label">Totale anno</div><div class="kpi-value" id="ft-anno">€ 0,00</div><div class="kpi-sub">tutte le fatture</div></div>
+            <div class="kpi-card uscite">
+              <div class="kpi-label">Fatture aperte</div>
+              <div class="kpi-value" id="ft-aperte">€ 0,00</div>
+              <div class="kpi-sub" id="ft-aperte-n">0 fatture</div>
+            </div>
+            <div class="kpi-card uscite">
+              <div class="kpi-label">In scadenza 30gg</div>
+              <div class="kpi-value" id="ft-scadenza">€ 0,00</div>
+              <div class="kpi-sub" id="ft-scadenza-n">0 fatture</div>
+            </div>
+            <div class="kpi-card mese">
+              <div class="kpi-label">Pagate questo mese</div>
+              <div class="kpi-value" id="ft-pagate">€ 0,00</div>
+              <div class="kpi-sub" id="ft-pagate-n">0 fatture</div>
+            </div>
+            <div class="kpi-card saldo">
+              <div class="kpi-label">Totale anno</div>
+              <div class="kpi-value" id="ft-anno">€ 0,00</div>
+              <div class="kpi-sub">tutte le fatture</div>
+            </div>
           </div>
+
+          <!-- Form nuova fattura -->
           <div class="section-card" style="margin-bottom:16px">
             <h2 style="margin-bottom:16px">Registra fattura</h2>
             <div class="form-grid">
@@ -505,30 +1087,102 @@
               <div class="field"><label>Imponibile (€)</label><input type="number" id="nft-netto" step="0.01" placeholder="0,00" oninput="calcFattura()" /></div>
               <div class="field"><label>IVA (€)</label><input type="number" id="nft-iva" step="0.01" placeholder="0,00" oninput="calcFattura()" /></div>
               <div class="field"><label>Totale (€)</label><input type="number" id="nft-totale" step="0.01" placeholder="0,00" class="pn-fc-input" style="width:100%" /></div>
-              <div class="field"><label>Metodo pagamento</label><select id="nft-metodo"><option value="">Da definire</option><option value="contanti">Contanti</option><option value="bonifico">Bonifico</option><option value="assegno">Assegno</option><option value="rid">RID/SDD</option></select></div>
-              <div class="field"><label>📍 Sede di scarico</label><select id="nft-sede"><option value="">— Sede di scarico —</option></select></div>
-              <div class="field"><label>✅ Controllata da</label><input type="text" id="nft-controllata" placeholder="Nome di chi ha verificato la fattura" /></div>
+              <div class="field"><label>Metodo pagamento</label>
+                <select id="nft-metodo">
+                  <option value="">Da definire</option>
+                  <option value="contanti">Contanti</option>
+                  <option value="bonifico">Bonifico</option>
+                  <option value="assegno">Assegno</option>
+                  <option value="rid">RID/SDD</option>
+                </select>
+              </div>
+              <div class="field"><label>📍 Sede di scarico</label>
+                <select id="nft-sede">
+                  <option value="">— Sede di scarico —</option>
+                </select>
+              </div>
+              <div class="field"><label>✅ Controllata da</label>
+                <input type="text" id="nft-controllata" placeholder="Nome di chi ha verificato la fattura" />
+              </div>
               <div class="field full"><label>Note</label><input type="text" id="nft-note" placeholder="Note..." /></div>
             </div>
-            <div class="form-actions"><button class="btn-primary" onclick="saveFattura()">Registra fattura →</button></div>
+            <div class="form-actions">
+              <button class="btn-primary" onclick="saveFattura()">Registra fattura →</button>
+            </div>
             <div id="nft-msg" class="auth-message"></div>
           </div>
-          <div class="section-card"><div class="section-header"><h2>Registro fatture</h2><div style="display:flex;gap:8px"><select id="ft-filter-stato" class="filter-input" onchange="loadFatture()"><option value="">Tutte</option><option value="aperta">Aperte</option><option value="pagata">Pagate</option><option value="pagata_parziale">Parz. pagate</option></select><select id="ft-filter-fornitore" class="filter-input" onchange="loadFatture()"><option value="">Tutti i fornitori</option></select></div></div><div id="fatture-list" class="entries-list"><div class="empty-state">Nessuna fattura</div></div></div>
-        </div>
-        <div id="fpanel-estratto" class="banca-panel">
-          <div class="section-card" style="margin-bottom:16px"><div class="form-grid"><div class="field"><label>Fornitore</label><div id="ec-fornitore-wrap" style="flex:1"></div><input type="hidden" id="ec-fornitore" /></div><div class="field"><label>Da</label><input type="date" id="ec-from" onchange="loadEstratto()" /></div><div class="field"><label>A</label><input type="date" id="ec-to" onchange="loadEstratto()" /></div></div></div>
-          <div class="kpi-grid" style="margin-bottom:16px">
-            <div class="kpi-card uscite"><div class="kpi-label">Fatturato totale</div><div class="kpi-value" id="ec-fatturato">€ 0,00</div><div class="kpi-sub">Somma fatture periodo</div></div>
-            <div class="kpi-card mese"><div class="kpi-label">Assegni emessi</div><div class="kpi-value" id="ec-assegni">€ 0,00</div><div class="kpi-sub">In attesa addebito banca</div></div>
-            <div class="kpi-card uscite"><div class="kpi-label">Saldo scoperto</div><div class="kpi-value" id="ec-scoperto">€ 0,00</div><div class="kpi-sub">Non coperto da assegni</div></div>
-            <div class="kpi-card saldo"><div class="kpi-label">Saldo da pagare</div><div class="kpi-value" id="ec-saldo">€ 0,00</div><div class="kpi-sub">Fatturato - addebitato</div></div>
+
+          <!-- Lista fatture -->
+          <div class="section-card">
+            <div class="section-header">
+              <h2>Registro fatture</h2>
+              <div style="display:flex;gap:8px">
+                <select id="ft-filter-stato" class="filter-input" onchange="loadFatture()">
+                  <option value="">Tutte</option>
+                  <option value="aperta">Aperte</option>
+                  <option value="pagata">Pagate</option>
+                  <option value="pagata_parziale">Parz. pagate</option>
+                </select>
+                <select id="ft-filter-fornitore" class="filter-input" onchange="loadFatture()">
+                  <option value="">Tutti i fornitori</option>
+                </select>
+              </div>
+            </div>
+            <div id="fatture-list" class="entries-list"><div class="empty-state">Nessuna fattura</div></div>
           </div>
-          <div class="section-card"><div class="section-header"><h2>Movimenti fornitore</h2><button class="btn-primary sm" onclick="exportEstrattoPDF()">↓ PDF</button></div><div id="estratto-list" class="entries-list"><div class="empty-state">Seleziona un fornitore</div></div></div>
         </div>
+
+        <!-- ── ESTRATTO CONTO ── -->
+        <div id="fpanel-estratto" class="banca-panel">
+          <div class="section-card" style="margin-bottom:16px">
+            <div class="form-grid">
+              <div class="field">
+                <label>Fornitore</label>
+                <div id="ec-fornitore-wrap" style="flex:1"></div><input type="hidden" id="ec-fornitore" />
+              </div>
+              <div class="field"><label>Da</label><input type="date" id="ec-from" onchange="loadEstratto()" /></div>
+              <div class="field"><label>A</label><input type="date" id="ec-to" onchange="loadEstratto()" /></div>
+            </div>
+          </div>
+
+          <!-- KPI estratto -->
+          <div class="kpi-grid" style="margin-bottom:16px">
+            <div class="kpi-card uscite">
+              <div class="kpi-label">Fatturato totale</div>
+              <div class="kpi-value" id="ec-fatturato">€ 0,00</div>
+              <div class="kpi-sub">Somma fatture periodo</div>
+            </div>
+            <div class="kpi-card mese">
+              <div class="kpi-label">Assegni emessi</div>
+              <div class="kpi-value" id="ec-assegni">€ 0,00</div>
+              <div class="kpi-sub">In attesa addebito banca</div>
+            </div>
+            <div class="kpi-card uscite">
+              <div class="kpi-label">Saldo scoperto</div>
+              <div class="kpi-value" id="ec-scoperto">€ 0,00</div>
+              <div class="kpi-sub">Non coperto da assegni</div>
+            </div>
+            <div class="kpi-card saldo">
+              <div class="kpi-label">Saldo da pagare</div>
+              <div class="kpi-value" id="ec-saldo">€ 0,00</div>
+              <div class="kpi-sub">Fatturato - addebitato</div>
+            </div>
+          </div>
+
+          <div class="section-card">
+            <div class="section-header">
+              <h2>Movimenti fornitore</h2>
+              <button class="btn-primary sm" onclick="exportEstrattoPDF()">↓ PDF</button>
+            </div>
+            <div id="estratto-list" class="entries-list"><div class="empty-state">Seleziona un fornitore</div></div>
+          </div>
+        </div>
+
       </div>
 
-      <!-- ====== IMPOSTAZIONI ====== -->
+      <!-- ====== VIEW: IMPOSTAZIONI ====== -->
       <div id="view-impostazioni" class="view">
+
         <div class="banca-tabs">
           <button class="banca-tab active" onclick="switchSettingsTab('categorie')" id="stab-categorie">🏷 Categorie</button>
           <button class="banca-tab" onclick="switchSettingsTab('causali')" id="stab-causali">💸 Causali prelievi</button>
@@ -537,60 +1191,136 @@
           <button class="banca-tab" onclick="switchSettingsTab('abbonamento')" id="stab-abbonamento">💳 Abbonamento</button>
         </div>
 
+        <!-- ── CATEGORIE ── -->
         <div id="spanel-categorie" class="banca-panel active">
+
+          <!-- KPI -->
           <div class="kpi-grid" style="margin-bottom:20px">
-            <div class="kpi-card entrate"><div class="kpi-label">Categorie entrate</div><div class="kpi-value" id="cat-n-entrate" style="color:var(--green-400)">0</div></div>
-            <div class="kpi-card uscite"><div class="kpi-label">Categorie uscite</div><div class="kpi-value" id="cat-n-uscite" style="color:var(--red-400)">0</div></div>
+            <div class="kpi-card entrate">
+              <div class="kpi-label">Categorie entrate</div>
+              <div class="kpi-value" id="cat-n-entrate" style="color:var(--green-400)">0</div>
+            </div>
+            <div class="kpi-card uscite">
+              <div class="kpi-label">Categorie uscite</div>
+              <div class="kpi-value" id="cat-n-uscite" style="color:var(--red-400)">0</div>
+            </div>
           </div>
+
+          <!-- Form nuova categoria -->
           <div class="section-card" style="margin-bottom:16px">
             <h2 style="margin-bottom:16px">Nuova categoria</h2>
             <div class="form-grid">
-              <div class="field"><label>Nome</label><input type="text" id="nc-nome" placeholder="Es. Affitto locale" /></div>
-              <div class="field"><label>Tipo</label><select id="nc-tipo"><option value="entrata">Entrata</option><option value="uscita">Uscita</option></select></div>
-              <div class="field"><label>Icona (emoji)</label><input type="text" id="nc-icon" placeholder="Es. 🏠" maxlength="4" style="font-size:20px;text-align:center" /></div>
-              <div class="field"><label>Colore</label><input type="color" id="nc-color" value="#3b82f6" style="height:42px;padding:4px;cursor:pointer" /></div>
+              <div class="field">
+                <label>Nome</label>
+                <input type="text" id="nc-nome" placeholder="Es. Affitto locale" />
+              </div>
+              <div class="field">
+                <label>Tipo</label>
+                <select id="nc-tipo">
+                  <option value="entrata">Entrata</option>
+                  <option value="uscita">Uscita</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Icona (emoji)</label>
+                <input type="text" id="nc-icon" placeholder="Es. 🏠" maxlength="4" style="font-size:20px;text-align:center" />
+              </div>
+              <div class="field">
+                <label>Colore</label>
+                <input type="color" id="nc-color" value="#3b82f6" style="height:42px;padding:4px;cursor:pointer" />
+              </div>
             </div>
-            <div class="form-actions"><button class="btn-primary" onclick="saveCategoria()">Aggiungi categoria →</button></div>
+            <div class="form-actions">
+              <button class="btn-primary" onclick="saveCategoria()">Aggiungi categoria →</button>
+            </div>
             <div id="nc-msg" class="auth-message"></div>
           </div>
+
+          <!-- Lista categorie -->
           <div class="section-card">
-            <div class="section-header"><h2>Categorie attive</h2><div style="display:flex;gap:8px"><button class="btn-secondary sm" onclick="filterCategorie('tutte')" id="cf-tutte">Tutte</button><button class="btn-secondary sm" onclick="filterCategorie('entrata')" id="cf-entrata">Entrate</button><button class="btn-secondary sm" onclick="filterCategorie('uscita')" id="cf-uscita">Uscite</button></div></div>
-            <div id="categorie-list" class="categorie-grid"><div class="empty-state">Nessuna categoria</div></div>
+            <div class="section-header">
+              <h2>Categorie attive</h2>
+              <div style="display:flex;gap:8px">
+                <button class="btn-secondary sm" onclick="filterCategorie('tutte')" id="cf-tutte">Tutte</button>
+                <button class="btn-secondary sm" onclick="filterCategorie('entrata')" id="cf-entrata">Entrate</button>
+                <button class="btn-secondary sm" onclick="filterCategorie('uscita')" id="cf-uscita">Uscite</button>
+              </div>
+            </div>
+            <div id="categorie-list" class="categorie-grid">
+              <div class="empty-state">Nessuna categoria</div>
+            </div>
           </div>
         </div>
 
+        <!-- ── CAUSALI PRELIEVI ── -->
         <div id="spanel-causali" class="banca-panel">
           <div class="section-card" style="margin-bottom:16px">
             <h2 style="margin-bottom:16px">Nuova causale prelievo</h2>
-            <div class="form-grid"><div class="field full"><label>Nome causale</label><input type="text" id="nc-causale-nome" placeholder="Es. Prelievo titolare, Spesa cassa..." /></div></div>
-            <div class="form-actions"><button class="btn-primary" onclick="saveCausalePrelievo()">Aggiungi causale →</button></div>
+            <div class="form-grid">
+              <div class="field full">
+                <label>Nome causale</label>
+                <input type="text" id="nc-causale-nome" placeholder="Es. Prelievo titolare, Spesa cassa..." />
+              </div>
+            </div>
+            <div class="form-actions">
+              <button class="btn-primary" onclick="saveCausalePrelievo()">Aggiungi causale →</button>
+            </div>
             <div id="nc-causale-msg" class="auth-message"></div>
           </div>
-          <div class="section-card"><div class="section-header"><h2>Causali attive</h2></div><div id="causali-list" class="entries-list"><div class="empty-state">Nessuna causale</div></div></div>
+          <div class="section-card">
+            <div class="section-header"><h2>Causali attive</h2></div>
+            <div id="causali-list" class="entries-list">
+              <div class="empty-state">Nessuna causale</div>
+            </div>
+          </div>
         </div>
 
+        <!-- ── ABBONAMENTO ── -->
         <div id="spanel-abbonamento" class="banca-panel">
-          <div id="abbonamento-content"><div class="empty-state">Caricamento...</div></div>
+          <div id="abbonamento-content">
+            <div class="empty-state">Caricamento...</div>
+          </div>
         </div>
 
+        <!-- ── ORARI TURNI ── -->
         <div id="spanel-orari" class="banca-panel">
           <div class="section-card">
             <h2 style="margin-bottom:4px">🕐 Orari turni</h2>
             <p style="font-size:13px;color:var(--gray-400);margin-bottom:20px">Gli orari vengono mostrati nella griglia planning accanto al nome del turno.</p>
             <div class="form-grid">
-              <div class="field"><label>☀ Mattina — inizio</label><input type="time" id="orario-mat-start" value="07:00" /></div>
-              <div class="field"><label>☀ Mattina — fine</label><input type="time" id="orario-mat-end" value="14:00" /></div>
-              <div class="field"><label>🌤 Pomeriggio — inizio</label><input type="time" id="orario-pom-start" value="14:00" /></div>
-              <div class="field"><label>🌤 Pomeriggio — fine</label><input type="time" id="orario-pom-end" value="20:00" /></div>
-              <div class="field"><label>🌙 Sera — inizio</label><input type="time" id="orario-ser-start" value="20:00" /></div>
-              <div class="field"><label>🌙 Sera — fine</label><input type="time" id="orario-ser-end" value="02:00" /></div>
+              <div class="field">
+                <label>☀ Mattina — inizio</label>
+                <input type="time" id="orario-mat-start" value="07:00" />
+              </div>
+              <div class="field">
+                <label>☀ Mattina — fine</label>
+                <input type="time" id="orario-mat-end" value="14:00" />
+              </div>
+              <div class="field">
+                <label>🌤 Pomeriggio — inizio</label>
+                <input type="time" id="orario-pom-start" value="14:00" />
+              </div>
+              <div class="field">
+                <label>🌤 Pomeriggio — fine</label>
+                <input type="time" id="orario-pom-end" value="20:00" />
+              </div>
+              <div class="field">
+                <label>🌙 Sera — inizio</label>
+                <input type="time" id="orario-ser-start" value="20:00" />
+              </div>
+              <div class="field">
+                <label>🌙 Sera — fine</label>
+                <input type="time" id="orario-ser-end" value="02:00" />
+              </div>
             </div>
-            <div class="form-actions"><button class="btn-primary" onclick="saveOrariTurni()">Salva orari →</button></div>
+            <div class="form-actions">
+              <button class="btn-primary" onclick="saveOrariTurni()">Salva orari →</button>
+            </div>
             <div id="orari-msg" class="auth-message"></div>
           </div>
         </div>
 
-        <!-- ★ PANNELLO AZIENDA — con az-num-turni ★ -->
+        <!-- ── AZIENDA ── -->
         <div id="spanel-azienda" class="banca-panel">
           <div class="section-card">
             <h2 style="margin-bottom:20px">Dati azienda</h2>
@@ -611,16 +1341,13 @@
                 <label>Telefono</label>
                 <input type="text" id="az-tel" placeholder="+39 02 1234567" />
               </div>
-              <!-- ★ NUOVO CAMPO TURNI ★ -->
               <div class="field">
                 <label>🕐 Numero turni Prima Nota</label>
                 <select id="az-num-turni">
                   <option value="3">3 turni — Mattina · Pomeriggio · Sera</option>
                   <option value="2">2 turni — Mattina · Sera</option>
                 </select>
-                <span style="font-size:11px;color:var(--gray-400);margin-top:4px;display:block">
-                  Con 2 turni la colonna Pomeriggio scompare dalla Prima Nota. Le formule matematiche restano invariate.
-                </span>
+                <span style="font-size:11px;color:var(--gray-400);margin-top:4px;display:block">Con 2 turni la colonna Pomeriggio scompare. Le formule restano invariate.</span>
               </div>
               <div class="field full">
                 <label>📧 Email report serale <span style="font-size:11px;color:var(--gray-400)">(riceve il report alla chiusura 🌙 Sera)</span></label>
@@ -633,6 +1360,7 @@
             <div id="az-msg" class="auth-message"></div>
           </div>
 
+          <!-- ZONA PERICOLOSA -->
           <div class="section-card" style="border:1px solid rgba(239,68,68,0.3);margin-top:20px">
             <h2 style="color:#ef4444;margin-bottom:8px">⚠️ Zona pericolosa</h2>
             <p style="font-size:13px;color:var(--gray-400);margin-bottom:16px">
@@ -647,8 +1375,14 @@
           <div style="background:var(--surface);border:1px solid rgba(239,68,68,0.4);border-radius:16px;padding:32px;max-width:420px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.5)">
             <h2 style="color:#ef4444;margin-bottom:8px">⚠️ Reset dati contabili</h2>
             <p style="font-size:13px;color:var(--gray-400);margin-bottom:20px">Questa operazione è <strong style="color:#ef4444">irreversibile</strong>. Inserisci la tua password per confermare.</p>
-            <div class="field" style="margin-bottom:16px"><label>Password owner</label><input type="password" id="reset-password" placeholder="Inserisci la tua password..." /></div>
-            <div class="field" style="margin-bottom:20px"><label>Scrivi <strong>RESET</strong> per confermare</label><input type="text" id="reset-confirm-text" placeholder="RESET" /></div>
+            <div class="field" style="margin-bottom:16px">
+              <label>Password owner</label>
+              <input type="password" id="reset-password" placeholder="Inserisci la tua password..." />
+            </div>
+            <div class="field" style="margin-bottom:20px">
+              <label>Scrivi <strong>RESET</strong> per confermare</label>
+              <input type="text" id="reset-confirm-text" placeholder="RESET" />
+            </div>
             <div id="reset-msg" class="auth-message" style="margin-bottom:12px"></div>
             <div style="display:flex;gap:10px">
               <button class="btn-secondary" onclick="hideResetModal()" style="flex:1">Annulla</button>
@@ -656,10 +1390,12 @@
             </div>
           </div>
         </div>
+
       </div>
 
-      <!-- HR DIPENDENTI -->
+      <!-- ====== VIEW: HR DIPENDENTI ====== -->
       <div id="view-hr" class="view">
+
         <div class="banca-tabs">
           <button class="banca-tab active" onclick="switchHRTab('dipendenti')" id="hrtab-dipendenti">👥 Dipendenti</button>
           <button class="banca-tab" onclick="switchHRTab('organico')" id="hrtab-organico">🏢 Organico</button>
@@ -669,9 +1405,13 @@
           <button class="banca-tab" onclick="switchHRTab('export')" id="hrtab-export">📤 Export</button>
         </div>
 
+        <!-- ── DIPENDENTI ── -->
         <div id="hrpanel-dipendenti" class="banca-panel active">
           <div class="section-card">
-            <div class="section-header"><h2>Dipendenti</h2><button class="btn-primary sm" onclick="showAddDipendente()">＋ Nuovo dipendente</button></div>
+            <div class="section-header">
+              <h2>Dipendenti</h2>
+              <button class="btn-primary sm" onclick="showAddDipendente()">＋ Nuovo dipendente</button>
+            </div>
             <div id="add-dipendente-form" class="add-form hidden">
               <div class="form-grid">
                 <div class="field"><label>Nome</label><input type="text" id="nd-nome" placeholder="Mario" /></div>
@@ -683,91 +1423,272 @@
                 <div class="field"><label>Telefono</label><input type="text" id="nd-telefono" placeholder="Es. +39 333 1234567" /></div>
                 <div class="field"><label>Colore badge</label><input type="color" id="nd-colore" value="#3b82f6" style="height:42px;padding:4px;cursor:pointer" /></div>
               </div>
+
+              <!-- Orari turni -->
               <div style="margin-top:16px;padding:14px;background:var(--bg);border-radius:10px;border:1px solid var(--border)">
                 <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);margin-bottom:12px">🕐 Orari turni (opzionale)</div>
                 <div class="form-grid">
-                  <div class="field"><label>☀ Mattina — inizio</label><input type="time" id="nd-mat-start" /></div>
-                  <div class="field"><label>☀ Mattina — fine</label><input type="time" id="nd-mat-end" /></div>
-                  <div class="field"><label>🌤 Pomeriggio — inizio</label><input type="time" id="nd-pom-start" /></div>
-                  <div class="field"><label>🌤 Pomeriggio — fine</label><input type="time" id="nd-pom-end" /></div>
-                  <div class="field"><label>🌙 Sera — inizio</label><input type="time" id="nd-ser-start" /></div>
-                  <div class="field"><label>🌙 Sera — fine</label><input type="time" id="nd-ser-end" /></div>
+                  <div class="field">
+                    <label>☀ Mattina — inizio</label>
+                    <input type="time" id="nd-mat-start" placeholder="Es. 07:00" />
+                  </div>
+                  <div class="field">
+                    <label>☀ Mattina — fine</label>
+                    <input type="time" id="nd-mat-end" placeholder="Es. 14:00" />
+                  </div>
+                  <div class="field">
+                    <label>🌤 Pomeriggio — inizio</label>
+                    <input type="time" id="nd-pom-start" placeholder="Es. 14:00" />
+                  </div>
+                  <div class="field">
+                    <label>🌤 Pomeriggio — fine</label>
+                    <input type="time" id="nd-pom-end" placeholder="Es. 20:00" />
+                  </div>
+                  <div class="field">
+                    <label>🌙 Sera — inizio</label>
+                    <input type="time" id="nd-ser-start" placeholder="Es. 20:00" />
+                  </div>
+                  <div class="field">
+                    <label>🌙 Sera — fine</label>
+                    <input type="time" id="nd-ser-end" placeholder="Es. 02:00" />
+                  </div>
                 </div>
+                <!-- Doppio turno -->
                 <label style="display:flex;align-items:center;gap:10px;margin-top:12px;padding:10px 14px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;cursor:pointer">
                   <input type="checkbox" id="nd-doppio-turno" style="width:16px;height:16px;accent-color:#2563eb">
-                  <div><div style="font-size:13px;font-weight:600;color:var(--text-primary)">🔄 Può fare doppio turno</div><div style="font-size:11px;color:var(--gray-400)">Il generatore potrà assegnarlo a più turni nello stesso giorno</div></div>
+                  <div>
+                    <div style="font-size:13px;font-weight:600;color:var(--text-primary)">🔄 Può fare doppio turno</div>
+                    <div style="font-size:11px;color:var(--gray-400)">Il generatore potrà assegnarlo a più turni nello stesso giorno</div>
+                  </div>
                 </label>
               </div>
+
+              <!-- Accordo contrattuale -->
               <div style="margin-top:16px;padding:14px;background:var(--bg);border-radius:10px;border:1px solid var(--border)">
                 <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);margin-bottom:14px">📋 Accordo contrattuale</div>
+
+                <!-- Tipo contratto -->
                 <div style="display:flex;gap:10px;margin-bottom:16px">
                   <label style="flex:1;display:flex;align-items:center;gap:8px;padding:12px;border:1.5px solid var(--border);border-radius:10px;cursor:pointer;transition:all .2s" id="lbl-forfettario">
                     <input type="radio" name="tipo-contratto" value="forfettario" id="tc-forfettario" onchange="toggleTipoContratto()" checked style="width:16px;height:16px;accent-color:#2563eb">
-                    <div><div style="font-size:13px;font-weight:700;color:var(--text-primary)">💰 Forfettario</div><div style="font-size:11px;color:var(--gray-400)">Importo fisso mensile</div></div>
+                    <div>
+                      <div style="font-size:13px;font-weight:700;color:var(--text-primary)">💰 Forfettario</div>
+                      <div style="font-size:11px;color:var(--gray-400)">Importo fisso mensile</div>
+                    </div>
                   </label>
                   <label style="flex:1;display:flex;align-items:center;gap:8px;padding:12px;border:1.5px solid var(--border);border-radius:10px;cursor:pointer;transition:all .2s" id="lbl-ccnl">
                     <input type="radio" name="tipo-contratto" value="ccnl" id="tc-ccnl" onchange="toggleTipoContratto()" style="width:16px;height:16px;accent-color:#2563eb">
-                    <div><div style="font-size:13px;font-weight:700;color:var(--text-primary)">📊 CCNL Commercio</div><div style="font-size:11px;color:var(--gray-400)">Paga oraria + maggiorazioni</div></div>
+                    <div>
+                      <div style="font-size:13px;font-weight:700;color:var(--text-primary)">📊 CCNL Commercio</div>
+                      <div style="font-size:11px;color:var(--gray-400)">Paga oraria + maggiorazioni</div>
+                    </div>
                   </label>
                 </div>
-                <div id="campo-forfettario"><div class="field"><label>Importo fisso mensile (€)</label><input type="number" id="nd-importo-fisso" placeholder="Es. 1400" step="0.01" /></div></div>
+
+                <!-- Forfettario -->
+                <div id="campo-forfettario">
+                  <div class="field">
+                    <label>Importo fisso mensile (€)</label>
+                    <input type="number" id="nd-importo-fisso" placeholder="Es. 1400" step="0.01" />
+                  </div>
+                </div>
+
+                <!-- CCNL -->
                 <div id="campo-ccnl" style="display:none">
                   <div class="form-grid">
-                    <div class="field"><label>Paga oraria base (€)</label><input type="number" id="nd-paga-oraria" placeholder="Es. 8.50" step="0.01" /></div>
-                    <div class="field"><label>Ore settimanali contrattuali</label><input type="number" id="nd-ore-settimanali" placeholder="40" value="40" /></div>
+                    <div class="field">
+                      <label>Paga oraria base (€)</label>
+                      <input type="number" id="nd-paga-oraria" placeholder="Es. 8.50" step="0.01" />
+                    </div>
+                    <div class="field">
+                      <label>Ore settimanali contrattuali</label>
+                      <input type="number" id="nd-ore-settimanali" placeholder="40" value="40" />
+                    </div>
                   </div>
+
                   <div style="font-size:12px;font-weight:700;color:var(--gray-400);margin:14px 0 10px;text-transform:uppercase;letter-spacing:.06em">Maggiorazioni previste</div>
                   <div style="display:flex;flex-direction:column;gap:10px">
+
                     <label style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;cursor:pointer">
-                      <div style="display:flex;align-items:center;gap:10px"><input type="checkbox" id="nd-straord-attivo" style="width:16px;height:16px;accent-color:#2563eb"><div><div style="font-size:13px;font-weight:600;color:var(--text-primary)">Straordinario feriale</div><div style="font-size:11px;color:var(--gray-400)">Ore oltre le 40 settimanali</div></div></div>
-                      <div style="display:flex;align-items:center;gap:6px"><input type="number" id="nd-magg-straord" value="15" min="0" max="100" style="width:60px;padding:4px 8px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-size:13px;text-align:center"><span style="font-size:12px;color:var(--gray-400)">%</span></div>
+                      <div style="display:flex;align-items:center;gap:10px">
+                        <input type="checkbox" id="nd-straord-attivo" style="width:16px;height:16px;accent-color:#2563eb">
+                        <div>
+                          <div style="font-size:13px;font-weight:600;color:var(--text-primary)">Straordinario feriale</div>
+                          <div style="font-size:11px;color:var(--gray-400)">Ore oltre le 40 settimanali</div>
+                        </div>
+                      </div>
+                      <div style="display:flex;align-items:center;gap:6px">
+                        <input type="number" id="nd-magg-straord" value="15" min="0" max="100" style="width:60px;padding:4px 8px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-size:13px;text-align:center">
+                        <span style="font-size:12px;color:var(--gray-400)">%</span>
+                      </div>
                     </label>
+
                     <label style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;cursor:pointer">
-                      <div style="display:flex;align-items:center;gap:10px"><input type="checkbox" id="nd-festivo-attivo" style="width:16px;height:16px;accent-color:#2563eb"><div><div style="font-size:13px;font-weight:600;color:var(--text-primary)">Festivo / domenicale</div><div style="font-size:11px;color:var(--gray-400)">Lavoro nei giorni festivi e domeniche</div></div></div>
-                      <div style="display:flex;align-items:center;gap:6px"><input type="number" id="nd-magg-festivo" value="30" min="0" max="100" style="width:60px;padding:4px 8px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-size:13px;text-align:center"><span style="font-size:12px;color:var(--gray-400)">%</span></div>
+                      <div style="display:flex;align-items:center;gap:10px">
+                        <input type="checkbox" id="nd-festivo-attivo" style="width:16px;height:16px;accent-color:#2563eb">
+                        <div>
+                          <div style="font-size:13px;font-weight:600;color:var(--text-primary)">Festivo / domenicale</div>
+                          <div style="font-size:11px;color:var(--gray-400)">Lavoro nei giorni festivi e domeniche</div>
+                        </div>
+                      </div>
+                      <div style="display:flex;align-items:center;gap:6px">
+                        <input type="number" id="nd-magg-festivo" value="30" min="0" max="100" style="width:60px;padding:4px 8px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-size:13px;text-align:center">
+                        <span style="font-size:12px;color:var(--gray-400)">%</span>
+                      </div>
                     </label>
+
                     <label style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;cursor:pointer">
-                      <div style="display:flex;align-items:center;gap:10px"><input type="checkbox" id="nd-notturno-attivo" style="width:16px;height:16px;accent-color:#2563eb"><div><div style="font-size:13px;font-weight:600;color:var(--text-primary)">Notturno</div><div style="font-size:11px;color:var(--gray-400)">Ore tra le 22:00 e le 06:00</div></div></div>
-                      <div style="display:flex;align-items:center;gap:6px"><input type="number" id="nd-magg-notturno" value="50" min="0" max="100" style="width:60px;padding:4px 8px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-size:13px;text-align:center"><span style="font-size:12px;color:var(--gray-400)">%</span></div>
+                      <div style="display:flex;align-items:center;gap:10px">
+                        <input type="checkbox" id="nd-notturno-attivo" style="width:16px;height:16px;accent-color:#2563eb">
+                        <div>
+                          <div style="font-size:13px;font-weight:600;color:var(--text-primary)">Notturno</div>
+                          <div style="font-size:11px;color:var(--gray-400)">Ore tra le 22:00 e le 06:00</div>
+                        </div>
+                      </div>
+                      <div style="display:flex;align-items:center;gap:6px">
+                        <input type="number" id="nd-magg-notturno" value="50" min="0" max="100" style="width:60px;padding:4px 8px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-size:13px;text-align:center">
+                        <span style="font-size:12px;color:var(--gray-400)">%</span>
+                      </div>
                     </label>
+
                   </div>
                 </div>
               </div>
+
               <div class="form-actions">
                 <button class="btn-secondary" onclick="hideAddDipendente()">Annulla</button>
                 <button class="btn-primary" onclick="saveDipendente()">Salva dipendente</button>
               </div>
             </div>
-            <div id="dipendenti-list" class="entries-list"><div class="empty-state">Nessun dipendente</div></div>
+            <div id="dipendenti-list" class="entries-list">
+              <div class="empty-state">Nessun dipendente</div>
+            </div>
           </div>
         </div>
 
+        <!-- ── ORGANICO PER SEDE ── -->
         <div id="hrpanel-organico" class="banca-panel">
-          <div class="section-card" style="margin-bottom:16px"><div class="section-header"><h2>👤 Chi lavora oggi</h2><span id="org-oggi-data" style="font-family:var(--font-mono);font-size:12px;color:var(--gray-400)"></span></div><div id="org-oggi-list" class="entries-list"><div class="empty-state">Caricamento...</div></div></div>
-          <div id="org-sedi-grid" class="org-sedi-grid"><div class="empty-state">Caricamento...</div></div>
+          <!-- Chi lavora oggi -->
+          <div class="section-card" style="margin-bottom:16px">
+            <div class="section-header">
+              <h2>👤 Chi lavora oggi</h2>
+              <span id="org-oggi-data" style="font-family:var(--font-mono);font-size:12px;color:var(--gray-400)"></span>
+            </div>
+            <div id="org-oggi-list" class="entries-list">
+              <div class="empty-state">Caricamento...</div>
+            </div>
+          </div>
+
+          <!-- Organico per sede -->
+          <div id="org-sedi-grid" class="org-sedi-grid">
+            <div class="empty-state">Caricamento...</div>
+          </div>
         </div>
 
+        <!-- ── TURNI SETTIMANALI ── -->
         <div id="hrpanel-turni" class="banca-panel">
           <div class="section-card" style="margin-bottom:16px">
-            <div class="section-header"><h2>Piano turni settimanale</h2><div style="display:flex;gap:8px;flex-wrap:wrap"><select id="turni-sede-filter" class="filter-input" onchange="loadPlanningSettimanale()"><option value="">Tutte le sedi</option></select><button class="btn-secondary sm" onclick="exportTurniPDF()">↓ PDF</button><button class="btn-secondary sm" onclick="condividiPlanningWhatsApp()">📤 WhatsApp</button></div></div>
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap"><button class="btn-secondary sm" onclick="navSettimana(-1)">← Prec.</button><input type="date" id="planning-data-nav" class="filter-input" onchange="loadPlanningSettimanale()" style="flex:1;max-width:180px" /><button class="btn-secondary sm" onclick="navSettimanaOggi()">Oggi</button><button class="btn-secondary sm" onclick="navSettimana(1)">Succ. →</button><button class="btn-primary sm" onclick="apriGeneraSettimana()" style="margin-left:auto">⚡ Genera settimana</button></div>
-            <div id="turni-grid" class="turni-grid-wrap"><div class="empty-state">Caricamento...</div></div>
-          </div>
-        </div>
-
-        <div id="hrpanel-presenze" class="banca-panel">
-          <div class="section-card" style="margin-bottom:16px"><div class="form-grid"><div class="field"><label>Dipendente</label><select id="pres-dipendente" onchange="loadPresenzeMese()"><option value="">Seleziona dipendente</option></select></div><div class="field"><label>Mese</label><select id="pres-mese" onchange="loadPresenzeMese()"></select></div><div class="field"><label>Anno</label><select id="pres-anno" onchange="loadPresenzeMese()"></select></div></div></div>
-          <div class="kpi-grid" style="margin-bottom:16px"><div class="kpi-card entrate"><div class="kpi-label">Giorni lavoro</div><div class="kpi-value" id="pr-lavoro" style="color:var(--green-400)">0</div></div><div class="kpi-card uscite"><div class="kpi-label">Assenze</div><div class="kpi-value" id="pr-assenze" style="color:var(--red-400)">0</div></div><div class="kpi-card mese"><div class="kpi-label">Ferie / Permessi</div><div class="kpi-value" id="pr-ferie" style="color:var(--gold-light)">0</div></div><div class="kpi-card saldo"><div class="kpi-label">Straordinari (ore)</div><div class="kpi-value" id="pr-straordinari" style="color:var(--blue-300)">0h</div></div></div>
-          <div class="section-card">
-            <div class="section-header"><h2>Calendario</h2><div style="display:flex;gap:8px"><button class="btn-secondary sm" onclick="exportPresenzePDF()">📄 PDF</button><button class="btn-primary sm" onclick="showAddPresenza()">＋ Aggiungi</button></div></div>
-            <div id="add-presenza-form" class="add-form hidden">
-              <div class="form-grid"><div class="field"><label>Data</label><input type="date" id="np-data" /></div><div class="field"><label>Tipo</label><select id="np-tipo"><option value="assenza">Assenza</option><option value="ferie">Ferie</option><option value="permesso">Permesso</option><option value="straordinario">Straordinario</option><option value="festivo">Festivo lavorato</option></select></div><div class="field"><label>Ore (per straordinari)</label><input type="number" id="np-ore" step="0.5" placeholder="Es. 2" /></div><div class="field"><label>Motivazione</label><input type="text" id="np-motivazione" placeholder="Es. Malattia, Visita medica..." /></div></div>
-              <div class="form-actions"><button class="btn-secondary" onclick="hideAddPresenza()">Annulla</button><button class="btn-primary" onclick="savePresenza()">Salva</button></div>
+            <div class="section-header">
+              <h2>Piano turni settimanale</h2>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <select id="turni-sede-filter" class="filter-input" onchange="loadPlanningSettimanale()">
+                  <option value="">Tutte le sedi</option>
+                </select>
+                <button class="btn-secondary sm" onclick="exportTurniPDF()">↓ PDF</button>
+                <button class="btn-secondary sm" onclick="condividiPlanningWhatsApp()">📤 WhatsApp</button>
+              </div>
             </div>
-            <div id="presenze-list" class="presenze-grid"><div class="empty-state">Seleziona dipendente e mese</div></div>
+            <!-- Navigazione settimana -->
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+              <button class="btn-secondary sm" onclick="navSettimana(-1)">← Prec.</button>
+              <input type="date" id="planning-data-nav" class="filter-input" onchange="loadPlanningSettimanale()" style="flex:1;max-width:180px" />
+              <button class="btn-secondary sm" onclick="navSettimanaOggi()">Oggi</button>
+              <button class="btn-secondary sm" onclick="navSettimana(1)">Succ. →</button>
+              <button class="btn-primary sm" onclick="apriGeneraSettimana()" style="margin-left:auto">⚡ Genera settimana</button>
+            </div>
+            <div id="turni-grid" class="turni-grid-wrap">
+              <div class="empty-state">Caricamento...</div>
+            </div>
           </div>
         </div>
 
+        <!-- ── PRESENZE ── -->
+        <div id="hrpanel-presenze" class="banca-panel">
+          <div class="section-card" style="margin-bottom:16px">
+            <div class="form-grid">
+              <div class="field">
+                <label>Dipendente</label>
+                <select id="pres-dipendente" onchange="loadPresenzeMese()">
+                  <option value="">Seleziona dipendente</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Mese</label>
+                <select id="pres-mese" onchange="loadPresenzeMese()"></select>
+              </div>
+              <div class="field">
+                <label>Anno</label>
+                <select id="pres-anno" onchange="loadPresenzeMese()"></select>
+              </div>
+            </div>
+          </div>
+
+          <!-- KPI presenze -->
+          <div class="kpi-grid" style="margin-bottom:16px">
+            <div class="kpi-card entrate">
+              <div class="kpi-label">Giorni lavoro</div>
+              <div class="kpi-value" id="pr-lavoro" style="color:var(--green-400)">0</div>
+            </div>
+            <div class="kpi-card uscite">
+              <div class="kpi-label">Assenze</div>
+              <div class="kpi-value" id="pr-assenze" style="color:var(--red-400)">0</div>
+            </div>
+            <div class="kpi-card mese">
+              <div class="kpi-label">Ferie / Permessi</div>
+              <div class="kpi-value" id="pr-ferie" style="color:var(--gold-light)">0</div>
+            </div>
+            <div class="kpi-card saldo">
+              <div class="kpi-label">Straordinari (ore)</div>
+              <div class="kpi-value" id="pr-straordinari" style="color:var(--blue-300)">0h</div>
+            </div>
+          </div>
+
+          <!-- Calendario presenze -->
+          <div class="section-card">
+            <div class="section-header">
+              <h2>Calendario</h2>
+              <div style="display:flex;gap:8px">
+                <button class="btn-secondary sm" onclick="exportPresenzePDF()">📄 PDF</button>
+                <button class="btn-primary sm" onclick="showAddPresenza()">＋ Aggiungi</button>
+              </div>
+            </div>
+            <div id="add-presenza-form" class="add-form hidden">
+              <div class="form-grid">
+                <div class="field"><label>Data</label><input type="date" id="np-data" /></div>
+                <div class="field"><label>Tipo</label>
+                  <select id="np-tipo">
+                    <option value="assenza">Assenza</option>
+                    <option value="ferie">Ferie</option>
+                    <option value="permesso">Permesso</option>
+                    <option value="straordinario">Straordinario</option>
+                    <option value="festivo">Festivo lavorato</option>
+                  </select>
+                </div>
+                <div class="field"><label>Ore (per straordinari)</label><input type="number" id="np-ore" step="0.5" placeholder="Es. 2" /></div>
+                <div class="field"><label>Motivazione</label><input type="text" id="np-motivazione" placeholder="Es. Malattia, Visita medica..." /></div>
+              </div>
+              <div class="form-actions">
+                <button class="btn-secondary" onclick="hideAddPresenza()">Annulla</button>
+                <button class="btn-primary" onclick="savePresenza()">Salva</button>
+              </div>
+            </div>
+            <div id="presenze-list" class="presenze-grid">
+              <div class="empty-state">Seleziona dipendente e mese</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── ACCONTI ── -->
         <div id="hrpanel-acconti" class="banca-panel">
           <div class="section-card" style="margin-bottom:16px">
             <h2 style="margin-bottom:16px">Nuovo acconto stipendio</h2>
@@ -775,20 +1696,68 @@
               <div class="field"><label>Dipendente</label><select id="acc-dipendente"><option value="">Seleziona</option></select></div>
               <div class="field"><label>Data</label><input type="date" id="acc-data" /></div>
               <div class="field"><label>Importo (€)</label><input type="number" id="acc-importo" step="0.01" placeholder="0,00" /></div>
-              <div class="field"><label>Tipo pagamento</label><select id="acc-tipo" onchange="toggleAccBanca()"><option value="contanti_cassa">💵 Contanti da cassa (Prima Nota)</option><option value="contanti_extra">💰 Contanti extra cassa</option><option value="bonifico">🏦 Bonifico bancario</option><option value="fuori_busta">🤫 Fuori busta</option></select></div>
-              <div class="field" id="acc-banca-wrap" style="display:none"><label>Banca</label><select id="acc-banca"><option value="">Seleziona banca</option></select></div>
+              <div class="field"><label>Tipo pagamento</label>
+                <select id="acc-tipo" onchange="toggleAccBanca()">
+                  <option value="contanti_cassa">💵 Contanti da cassa (Prima Nota)</option>
+                  <option value="contanti_extra">💰 Contanti extra cassa</option>
+                  <option value="bonifico">🏦 Bonifico bancario</option>
+                  <option value="fuori_busta">🤫 Fuori busta</option>
+                </select>
+              </div>
+              <div class="field" id="acc-banca-wrap" style="display:none">
+                <label>Banca</label>
+                <select id="acc-banca"><option value="">Seleziona banca</option></select>
+              </div>
               <div class="field full"><label>Note</label><input type="text" id="acc-note" placeholder="Note..." /></div>
             </div>
-            <div class="form-actions"><button class="btn-primary" onclick="saveAcconto()">Registra acconto →</button></div>
+            <div class="form-actions">
+              <button class="btn-primary" onclick="saveAcconto()">Registra acconto →</button>
+            </div>
             <div id="acc-msg" class="auth-message"></div>
           </div>
-          <div class="section-card"><div class="section-header"><h2>Acconti registrati</h2><select id="acc-filter-dip" class="filter-input" onchange="loadAcconti()"><option value="">Tutti i dipendenti</option></select></div><div id="acconti-list" class="entries-list"><div class="empty-state">Nessun acconto registrato</div></div></div>
+
+          <div class="section-card">
+            <div class="section-header">
+              <h2>Acconti registrati</h2>
+              <select id="acc-filter-dip" class="filter-input" onchange="loadAcconti()">
+                <option value="">Tutti i dipendenti</option>
+              </select>
+            </div>
+            <div id="acconti-list" class="entries-list">
+              <div class="empty-state">Nessun acconto registrato</div>
+            </div>
+          </div>
         </div>
 
+        <!-- ── EXPORT ── -->
         <div id="hrpanel-export" class="banca-panel">
-          <div class="section-card" style="margin-bottom:16px"><h2 style="margin-bottom:16px">Export per consulente paghe</h2><div class="form-grid"><div class="field"><label>Dipendente</label><select id="exp-dipendente"><option value="">Tutti</option></select></div><div class="field"><label>Mese</label><select id="exp-mese"></select></div><div class="field"><label>Anno</label><select id="exp-anno"></select></div></div><div class="form-actions"><button class="btn-primary" onclick="exportHRPDF()">↓ PDF consulente</button><button class="btn-secondary" onclick="exportHRCSV()">↓ CSV / Excel</button></div></div>
-          <div id="export-preview" class="section-card"><div class="empty-state">Seleziona dipendente e mese per l'anteprima</div></div>
+          <div class="section-card" style="margin-bottom:16px">
+            <h2 style="margin-bottom:16px">Export per consulente paghe</h2>
+            <div class="form-grid">
+              <div class="field">
+                <label>Dipendente</label>
+                <select id="exp-dipendente"><option value="">Tutti</option></select>
+              </div>
+              <div class="field">
+                <label>Mese</label>
+                <select id="exp-mese"></select>
+              </div>
+              <div class="field">
+                <label>Anno</label>
+                <select id="exp-anno"></select>
+              </div>
+            </div>
+            <div class="form-actions">
+              <button class="btn-primary" onclick="exportHRPDF()">↓ PDF consulente</button>
+              <button class="btn-secondary" onclick="exportHRCSV()">↓ CSV / Excel</button>
+            </div>
+          </div>
+
+          <div id="export-preview" class="section-card">
+            <div class="empty-state">Seleziona dipendente e mese per l'anteprima</div>
+          </div>
         </div>
+
       </div>
 
     </main>
@@ -797,40 +1766,89 @@
   <!-- Modale permessi cassiere -->
   <div id="modal-permessi" class="modal-overlay hidden">
     <div class="modal-card">
-      <div class="modal-header"><h3>Permessi utente</h3><button class="modal-close" onclick="closeModalPermessi()">✕</button></div>
+      <div class="modal-header">
+        <h3>Permessi utente</h3>
+        <button class="modal-close" onclick="closeModalPermessi()">✕</button>
+      </div>
       <div class="modal-body">
         <div id="modal-permessi-user" class="modal-info-box" style="margin-bottom:16px"></div>
-        <p style="font-size:12px;color:var(--gray-400);margin-bottom:16px;font-family:var(--font-mono)">Seleziona le sezioni che questo utente può visualizzare</p>
+        <p style="font-size:12px;color:var(--gray-400);margin-bottom:16px;font-family:var(--font-mono)">
+          Seleziona le sezioni che questo utente può visualizzare
+        </p>
         <div class="permessi-grid">
-          <label class="perm-item"><input type="checkbox" id="perm-dashboard" checked disabled /><span>📊 Dashboard</span><span class="perm-note">Sempre attivo</span></label>
-          <label class="perm-item"><input type="checkbox" id="perm-primanota" checked disabled /><span>✎ Prima Nota</span><span class="perm-note">Sempre attivo</span></label>
-          <label class="perm-item"><input type="checkbox" id="perm-movimenti" /><span>＋ Movimenti extra cassa</span></label>
-          <label class="perm-item"><input type="checkbox" id="perm-storico" /><span>◷ Storico</span></label>
-          <label class="perm-item"><input type="checkbox" id="perm-report" /><span>◎ Report</span></label>
-          <label class="perm-item"><input type="checkbox" id="perm-banca" /><span>🏦 Banca &amp; Finanza</span></label>
-          <label class="perm-item"><input type="checkbox" id="perm-fornitori" /><span>📦 Fornitori</span></label>
+          <label class="perm-item">
+            <input type="checkbox" id="perm-dashboard" checked disabled />
+            <span>📊 Dashboard</span>
+            <span class="perm-note">Sempre attivo</span>
+          </label>
+          <label class="perm-item">
+            <input type="checkbox" id="perm-primanota" checked disabled />
+            <span>✎ Prima Nota</span>
+            <span class="perm-note">Sempre attivo</span>
+          </label>
+          <label class="perm-item">
+            <input type="checkbox" id="perm-movimenti" />
+            <span>＋ Movimenti extra cassa</span>
+          </label>
+          <label class="perm-item">
+            <input type="checkbox" id="perm-storico" />
+            <span>◷ Storico</span>
+          </label>
+          <label class="perm-item">
+            <input type="checkbox" id="perm-report" />
+            <span>◎ Report</span>
+          </label>
+          <label class="perm-item">
+            <input type="checkbox" id="perm-banca" />
+            <span>🏦 Banca & Finanza</span>
+          </label>
+          <label class="perm-item">
+            <input type="checkbox" id="perm-fornitori" />
+            <span>📦 Fornitori</span>
+          </label>
         </div>
       </div>
-      <div class="modal-footer"><button class="btn-secondary" onclick="closeModalPermessi()">Annulla</button><button class="btn-primary" onclick="salvaPermessi()">Salva permessi →</button></div>
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="closeModalPermessi()">Annulla</button>
+        <button class="btn-primary" onclick="salvaPermessi()">Salva permessi →</button>
+      </div>
     </div>
   </div>
 
   <!-- Modale pagamento assegno -->
   <div id="modal-paga-assegno" class="modal-overlay hidden">
     <div class="modal-card">
-      <div class="modal-header"><h3>Registra pagamento assegno</h3><button class="modal-close" onclick="closeModalAssegno()">✕</button></div>
+      <div class="modal-header">
+        <h3>Registra pagamento assegno</h3>
+        <button class="modal-close" onclick="closeModalAssegno()">✕</button>
+      </div>
       <div class="modal-body">
         <div id="modal-assegno-info" class="modal-info-box"></div>
         <div class="form-grid" style="margin-top:16px">
-          <div class="field"><label>Data pagamento</label><input type="date" id="pag-data" /></div>
-          <div class="field"><label>Banca di addebito</label><select id="pag-banca"><option value="">Seleziona banca</option></select></div>
-          <div class="field full"><label>Note</label><input type="text" id="pag-note" placeholder="Es. Pagato in filiale..." /></div>
+          <div class="field">
+            <label>Data pagamento</label>
+            <input type="date" id="pag-data" />
+          </div>
+          <div class="field">
+            <label>Banca di addebito</label>
+            <select id="pag-banca">
+              <option value="">Seleziona banca</option>
+            </select>
+          </div>
+          <div class="field full">
+            <label>Note</label>
+            <input type="text" id="pag-note" placeholder="Es. Pagato in filiale..." />
+          </div>
         </div>
       </div>
-      <div class="modal-footer"><button class="btn-secondary" onclick="closeModalAssegno()">Annulla</button><button class="btn-primary" onclick="confermaPagamentoAssegno()">Conferma pagamento →</button></div>
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="closeModalAssegno()">Annulla</button>
+        <button class="btn-primary" onclick="confermaPagamentoAssegno()">Conferma pagamento →</button>
+      </div>
     </div>
   </div>
 
+  <!-- Toast notification -->
   <div id="toast" class="toast"></div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -838,91 +1856,173 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
   <script src="app.js"></script>
-
+  <!-- ====== BOTTONE AIUTO ====== -->
   <button id="help-fab" onclick="toggleHelp()" title="Aiuto">?</button>
+
+  <!-- ====== DRAWER AIUTO ====== -->
   <div id="help-overlay" onclick="closeHelp()"></div>
   <div id="help-drawer">
     <div class="help-header">
-      <div><div style="font-size:18px;font-weight:800;color:var(--text-primary)">Centro assistenza</div><div style="font-size:12px;color:var(--gray-400);margin-top:2px">Come possiamo aiutarti?</div></div>
+      <div>
+        <div style="font-size:18px;font-weight:800;color:var(--text-primary)">Centro assistenza</div>
+        <div style="font-size:12px;color:var(--gray-400);margin-top:2px">Come possiamo aiutarti?</div>
+      </div>
       <button onclick="closeHelp()" class="help-close">✕</button>
     </div>
-    <div class="help-search-wrap"><input type="text" id="help-search" placeholder="🔍 Cerca nelle guide..." class="help-search" oninput="filterHelp(this.value)" /></div>
+
+    <!-- Ricerca -->
+    <div class="help-search-wrap">
+      <input type="text" id="help-search" placeholder="🔍 Cerca nelle guide..." class="help-search" oninput="filterHelp(this.value)" />
+    </div>
+
+    <!-- Sezioni -->
     <div id="help-content" class="help-content">
+
       <div class="help-section" data-tags="iniziare account registrazione setup">
         <div class="help-section-title">🚀 Come iniziare</div>
-        <div class="help-item"><div class="help-q">Come configuro la mia attività?</div><div class="help-a">Vai su <strong>Impostazioni → Azienda</strong> e inserisci il nome dell'attività. Poi aggiungi le sedi in <strong>Sedi</strong> e configura le banche in <strong>Banca &amp; Finanza → Banche</strong>.</div></div>
-        <div class="help-item"><div class="help-q">Come invito i miei collaboratori?</div><div class="help-a">Vai su <strong>Team</strong> nel menu e clicca <strong>＋ Aggiungi utente</strong>. Inserisci nome, email, password e ruolo.</div></div>
-        <div class="help-item"><div class="help-q">Qual è la differenza tra Cassiere, Responsabile sede e Admin?</div><div class="help-a"><strong>Cassiere</strong> — Prima Nota e Dashboard base.<br><strong>Responsabile sede</strong> — tutto del cassiere + Storico, Dipendenti, Fornitori.<br><strong>Admin</strong> — tutto tranne Impostazioni e Team.<br><strong>Owner</strong> — accesso completo.</div></div>
-        <div class="help-item"><div class="help-q">Quanti utenti posso invitare?</div><div class="help-a">Il piano Free include 1 utente. Con il piano Pro utenti illimitati, con Business utenti illimitati.</div></div>
+        <div class="help-item">
+          <div class="help-q">Come configuro la mia attività?</div>
+          <div class="help-a">Vai su <strong>Impostazioni → Azienda</strong> e inserisci il nome dell'attività. Poi aggiungi le sedi in <strong>Sedi</strong> e configura le banche in <strong>Banca & Finanza → Banche</strong>.</div>
+        </div>
+        <div class="help-item">
+          <div class="help-q">Come invito i miei collaboratori?</div>
+          <div class="help-a">Vai su <strong>Team</strong> nel menu e clicca <strong>＋ Aggiungi utente</strong>. Inserisci nome, email, password e ruolo. L'account è subito attivo — comunica le credenziali al collaboratore a voce o su WhatsApp.</div>
+        </div>
+        <div class="help-item">
+          <div class="help-q">Qual è la differenza tra Cassiere, Responsabile sede e Admin?</div>
+          <div class="help-a">
+            <strong>Cassiere</strong> — Prima Nota, registrazione fatture fornitori del proprio locale, Dashboard base.<br>
+            <strong>Responsabile sede</strong> — tutto del cassiere + Storico, Dipendenti (turni e acconti), Fornitori completo.<br>
+            <strong>Admin</strong> — tutto tranne Impostazioni e Team (solo Owner).<br>
+            <strong>Owner</strong> — accesso completo a tutto.
+          </div>
+        </div>
+        <div class="help-item">
+          <div class="help-q">Cos'è il Responsabile sede?</div>
+          <div class="help-a">Il <strong>Responsabile sede</strong> (Manager) ha accesso a: Prima Nota, Storico, Dipendenti (turni e acconti), Fornitori (registrazione fatture) e Dashboard. Non può accedere a Banca & Finanza, Impostazioni o Team.</div>
+        </div>
+        <div class="help-item">
+          <div class="help-q">Come registro la sede e il responsabile su una fattura?</div>
+          <div class="help-a">Nel form Registra fattura trovi il campo <strong>Sede di scarico</strong> (in quale locale è arrivata la merce) e <strong>Controllata da</strong> (chi ha verificato la fattura). Queste info appaiono nell'estratto conto del fornitore.</div>
+        </div>
+        <div class="help-item">
+          <div class="help-q">Quanti utenti posso invitare?</div>
+          <div class="help-a">Il piano Free include 1 utente. Con il piano Pro puoi invitare fino a 5 collaboratori, con Business utenti illimitati.</div>
+        </div>
       </div>
+
       <div class="help-section" data-tags="prima nota incasso turni mattina pomeriggio sera cassa">
         <div class="help-section-title">📒 Prima Nota</div>
-        <div class="help-item"><div class="help-q">Come funziona la logica dei turni?</div><div class="help-a">La Prima Nota può avere 2 o 3 turni, configurabile in <strong>Impostazioni → Azienda → Numero turni</strong>. Con 3 turni: Mattina, Pomeriggio, Sera — ogni turno sovrascrive il precedente. Con 2 turni la colonna Pomeriggio scompare.</div></div>
-        <div class="help-item"><div class="help-q">Come funziona il report serale automatico?</div><div class="help-a">Quando si blocca il turno 🌙 Sera con il lucchetto, KONTRO invia automaticamente un'email all'admin con il riepilogo della giornata. Configura l'email in <strong>Impostazioni → Azienda → Email report serale</strong>.</div></div>
+        <div class="help-item">
+          <div class="help-q">Come funziona la logica dei 3 turni?</div>
+          <div class="help-a">La Prima Nota ha 3 colonne: Mattina, Pomeriggio e Sera. Ogni turno aggiorna il precedente — il valore della colonna più avanzata compilata è quello definitivo. Non si sommano tra loro.</div>
+        </div>
+        <div class="help-item">
+          <div class="help-q">Cos'è il fondo cassa?</div>
+          <div class="help-a">Il fondo cassa è la somma lasciata in cassa per il giorno successivo. Va inserito nelle USCITE del turno di chiusura e viene aggiunto all'incasso calcolato.</div>
+        </div>
+        <div class="help-item">
+          <div class="help-q">Cos'è la differenza?</div>
+          <div class="help-a">La differenza è il risultato di Entrate − Uscite. Se è positiva (in rosso) significa che le uscite superano le entrate dichiarate — da verificare.</div>
+        </div>
+        <div class="help-item">
+          <div class="help-q">Come aggiungo un fornitore alla prima nota?</div>
+          <div class="help-a">I fornitori nella Prima Nota si selezionano dal menu a tendina nella sezione FORNITORI. Per aggiungerne di nuovi vai su <strong>Fornitori → Anagrafica</strong>.</div>
+        </div>
+        <div class="help-item">
+          <div class="help-q">Come funziona il report serale automatico?</div>
+          <div class="help-a">Quando si blocca il turno 🌙 Sera con il lucchetto, KONTRO invia automaticamente un'email all'admin con il riepilogo della giornata: totale entrate, uscite, incasso, differenza, fornitori in prima nota e fatture registrate. Configura l'email di ricezione in <strong>Impostazioni → Azienda → Email report serale</strong>.</div>
+        </div>
+          <div class="help-a">Nella Prima Nota ogni colonna turno (☀ Mattina, 🌤 Pomeriggio, 🌙 Sera) ha un lucchetto 🔓 nell'intestazione. Clicca per bloccare il turno — gli input diventano non modificabili. Solo <strong>owner/admin</strong> possono sbloccare. Il blocco viene salvato e rimane anche riaprendo la giornata.</div>
+        </div>
       </div>
+
       <div class="help-section" data-tags="banca finanza versamento assegno rid">
-        <div class="help-section-title">🏦 Banca &amp; Finanza</div>
-        <div class="help-item"><div class="help-q">Come registro un versamento in banca?</div><div class="help-a">Vai su <strong>Banca &amp; Finanza → Versamenti</strong>, inserisci data, importo e banca.</div></div>
-        <div class="help-item"><div class="help-q">Come funziona la conciliazione fiscale?</div><div class="help-a">La conciliazione confronta il totale degli incassi dichiarati in Prima Nota con i versamenti effettivi in banca.</div></div>
+        <div class="help-section-title">🏦 Banca & Finanza</div>
+        <div class="help-item">
+          <div class="help-q">Come registro un versamento in banca?</div>
+          <div class="help-a">Vai su <strong>Banca & Finanza → Versamenti</strong>, inserisci data, importo e banca. Il versamento aggiorna automaticamente il saldo della banca selezionata.</div>
+        </div>
+        <div class="help-item">
+          <div class="help-q">Come funziona la conciliazione fiscale?</div>
+          <div class="help-a">La conciliazione confronta il totale degli incassi dichiarati in Prima Nota con i versamenti effettivi in banca. Una differenza positiva indica denaro non ancora versato.</div>
+        </div>
+        <div class="help-item">
+          <div class="help-q">Cos'è il fabbisogno finanziario?</div>
+          <div class="help-a">È la previsione delle uscite fisse nei prossimi 30 giorni (RID, assegni in scadenza, fornitori) confrontata con la liquidità disponibile in banca.</div>
+        </div>
       </div>
+
+      <div class="help-section" data-tags="dipendenti turni planning presenze">
+        <div class="help-section-title">👥 Dipendenti</div>
+        <div class="help-item">
+          <div class="help-q">Come creo il planning settimanale?</div>
+          <div class="help-a">Vai su <strong>Dipendenti → Turni</strong>, naviga alla settimana e clicca <strong>+</strong> per aggiungere un dipendente al turno, <strong>+R</strong> per segnare un riposo.</div>
+        </div>
+        <div class="help-item">
+          <div class="help-q">Come funziona il generatore automatico?</div>
+          <div class="help-a">Clicca <strong>⚡ Genera settimana</strong> — il sistema analizza le ultime 8 settimane e ripropone i turni in base al pattern storico. Puoi inserire le assenze prima di generare.</div>
+        </div>
+        <div class="help-item">
+          <div class="help-q">Cos'è il doppio turno?</div>
+          <div class="help-a">Attivando <strong>🔄 Può fare doppio turno</strong> nella scheda dipendente, il generatore automatico potrà assegnarlo a più turni nello stesso giorno (es. mattina e sera) se lo storico lo conferma. I dipendenti senza questa opzione ricevono sempre un solo turno per giorno.</div>
+        </div>
+        <div class="help-item">
+          <div class="help-q">Come esporto il PDF presenze mensile?</div>
+          <div class="help-a">Vai su <strong>Dipendenti → Presenze</strong>, seleziona il dipendente, mese e anno, poi clicca <strong>📄 PDF</strong>. Il documento include riepilogo giorni lavorati, compenso stimato con maggiorazioni, acconti ricevuti e saldo da corrispondere.</div>
+        </div>
+        <div class="help-item">
+          <div class="help-q">Come viene calcolato il compenso nel PDF?</div>
+          <div class="help-a">Per i dipendenti <strong>CCNL</strong>: giorni lavorati × ore giornaliere × paga oraria, più le maggiorazioni per straordinari, festivi e notturni configurate nella scheda. Per i dipendenti <strong>Forfettari</strong>: importo fisso mensile. In entrambi i casi vengono detratti gli acconti del mese.</div>
+        </div>
+      </div>
+
       <div class="help-section" data-tags="abbonamento piano upgrade stripe pagamento prezzi sedi">
         <div class="help-section-title">💳 Abbonamento</div>
-        <div class="help-item"><div class="help-q">Quali sono i piani disponibili?</div><div class="help-a"><strong>Free €0</strong> — 1 sede, 1 utente, 30gg storico. <strong>Pro €29/mese</strong> — 1 sede, utenti illimitati, storico illimitato. <strong>Business €59/mese</strong> — fino a 3 sedi. <strong>Enterprise €79/mese</strong> — sedi illimitate, supporto prioritario.</div></div>
-        <div class="help-item"><div class="help-q">Come passo a un piano superiore?</div><div class="help-a">Vai su <strong>Impostazioni → Abbonamento</strong> e clicca sul piano che preferisci.</div></div>
+        <div class="help-item">
+          <div class="help-q">Quali sono i piani disponibili?</div>
+          <div class="help-a"><strong>Free €0</strong> — 1 sede, 1 utente, 30gg storico. <strong>Pro €29/mese</strong> — 1 sede, utenti illimitati, storico illimitato. <strong>Business €59/mese</strong> — fino a 3 sedi, utenti illimitati. <strong>Enterprise €79/mese</strong> — sedi illimitate, supporto prioritario.</div>
+        </div>
+        <div class="help-item">
+          <div class="help-q">Come passo a un piano superiore?</div>
+          <div class="help-a">Vai su <strong>Impostazioni → Abbonamento</strong> e clicca sul piano che preferisci. Il pagamento è gestito da Stripe in modo sicuro.</div>
+        </div>
+        <div class="help-item">
+          <div class="help-q">Come cancello l'abbonamento?</div>
+          <div class="help-a">Vai su <strong>Impostazioni → Abbonamento → Gestisci abbonamento</strong>. Puoi cancellare in qualsiasi momento — resti attivo fino alla fine del periodo pagato.</div>
+        </div>
       </div>
+
+      <div class="help-section" data-tags="dipendenti contratto forfettario ccnl straordinario festivo notturno paga oraria">
+        <div class="help-section-title">📋 Contratto dipendenti</div>
+        <div class="help-item">
+          <div class="help-q">Qual è la differenza tra Forfettario e CCNL?</div>
+          <div class="help-a">Con <strong>Forfettario</strong> il dipendente riceve un importo fisso mensile indipendentemente dalle ore lavorate o dagli straordinari. Con <strong>CCNL Commercio</strong> si calcola la paga in base alle ore lavorate con le maggiorazioni previste dal contratto nazionale.</div>
+        </div>
+        <div class="help-item">
+          <div class="help-q">Come configuro le maggiorazioni CCNL?</div>
+          <div class="help-a">Nella scheda dipendente seleziona CCNL, inserisci la paga oraria base e le ore settimanali contrattuali (di solito 40). Poi attiva le spunte per le maggiorazioni: straordinario feriale (default 15%), festivo/domenicale (30%), notturno (50%). Puoi modificare le percentuali per accordi individuali.</div>
+        </div>
+        <div class="help-item">
+          <div class="help-q">Cosa sono gli straordinari nel CCNL Commercio?</div>
+          <div class="help-a">Secondo il CCNL Commercio Confcommercio: straordinario feriale +15% (41ª–48ª ora) o +20% (oltre 48 ore), festivo/domenicale +30%, notturno (22:00–06:00) +50%. Le percentuali sono personalizzabili in base all'accordo individuale.</div>
+        </div>
+        <div class="help-item">
+          <div class="help-q">Posso usare un importo forfettario anche con straordinari occasionali?</div>
+          <div class="help-a">Sì — scegli Forfettario e inserisci l'importo fisso base. Gli eventuali straordinari li gestirai manualmente tramite gli Acconti nella scheda dipendente.</div>
+        </div>
+      </div>
+
       <div class="help-section" data-tags="supporto contatto email problema">
         <div class="help-section-title">📧 Supporto</div>
-        <div class="help-item"><div class="help-q">Come contatto il supporto?</div><div class="help-a">Scrivi a <a href="mailto:info@kontro.cloud" style="color:var(--blue-300)">info@kontro.cloud</a> — rispondiamo entro 24 ore nei giorni lavorativi.</div></div>
+        <div class="help-item">
+          <div class="help-q">Come contatto il supporto?</div>
+          <div class="help-a">Scrivi a <a href="mailto:info@kontro.cloud" style="color:var(--blue-300)">info@kontro.cloud</a> — rispondiamo entro 24 ore nei giorni lavorativi.</div>
+        </div>
       </div>
+
     </div>
-  </div>
-
-  <!-- ============= Service Worker Registration (PWA) ============= -->
-  <script>
-    // Registra il service worker SOLO in produzione (HTTPS).
-    // In sviluppo locale (http://localhost) non parte, per evitare problemi di cache.
-    if ('serviceWorker' in navigator && window.location.protocol === 'https:') {
-      window.addEventListener('load', function() {
-        navigator.serviceWorker
-          .register('/service-worker.js')
-          .then(function(registration) {
-            console.log('[KONTRO PWA] Service Worker registrato');
-
-            // Quando arriva una nuova versione, la segnala in console
-            registration.addEventListener('updatefound', function() {
-              var newWorker = registration.installing;
-              if (newWorker) {
-                newWorker.addEventListener('statechange', function() {
-                  if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                    console.log('[KONTRO PWA] Nuova versione disponibile al prossimo avvio');
-                  }
-                });
-              }
-            });
-          })
-          .catch(function(err) {
-            console.error('[KONTRO PWA] Errore SW:', err);
-          });
-      });
-    }
-  </script>
-  <!-- =============================================================== -->
-
-  <!-- ============= PWA Install Banner (iOS + Android) ============= -->
-  <script src="/pwa-install.js" defer></script>
-  <!-- =============================================================== -->
-
-  <!-- ============= Push Notifications module ============= -->
-  <script src="/push-notifications.js" defer></script>
-  <!-- ======================================================= -->
-
-  <!-- ============= Mobile Prima Nota fix ============= -->
-  <script src="/mobile-prima-nota.js" defer></script>
-  <!-- ================================================== -->
-
-  <!-- ============= Autosave Prima Nota ============= -->
-  <script src="/autosave.js" defer></script>
-  <!-- ================================================ -->
+  
 
 </body>
 </html>

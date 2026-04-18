@@ -3365,6 +3365,7 @@ async function loadFattureFornitoreAssegno() {
       <div class="fa-info">
         <div class="fa-numero">${f.numero ? 'N° ' + f.numero : 'Fattura'} · ${f.data_fattura ? formatDate(f.data_fattura) : ''}</div>
         <div class="fa-scadenza">Scadenza: ${f.data_scadenza ? formatDate(f.data_scadenza) : '—'}</div>
+        <span class="fa-scadenza-raw" data-date="${f.data_scadenza || ''}" style="display:none"></span>
       </div>
       <div class="fa-importo">${formatEur(f.importo_totale)}</div>
     </div>`).join('') + '<div class="fatture-assegno-totale"><span class="fat-tot-label">Totale selezionato</span><span class="fat-tot-val" id="fat-tot-val">€ 0,00</span></div>';
@@ -3395,15 +3396,11 @@ function updateTotaleSelezionato() {
   // Somma importi dalle fatture selezionate
   let tot = 0;
   fattureAssegnoSelezionate.forEach(id => {
-    const chk = document.getElementById('chk-' + id);
-    if (chk) {
-      // Leggi importo dal data attribute
-      const item = document.getElementById('fai-' + id);
-      const importoEl = item?.querySelector('.fa-importo');
-      if (importoEl) {
-        const txt = importoEl.textContent.replace('€','').replace('.','').replace(',','.').trim();
-        tot += parseFloat(txt) || 0;
-      }
+    const item = document.getElementById('fai-' + id);
+    const importoEl = item?.querySelector('.fa-importo');
+    if (importoEl) {
+      const txt = importoEl.textContent.replace('€','').replace('.','').replace(',','.').trim();
+      tot += parseFloat(txt) || 0;
     }
   });
 
@@ -3413,6 +3410,164 @@ function updateTotaleSelezionato() {
   if (tot > 0) {
     const impEl = document.getElementById('na-importo');
     if (impEl && !impEl.value) impEl.value = tot.toFixed(2);
+  }
+
+  // ★ Calcola data ottimale con simulazione liquidità
+  const dataConsigliataEl = document.getElementById('na-data-consigliata');
+  if (fattureAssegnoSelezionate.size > 0 && tot > 0) {
+    calcolaDataOttimaleAssegno(tot, dataConsigliataEl);
+  } else if (dataConsigliataEl) {
+    dataConsigliataEl.style.display = 'none';
+    const naScadenza = document.getElementById('na-scadenza');
+    if (naScadenza) naScadenza.value = '';
+  }
+}
+
+// ★ SIMULATORE LIQUIDITÀ — calcola il giorno ottimale per emettere l'assegno
+async function calcolaDataOttimaleAssegno(importoAssegno, dataConsigliataEl) {
+  if (!currentBusiness) return;
+
+  dataConsigliataEl.innerHTML = '⏳ Calcolo liquidità in corso...';
+  dataConsigliataEl.style.display = 'block';
+
+  const today = new Date().toISOString().split('T')[0];
+  const in90 = new Date(); in90.setDate(in90.getDate() + 90);
+  const in90str = in90.toISOString().split('T')[0];
+  const from28 = new Date(); from28.setDate(from28.getDate() - 28);
+  const from28str = from28.toISOString().split('T')[0];
+
+  try {
+    // Carica tutti i dati in parallelo
+    const [
+      { data: vers },
+      { data: movUsc },
+      { data: assegniAperti },
+      { data: ridAttivi },
+      { data: fattureAperte },
+      { data: noteStorico }
+    ] = await Promise.all([
+      db.from('versamenti').select('importo_contante,importo_pos').eq('business_id', currentBusiness.id),
+      db.from('movimenti_banca').select('importo').eq('business_id', currentBusiness.id).eq('segno','dare'),
+      db.from('assegni').select('importo,data_scadenza').eq('business_id', currentBusiness.id).in('stato',['emesso','da_addebitare']).lte('data_scadenza', in90str),
+      db.from('rid_bancari').select('importo,prossimo_addebito,frequenza').eq('business_id', currentBusiness.id).eq('attivo',true),
+      db.from('fatture_fornitori').select('importo_totale,data_scadenza').eq('business_id', currentBusiness.id).in('stato',['aperta','pagata_parziale']).lte('data_scadenza', in90str),
+      db.from('daily_notes').select('data,incasso_giornaliero,tot_uscite_giornaliere').eq('business_id', currentBusiness.id).gte('data', from28str).order('data')
+    ]);
+
+    // ── Saldo banche attuale ──────────────────────────────────────────
+    let saldoAttuale = bancheCache.reduce((s,b) => s + Number(b.saldo_iniziale||0), 0);
+    saldoAttuale += (vers||[]).reduce((s,v) => s + Number(v.importo_contante||0) + Number(v.importo_pos||0), 0);
+    saldoAttuale -= (movUsc||[]).reduce((s,m) => s + Number(m.importo||0), 0);
+
+    // ── Media incasso per giorno della settimana (storico 28gg) ──────
+    const mediaIncassoDow = Array(7).fill(0).map(() => ({ tot:0, n:0 }));
+    const mediaUsciteDow  = Array(7).fill(0).map(() => ({ tot:0, n:0 }));
+    (noteStorico||[]).forEach(n => {
+      const dow = new Date(n.data + 'T12:00:00').getDay();
+      const inc = Number(n.incasso_giornaliero||0);
+      const usc = Number(n.tot_uscite_giornaliere||0);
+      if (inc > 0) { mediaIncassoDow[dow].tot += inc; mediaIncassoDow[dow].n++; }
+      if (usc > 0) { mediaUsciteDow[dow].tot += usc;  mediaUsciteDow[dow].n++; }
+    });
+    const incassoMedioG = mediaIncassoDow.map(d => d.n > 0 ? d.tot/d.n : 0);
+    const usciteMedieG  = mediaUsciteDow.map(d  => d.n > 0 ? d.tot/d.n : 0);
+
+    // ── Mappa uscite programmate per data ─────────────────────────────
+    const usciteProgrammate = {}; // { 'YYYY-MM-DD': importo }
+    const addUscita = (data, imp) => {
+      usciteProgrammate[data] = (usciteProgrammate[data] || 0) + imp;
+    };
+
+    // Assegni già emessi
+    (assegniAperti||[]).forEach(a => {
+      if (a.data_scadenza >= today) addUscita(a.data_scadenza, Number(a.importo||0));
+    });
+
+    // Fatture aperte con scadenza
+    (fattureAperte||[]).forEach(f => {
+      if (f.data_scadenza && f.data_scadenza >= today) addUscita(f.data_scadenza, Number(f.importo_totale||0));
+    });
+
+    // RID attivi — proietta prossimi addebiti nei 90 giorni
+    (ridAttivi||[]).forEach(r => {
+      let nextDate = r.prossimo_addebito;
+      if (!nextDate || nextDate < today) return;
+      const freqGiorni = { mensile:30, bimestrale:60, trimestrale:90, semestrale:180, annuale:365 }[r.frequenza] || 30;
+      let d = nextDate;
+      while (d <= in90str) {
+        addUscita(d, Number(r.importo||0));
+        const nd = new Date(d + 'T12:00:00');
+        nd.setDate(nd.getDate() + freqGiorni);
+        d = nd.toISOString().split('T')[0];
+      }
+    });
+
+    // ── Simulazione giorno per giorno ────────────────────────────────
+    let saldo = saldoAttuale;
+    let dataOttimale = null;
+    let motivazione = '';
+    const BUFFER_SICUREZZA = importoAssegno * 0.1; // 10% buffer
+
+    for (let i = 1; i <= 90; i++) {
+      const d = new Date(); d.setDate(d.getDate() + i);
+      const dataStr = d.toISOString().split('T')[0];
+      const dow = d.getDay();
+
+      // Entrate del giorno (incasso previsto)
+      const entrate = incassoMedioG[dow];
+
+      // Uscite del giorno: medie operative + programmate
+      const usciteOp   = usciteMedieG[dow];
+      const usciteProg = usciteProgrammate[dataStr] || 0;
+      const usciteTot  = usciteOp + usciteProg;
+
+      // Aggiorna saldo
+      saldo += entrate - usciteTot;
+
+      // Il giorno è buono se: saldo attuale >= importo assegno + buffer sicurezza
+      if (saldo >= importoAssegno + BUFFER_SICUREZZA && !dataOttimale) {
+        dataOttimale = dataStr;
+        // Calcola composizione del saldo quel giorno
+        const usciteQuelGiorno = usciteProgrammate[dataStr] || 0;
+        if (usciteQuelGiorno > 0) {
+          motivazione = `Quel giorno hai ${formatEur(usciteQuelGiorno)} di uscite programmate`;
+        } else {
+          motivazione = `Saldo previsto ${formatEur(saldo)} · buffer sicurezza ${formatEur(BUFFER_SICUREZZA)}`;
+        }
+        break;
+      }
+    }
+
+    // ── Mostra risultato ──────────────────────────────────────────────
+    if (!dataOttimale) {
+      dataConsigliataEl.innerHTML =
+        `⚠️ <strong>Liquidità insufficiente nei prossimi 90 giorni</strong><br>` +
+        `<span style="font-size:11px;font-weight:400">Saldo attuale: ${formatEur(saldoAttuale)} — ` +
+        `considera di ridurre l'importo o verificare le entrate previste</span>`;
+      dataConsigliataEl.style.background = 'rgba(239,68,68,0.1)';
+      dataConsigliataEl.style.borderColor = 'rgba(239,68,68,0.3)';
+      dataConsigliataEl.style.color = '#fca5a5';
+    } else {
+      const oggi = new Date();
+      const dOtt = new Date(dataOttimale + 'T12:00:00');
+      const giorniMancanti = Math.round((dOtt - oggi) / 86400000);
+
+      dataConsigliataEl.innerHTML =
+        `📅 <strong>Data consigliata: ${formatDate(dataOttimale)}</strong>` +
+        ` <span style="font-weight:400;opacity:.8">(tra ${giorniMancanti} giorni)</span><br>` +
+        `<span style="font-size:11px;font-weight:400;opacity:.75">${motivazione}</span>`;
+      dataConsigliataEl.style.background = 'rgba(99,102,241,0.12)';
+      dataConsigliataEl.style.borderColor = 'rgba(99,102,241,0.3)';
+      dataConsigliataEl.style.color = '#a5b4fc';
+
+      // Auto-compila data scadenza assegno se vuota
+      const naScadenza = document.getElementById('na-scadenza');
+      if (naScadenza && !naScadenza.value) naScadenza.value = dataOttimale;
+    }
+
+  } catch (err) {
+    console.warn('calcolaDataOttimale error:', err.message);
+    dataConsigliataEl.style.display = 'none';
   }
 }
 
