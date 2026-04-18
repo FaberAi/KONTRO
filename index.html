@@ -4,6 +4,24 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>KONTRO — Prima Nota Digitale</title>
+
+  <!-- ============= PWA Configuration ============= -->
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#0d1526" />
+  <meta name="description" content="Prima nota digitale per bar, ristoranti e pubblici esercizi. Gestione cassa a 3 turni, banca, dipendenti, fornitori." />
+
+  <!-- Favicon browser -->
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+
+  <!-- iOS: icona "Aggiungi a Home" e comportamento app-like -->
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="KONTRO" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <!-- =============================================== -->
+
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
@@ -858,6 +876,37 @@
       </div>
     </div>
   </div>
+
+  <!-- ============= Service Worker Registration (PWA) ============= -->
+  <script>
+    // Registra il service worker SOLO in produzione (HTTPS).
+    // In sviluppo locale (http://localhost) non parte, per evitare problemi di cache.
+    if ('serviceWorker' in navigator && window.location.protocol === 'https:') {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker
+          .register('/service-worker.js')
+          .then(function(registration) {
+            console.log('[KONTRO PWA] Service Worker registrato');
+
+            // Quando arriva una nuova versione, la segnala in console
+            registration.addEventListener('updatefound', function() {
+              var newWorker = registration.installing;
+              if (newWorker) {
+                newWorker.addEventListener('statechange', function() {
+                  if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                    console.log('[KONTRO PWA] Nuova versione disponibile al prossimo avvio');
+                  }
+                });
+              }
+            });
+          })
+          .catch(function(err) {
+            console.error('[KONTRO PWA] Errore SW:', err);
+          });
+      });
+    }
+  </script>
+  <!-- =============================================================== -->
 
 </body>
 </html>
