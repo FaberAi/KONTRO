@@ -3588,6 +3588,18 @@ async function calcolaDataOttimaleAssegno(importoAssegno, dataConsigliataEl) {
 
 // Override saveAssegno per collegare le fatture
 const _origSaveAssegno = saveAssegno;
+function resetFormAssegno() {
+  ['na-numero','na-importo','na-note'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  const naFor = document.getElementById('na-fornitore'); if (naFor) naFor.value = '';
+  const naBan = document.getElementById('na-banca');    if (naBan) naBan.value = '';
+  const naEm  = document.getElementById('na-emissione'); if (naEm) naEm.value = new Date().toISOString().split('T')[0];
+  const naSc  = document.getElementById('na-scadenza'); if (naSc)  naSc.value = '';
+  const wrap  = document.getElementById('na-fatture-wrap'); if (wrap) wrap.style.display = 'none';
+  const cons  = document.getElementById('na-data-consigliata'); if (cons) cons.style.display = 'none';
+  const msg   = document.getElementById('na-msg'); if (msg) msg.textContent = '';
+  fattureAssegnoSelezionate.clear();
+}
+
 async function saveAssegno() {
   if (!currentBusiness) return;
   const importo = parseFloat(document.getElementById('na-importo').value);
