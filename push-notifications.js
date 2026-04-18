@@ -1,8 +1,15 @@
 /* ==========================================================================
-   KONTRO - Push Notifications Client (con pulsante di test floating)
+   KONTRO - Push Notifications Client (versione produzione)
    
-   Inietta automaticamente un pulsante "🔔 Test notifiche" in basso a destra
-   quando l'utente e' loggato. Zero comandi da terminale.
+   Questo file espone 5 funzioni tramite window.KontroPush:
+   - isSupported(), isSubscribed(), subscribe(), unsubscribe(), sendTest()
+   
+   Nessun pulsante automatico: la subscribe() verra' chiamata da altri
+   punti dell'applicazione (es. dopo la chiusura serale).
+   
+   Come usarlo dal codice:
+     const result = await window.KontroPush.subscribe();
+     if (result.success) { ... ha dato permesso ... }
    ========================================================================== */
 
 (function() {
@@ -86,6 +93,7 @@
       if (!response.ok) return { success: false, reason: result.error };
       return { success: true, subscriptionId: result.subscriptionId };
     } catch (err) {
+      console.error('[KontroPush] subscribe error:', err);
       return { success: false, reason: err.message };
     }
   }
@@ -130,116 +138,7 @@
     } catch (err) { return { success: false, reason: err.message }; }
   }
 
-  // ===== PULSANTE FLOATING =====
-
-  function injectStyles() {
-    if (document.getElementById('kontro-push-test-styles')) return;
-    const style = document.createElement('style');
-    style.id = 'kontro-push-test-styles';
-    style.textContent =
-      '#kontro-push-test-btn{position:fixed;bottom:20px;right:20px;z-index:99998;' +
-      'background:linear-gradient(135deg,#2563eb 0%,#3b82f6 100%);color:white;border:none;' +
-      'padding:14px 20px;border-radius:100px;font-family:"Syne",-apple-system,sans-serif;' +
-      'font-weight:700;font-size:14px;cursor:pointer;box-shadow:0 8px 24px rgba(37,99,235,0.5);' +
-      'display:flex;align-items:center;gap:8px;-webkit-tap-highlight-color:transparent;' +
-      'transition:transform 0.2s,box-shadow 0.2s}' +
-      '#kontro-push-test-btn:active{transform:scale(0.96);box-shadow:0 4px 12px rgba(37,99,235,0.4)}' +
-      '#kontro-push-test-btn .ic{font-size:18px}' +
-      '#kontro-push-test-status{position:fixed;bottom:84px;right:20px;z-index:99997;' +
-      'background:#0d1526;color:white;padding:12px 16px;border-radius:12px;' +
-      'font-family:-apple-system,sans-serif;font-size:13px;line-height:1.4;max-width:280px;' +
-      'box-shadow:0 8px 24px rgba(0,0,0,0.4);border:1px solid rgba(99,130,200,0.25);' +
-      'opacity:0;transform:translateY(10px);transition:opacity 0.3s,transform 0.3s;' +
-      'pointer-events:none}' +
-      '#kontro-push-test-status.show{opacity:1;transform:translateY(0)}';
-    document.head.appendChild(style);
-  }
-
-  function showStatus(message, type) {
-    let status = document.getElementById('kontro-push-test-status');
-    if (!status) {
-      status = document.createElement('div');
-      status.id = 'kontro-push-test-status';
-      document.body.appendChild(status);
-    }
-    const color = type === 'error' ? '#f87171' : (type === 'success' ? '#4ade80' : '#60a5fa');
-    const icon = type === 'error' ? '❌' : (type === 'success' ? '✅' : 'ℹ️');
-    status.innerHTML = '<span style="color:' + color + ';font-weight:700">' + icon + '</span> ' + message;
-    status.classList.add('show');
-    clearTimeout(status._timer);
-    status._timer = setTimeout(function() { status.classList.remove('show'); }, 7000);
-  }
-
-  async function handleClick() {
-    const btn = document.getElementById('kontro-push-test-btn');
-    if (!btn || btn.disabled) return;
-    btn.disabled = true;
-    const originalHTML = btn.innerHTML;
-    btn.innerHTML = '<span class="ic">⏳</span> Attendere...';
-
-    try {
-      const already = await isSubscribed();
-      if (!already) {
-        showStatus('Chiedo il permesso...', 'info');
-        const r = await subscribe();
-        if (!r.success) {
-          showStatus('Errore: ' + r.reason, 'error');
-          return;
-        }
-        showStatus('Dispositivo registrato! Invio test...', 'info');
-      } else {
-        showStatus('Gia registrato. Invio test...', 'info');
-      }
-      const t = await sendTest();
-      if (t.success && t.sent > 0) {
-        showStatus('Notifica inviata! Controlla il telefono.', 'success');
-      } else if (t.success && t.sent === 0) {
-        showStatus('Nessun device nel database. Retry.', 'error');
-      } else {
-        showStatus('Errore: ' + (t.reason || 'sconosciuto'), 'error');
-      }
-    } catch (err) {
-      showStatus('Errore: ' + err.message, 'error');
-    } finally {
-      btn.innerHTML = originalHTML;
-      btn.disabled = false;
-    }
-  }
-
-  function injectButton() {
-    if (document.getElementById('kontro-push-test-btn')) return;
-    const btn = document.createElement('button');
-    btn.id = 'kontro-push-test-btn';
-    btn.innerHTML = '<span class="ic">🔔</span> Test notifiche';
-    btn.addEventListener('click', handleClick);
-    document.body.appendChild(btn);
-  }
-
-  function removeButton() {
-    const btn = document.getElementById('kontro-push-test-btn');
-    if (btn) btn.remove();
-    const status = document.getElementById('kontro-push-test-status');
-    if (status) status.remove();
-  }
-
-  async function checkAndShow() {
-    try {
-      if (typeof db === 'undefined' || !db.auth) return;
-      const { data } = await db.auth.getUser();
-      if (data && data.user) {
-        injectStyles();
-        injectButton();
-      } else {
-        removeButton();
-      }
-    } catch (err) { /* ignora */ }
-  }
-
-  function start() {
-    checkAndShow();
-    setInterval(checkAndShow, 2000);
-  }
-
+  // Espone API
   window.KontroPush = {
     isSupported: isSupported,
     isSubscribed: isSubscribed,
@@ -248,11 +147,5 @@
     sendTest: sendTest
   };
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', start);
-  } else {
-    start();
-  }
-
-  console.log('[KontroPush] Pronto con pulsante test');
+  console.log('[KontroPush] Modulo caricato (modalita produzione)');
 })();
