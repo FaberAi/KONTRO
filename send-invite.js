@@ -28,6 +28,7 @@ body{font-family:Arial,sans-serif;background:#f4f4f4;margin:0;padding:40px 20px}
 .btn{display:block;background:#2563eb;color:white!important;text-decoration:none;padding:14px 24px;border-radius:10px;text-align:center;font-weight:700;font-size:15px;margin-bottom:24px}
 .lbox{background:rgba(255,255,255,.05);border-radius:8px;padding:12px 16px;font-family:monospace;font-size:12px;color:#9ca3af;word-break:break-all;margin-bottom:24px}
 .f{color:#4b5563;font-size:12px;text-align:center;padding:20px 32px;border-top:1px solid rgba(255,255,255,.05)}
+.f a{color:#4b5563;text-decoration:none}
 </style></head>
 <body><div class="c">
 <div class="h"><span class="li">K</span><span class="lt">KONTRO</span></div>
@@ -40,7 +41,7 @@ body{font-family:Arial,sans-serif;background:#f4f4f4;margin:0;padding:40px 20px}
 <div class="lbox">${inviteLink}</div>
 <p class="p" style="font-size:12px;color:#4b5563">L'invito scade tra 7 giorni.</p>
 </div>
-<div class="f">KONTRO — Prima nota digitale · www.kontro.cloud</div>
+<div class="f">KONTRO — Prima nota digitale · <a href="https://www.kontro.cloud">www.kontro.cloud</a></div>
 </div></body></html>`;
 
   const apiKey = process.env.RESEND_API_KEY;
