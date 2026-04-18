@@ -3442,30 +3442,28 @@ function updateTotaleSelezionato() {
 async function calcolaDataOttimaleAssegno(importoAssegno, dataConsigliataEl) {
   if (!currentBusiness) return;
 
-  dataConsigliataEl.innerHTML = '⏳ Calcolo liquidità in corso...';
-  dataConsigliataEl.style.display = 'block';
+  // Reset stile
+  dataConsigliataEl.style.cssText = 'display:block;background:transparent;border:none;padding:0;margin-top:8px';
+  dataConsigliataEl.innerHTML = '<div style="padding:12px;font-size:12px;color:var(--gray-400)">⏳ Analisi liquidità in corso...</div>';
 
   const today = new Date().toISOString().split('T')[0];
-  const in90 = new Date(); in90.setDate(in90.getDate() + 90);
+  const GIORNI = 60; // mostra 60 giorni
+  const in90   = new Date(); in90.setDate(in90.getDate() + 90);
   const in90str = in90.toISOString().split('T')[0];
-  const from28 = new Date(); from28.setDate(from28.getDate() - 28);
+  const from28  = new Date(); from28.setDate(from28.getDate() - 28);
   const from28str = from28.toISOString().split('T')[0];
 
   try {
-    // Carica tutti i dati in parallelo
     const [
-      { data: vers },
-      { data: movUsc },
-      { data: assegniAperti },
-      { data: ridAttivi },
-      { data: fattureAperte },
-      { data: noteStorico }
+      { data: vers }, { data: movUsc },
+      { data: assegniAperti }, { data: ridAttivi },
+      { data: fattureAperte }, { data: noteStorico }
     ] = await Promise.all([
       db.from('versamenti').select('importo_contante,importo_pos').eq('business_id', currentBusiness.id),
       db.from('movimenti_banca').select('importo').eq('business_id', currentBusiness.id).eq('segno','dare'),
-      db.from('assegni').select('importo,data_scadenza').eq('business_id', currentBusiness.id).in('stato',['emesso','da_addebitare']).lte('data_scadenza', in90str),
-      db.from('rid_bancari').select('importo,prossimo_addebito,frequenza').eq('business_id', currentBusiness.id).eq('attivo',true),
-      db.from('fatture_fornitori').select('importo_totale,data_scadenza').eq('business_id', currentBusiness.id).in('stato',['aperta','pagata_parziale']).lte('data_scadenza', in90str),
+      db.from('assegni').select('importo,data_scadenza,beneficiario').eq('business_id', currentBusiness.id).in('stato',['emesso','da_addebitare']).lte('data_scadenza', in90str),
+      db.from('rid_bancari').select('importo,prossimo_addebito,frequenza,nome').eq('business_id', currentBusiness.id).eq('attivo',true),
+      db.from('fatture_fornitori').select('importo_totale,data_scadenza,fornitori(ragione_sociale)').eq('business_id', currentBusiness.id).in('stato',['aperta','pagata_parziale']).lte('data_scadenza', in90str),
       db.from('daily_notes').select('data,incasso_giornaliero,tot_uscite_giornaliere').eq('business_id', currentBusiness.id).gte('data', from28str).order('data')
     ]);
 
@@ -3474,7 +3472,7 @@ async function calcolaDataOttimaleAssegno(importoAssegno, dataConsigliataEl) {
     saldoAttuale += (vers||[]).reduce((s,v) => s + Number(v.importo_contante||0) + Number(v.importo_pos||0), 0);
     saldoAttuale -= (movUsc||[]).reduce((s,m) => s + Number(m.importo||0), 0);
 
-    // ── Media incasso per giorno della settimana (storico 28gg) ──────
+    // ── Media incasso/uscite per giorno settimana ─────────────────────
     const mediaIncassoDow = Array(7).fill(0).map(() => ({ tot:0, n:0 }));
     const mediaUsciteDow  = Array(7).fill(0).map(() => ({ tot:0, n:0 }));
     (noteStorico||[]).forEach(n => {
@@ -3487,102 +3485,220 @@ async function calcolaDataOttimaleAssegno(importoAssegno, dataConsigliataEl) {
     const incassoMedioG = mediaIncassoDow.map(d => d.n > 0 ? d.tot/d.n : 0);
     const usciteMedieG  = mediaUsciteDow.map(d  => d.n > 0 ? d.tot/d.n : 0);
 
-    // ── Mappa uscite programmate per data ─────────────────────────────
-    const usciteProgrammate = {}; // { 'YYYY-MM-DD': importo }
-    const addUscita = (data, imp) => {
-      usciteProgrammate[data] = (usciteProgrammate[data] || 0) + imp;
+    // ── Mappa eventi per data {importo, etichette[]} ──────────────────
+    const eventiPerData = {}; // { 'YYYY-MM-DD': { uscita: num, etichette: [] } }
+    const addEvento = (data, imp, label) => {
+      if (!eventiPerData[data]) eventiPerData[data] = { uscita: 0, etichette: [] };
+      eventiPerData[data].uscita += imp;
+      if (label) eventiPerData[data].etichette.push(label);
     };
 
-    // Assegni già emessi
     (assegniAperti||[]).forEach(a => {
-      if (a.data_scadenza >= today) addUscita(a.data_scadenza, Number(a.importo||0));
+      if (a.data_scadenza >= today) addEvento(a.data_scadenza, Number(a.importo||0), '📝 Assegno ' + (a.beneficiario||''));
     });
-
-    // Fatture aperte con scadenza
     (fattureAperte||[]).forEach(f => {
-      if (f.data_scadenza && f.data_scadenza >= today) addUscita(f.data_scadenza, Number(f.importo_totale||0));
+      if (f.data_scadenza && f.data_scadenza >= today) addEvento(f.data_scadenza, Number(f.importo_totale||0), '🧾 ' + (f.fornitori?.ragione_sociale||'Fattura'));
     });
-
-    // RID attivi — proietta prossimi addebiti nei 90 giorni
     (ridAttivi||[]).forEach(r => {
-      let nextDate = r.prossimo_addebito;
-      if (!nextDate || nextDate < today) return;
-      const freqGiorni = { mensile:30, bimestrale:60, trimestrale:90, semestrale:180, annuale:365 }[r.frequenza] || 30;
-      let d = nextDate;
+      let d = r.prossimo_addebito;
+      if (!d || d < today) return;
+      const freqG = { mensile:30, bimestrale:60, trimestrale:90, semestrale:180, annuale:365 }[r.frequenza] || 30;
       while (d <= in90str) {
-        addUscita(d, Number(r.importo||0));
-        const nd = new Date(d + 'T12:00:00');
-        nd.setDate(nd.getDate() + freqGiorni);
+        addEvento(d, Number(r.importo||0), '🔄 ' + r.nome);
+        const nd = new Date(d + 'T12:00:00'); nd.setDate(nd.getDate() + freqG);
         d = nd.toISOString().split('T')[0];
       }
     });
 
-    // ── Simulazione giorno per giorno ────────────────────────────────
+    // ── Simulazione: costruisce mappa saldo per ogni giorno ───────────
+    const BUFFER = importoAssegno * 0.1;
+    const saldoPerData = {};
     let saldo = saldoAttuale;
-    let dataOttimale = null;
-    let motivazione = '';
-    const BUFFER_SICUREZZA = importoAssegno * 0.1; // 10% buffer
+    let primoGiornoOk = null;
 
-    for (let i = 1; i <= 90; i++) {
+    for (let i = 1; i <= GIORNI; i++) {
       const d = new Date(); d.setDate(d.getDate() + i);
-      const dataStr = d.toISOString().split('T')[0];
+      const ds = d.toISOString().split('T')[0];
       const dow = d.getDay();
-
-      // Entrate del giorno (incasso previsto)
-      const entrate = incassoMedioG[dow];
-
-      // Uscite del giorno: medie operative + programmate
-      const usciteOp   = usciteMedieG[dow];
-      const usciteProg = usciteProgrammate[dataStr] || 0;
-      const usciteTot  = usciteOp + usciteProg;
-
-      // Aggiorna saldo
-      saldo += entrate - usciteTot;
-
-      // Il giorno è buono se: saldo attuale >= importo assegno + buffer sicurezza
-      if (saldo >= importoAssegno + BUFFER_SICUREZZA && !dataOttimale) {
-        dataOttimale = dataStr;
-        // Calcola composizione del saldo quel giorno
-        const usciteQuelGiorno = usciteProgrammate[dataStr] || 0;
-        if (usciteQuelGiorno > 0) {
-          motivazione = `Quel giorno hai ${formatEur(usciteQuelGiorno)} di uscite programmate`;
-        } else {
-          motivazione = `Saldo previsto ${formatEur(saldo)} · buffer sicurezza ${formatEur(BUFFER_SICUREZZA)}`;
-        }
-        break;
-      }
+      const entrate   = incassoMedioG[dow];
+      const usciteOp  = usciteMedieG[dow];
+      const usciteProg = eventiPerData[ds]?.uscita || 0;
+      saldo += entrate - usciteOp - usciteProg;
+      saldoPerData[ds] = { saldo, entrate, usciteOp, usciteProg, eventi: eventiPerData[ds]?.etichette || [] };
+      if (!primoGiornoOk && saldo >= importoAssegno + BUFFER) primoGiornoOk = ds;
     }
 
-    // ── Mostra risultato ──────────────────────────────────────────────
-    if (!dataOttimale) {
-      dataConsigliataEl.innerHTML =
-        `⚠️ <strong>Liquidità insufficiente nei prossimi 90 giorni</strong><br>` +
-        `<span style="font-size:11px;font-weight:400">Saldo attuale: ${formatEur(saldoAttuale)} — ` +
-        `considera di ridurre l'importo o verificare le entrate previste</span>`;
-      dataConsigliataEl.style.background = 'rgba(239,68,68,0.1)';
-      dataConsigliataEl.style.borderColor = 'rgba(239,68,68,0.3)';
-      dataConsigliataEl.style.color = '#fca5a5';
-    } else {
-      const oggi = new Date();
-      const dOtt = new Date(dataOttimale + 'T12:00:00');
-      const giorniMancanti = Math.round((dOtt - oggi) / 86400000);
+    // ── Render calendario ─────────────────────────────────────────────
+    const giorniSettimana = ['Lu','Ma','Me','Gi','Ve','Sa','Do'];
+    const mesiNomi = ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
 
-      dataConsigliataEl.innerHTML =
-        `📅 <strong>Data consigliata: ${formatDate(dataOttimale)}</strong>` +
-        ` <span style="font-weight:400;opacity:.8">(tra ${giorniMancanti} giorni)</span><br>` +
-        `<span style="font-size:11px;font-weight:400;opacity:.75">${motivazione}</span>`;
-      dataConsigliataEl.style.background = 'rgba(99,102,241,0.12)';
-      dataConsigliataEl.style.borderColor = 'rgba(99,102,241,0.3)';
-      dataConsigliataEl.style.color = '#a5b4fc';
+    let html = `
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;margin-top:4px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <div style="font-size:13px;font-weight:700;color:var(--text-primary)">
+            📅 Scegli la data di scadenza
+          </div>
+          <div style="display:flex;gap:10px;font-size:10px;color:var(--gray-400)">
+            <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#10b981;margin-right:3px;vertical-align:middle"></span>Ottimale</span>
+            <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#f59e0b;margin-right:3px;vertical-align:middle"></span>Marginale</span>
+            <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#ef4444;margin-right:3px;vertical-align:middle"></span>Critico</span>
+            <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);margin-right:3px;vertical-align:middle"></span>Scadenza</span>
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--gray-400);margin-bottom:10px">
+          Saldo attuale: <strong style="color:${saldoAttuale>=0?'var(--green-400)':'var(--red-400)'}">${formatEur(saldoAttuale)}</strong>
+          · Importo assegno: <strong style="color:var(--text-primary)">${formatEur(importoAssegno)}</strong>
+          · Incasso medio/giorno: <strong style="color:#60a5fa">${formatEur(incassoMedioG.reduce((s,v)=>s+v,0)/7)}</strong>
+          ${primoGiornoOk ? '· <strong style="color:#10b981">✓ Prima data ok: ' + formatDate(primoGiornoOk) + '</strong>' : '· <strong style="color:#ef4444">⚠ Liquidità insufficiente nei prossimi 60 giorni</strong>'}
+        </div>`;
 
-      // Auto-compila data scadenza assegno se vuota
+    // Intestazione colonne settimana
+    html += '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:4px">';
+    giorniSettimana.forEach(g => {
+      html += `<div style="text-align:center;font-size:10px;font-weight:700;color:var(--gray-500);padding:2px">${g}</div>`;
+    });
+    html += '</div>';
+
+    // Costruisce settimane
+    const startDate = new Date(); startDate.setDate(startDate.getDate() + 1);
+    // Allinea al lunedì
+    const dowStart = startDate.getDay(); // 0=dom,1=lun,...
+    const offsetToMon = dowStart === 0 ? -6 : 1 - dowStart;
+    const calStart = new Date(startDate); calStart.setDate(calStart.getDate() + offsetToMon);
+
+    html += '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px">';
+
+    const todayD = new Date(today + 'T12:00:00');
+    let mese = -1;
+
+    for (let i = 0; i < 7 * 9; i++) { // max 9 settimane
+      const d = new Date(calStart); d.setDate(d.getDate() + i);
+      const ds = d.toISOString().split('T')[0];
+      const isPast = ds < today;
+      const isFuture = d.getDate(); // numero del giorno
+
+      if (!isPast && ds > in90str) break; // stop
+
+      // Separatore mese
+      if (d.getMonth() !== mese && !isPast) {
+        mese = d.getMonth();
+      }
+
+      const info = saldoPerData[ds];
+      const haEventi = (info?.eventi?.length || 0) > 0;
+      const saldoG   = info?.saldo ?? saldoAttuale;
+      const incassoG = info?.entrate ?? 0;
+
+      let bg = 'rgba(255,255,255,0.04)'; // futuro default
+      let border = '1px solid rgba(255,255,255,0.06)';
+      let textCol = 'var(--gray-600)';
+      let title = '';
+
+      if (isPast) {
+        bg = 'transparent'; textCol = 'var(--gray-700)'; border = 'none';
+      } else if (info) {
+        // Colore basato su liquidità
+        const ratio = saldoG / (importoAssegno + BUFFER);
+        if (saldoG >= importoAssegno + BUFFER) {
+          // Verde: ottimale — intensità proporzionale al surplus
+          const intensity = Math.min(1, (saldoG - importoAssegno) / importoAssegno);
+          bg = `rgba(16,185,129,${0.15 + intensity * 0.25})`;
+          border = '1px solid rgba(16,185,129,0.4)';
+          textCol = '#6ee7b7';
+        } else if (saldoG >= importoAssegno * 0.7) {
+          bg = 'rgba(245,158,11,0.2)'; border = '1px solid rgba(245,158,11,0.35)'; textCol = '#fcd34d';
+        } else {
+          bg = 'rgba(239,68,68,0.15)'; border = '1px solid rgba(239,68,68,0.3)'; textCol = '#fca5a5';
+        }
+
+        // Overlay scadenze programmate
+        if (haEventi) {
+          border = '1px solid rgba(255,255,255,0.25)';
+        }
+
+        title = `Saldo prev: ${formatEur(saldoG)}\\nIncasso: ${formatEur(incassoG)}` +
+          (info.usciteProg > 0 ? `\\nUscite prog: ${formatEur(info.usciteProg)}` : '') +
+          (info.eventi.length > 0 ? `\\n${info.eventi.join(', ')}` : '');
+      }
+
+      // Evidenzia primo giorno ok
+      let extra = '';
+      if (ds === primoGiornoOk) {
+        border = '2px solid #a5b4fc';
+        extra = '<div style="position:absolute;bottom:2px;left:50%;transform:translateX(-50%);width:4px;height:4px;border-radius:50%;background:#a5b4fc"></div>';
+      }
+
+      // Indicatore eventi/scadenze
+      const dotEventi = haEventi && !isPast
+        ? '<div style="position:absolute;top:2px;right:2px;width:4px;height:4px;border-radius:50%;background:#f59e0b"></div>'
+        : '';
+
+      const numStyle = isPast ? 'opacity:.3' : '';
+      const clickable = !isPast && info ? `onclick="selezionaDataScadenzaAssegno('${ds}')" style="cursor:pointer"` : '';
+
+      html += `<div ${clickable} title="${title}" style="position:relative;border-radius:6px;background:${bg};border:${border};aspect-ratio:1;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:all .15s;${!isPast&&info?'':'pointer-events:none'}">
+        ${dotEventi}
+        <div style="font-size:11px;font-weight:600;color:${textCol};${numStyle}">${d.getDate()}</div>
+        ${d.getDate() === 1 ? `<div style="font-size:8px;color:var(--gray-500);line-height:1">${mesiNomi[d.getMonth()]}</div>` : ''}
+        ${extra}
+      </div>`;
+    }
+
+    html += '</div>';
+
+    // Legenda incasso medio
+    html += `
+      <div style="margin-top:12px;padding:10px 12px;background:rgba(96,165,250,0.06);border-radius:8px;border:1px solid rgba(96,165,250,0.15)">
+        <div style="font-size:11px;color:var(--gray-400);margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:.05em">📈 Incasso medio per giorno della settimana</div>
+        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">`;
+
+    const dowLabels = ['Do','Lu','Ma','Me','Gi','Ve','Sa'];
+    const maxInc = Math.max(...incassoMedioG, 1);
+    // Riordina Lu→Do
+    const order = [1,2,3,4,5,6,0];
+    order.forEach(dow => {
+      const val = incassoMedioG[dow];
+      const h = Math.round((val / maxInc) * 28);
+      html += `<div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+        <div style="width:100%;height:28px;display:flex;align-items:flex-end">
+          <div style="width:100%;height:${h}px;background:rgba(96,165,250,${0.3 + (val/maxInc)*0.5});border-radius:2px;min-height:${val>0?2:0}px"></div>
+        </div>
+        <div style="font-size:9px;color:var(--gray-500)">${dowLabels[dow]}</div>
+        <div style="font-size:9px;color:#60a5fa">${val > 0 ? formatEur(val).replace('€ ','') : '—'}</div>
+      </div>`;
+    });
+    html += '</div></div></div></div>';
+
+    dataConsigliataEl.innerHTML = html;
+
+    // Auto-seleziona il primo giorno ottimale se il campo è vuoto
+    if (primoGiornoOk) {
       const naScadenza = document.getElementById('na-scadenza');
-      if (naScadenza && !naScadenza.value) naScadenza.value = dataOttimale;
+      if (naScadenza && !naScadenza.value) naScadenza.value = primoGiornoOk;
     }
 
   } catch (err) {
     console.warn('calcolaDataOttimale error:', err.message);
     dataConsigliataEl.style.display = 'none';
+  }
+}
+
+// Seleziona una data dal calendario e la imposta nel campo scadenza
+function selezionaDataScadenzaAssegno(dataStr) {
+  const el = document.getElementById('na-scadenza');
+  if (el) {
+    el.value = dataStr;
+    // Evidenzia visivamente la selezione nel calendario
+    const dataConsigliataEl = document.getElementById('na-data-consigliata');
+    if (dataConsigliataEl) {
+      const existing = dataConsigliataEl.querySelector('.cal-selected-label');
+      if (existing) existing.remove();
+      const label = document.createElement('div');
+      label.className = 'cal-selected-label';
+      label.style.cssText = 'margin-top:8px;padding:8px 12px;background:rgba(165,180,252,0.15);border:1px solid rgba(165,180,252,0.4);border-radius:8px;font-size:12px;font-weight:600;color:#a5b4fc;text-align:center';
+      label.textContent = '✓ Data selezionata: ' + formatDate(dataStr);
+      dataConsigliataEl.querySelector('div').appendChild(label);
+    }
   }
 }
 
