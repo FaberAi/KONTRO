@@ -1,5 +1,9 @@
 {
   "routes": [
+    { "src": "/manifest.json",       "dest": "/manifest.json" },
+    { "src": "/service-worker.js",   "dest": "/service-worker.js",
+      "headers": { "Service-Worker-Allowed": "/", "Cache-Control": "public, max-age=0, must-revalidate" } },
+    { "src": "/icons/(.*)",          "dest": "/icons/$1" },
     { "src": "/sitemap.xml",         "dest": "/sitemap.xml" },
     { "src": "/robots.txt",          "dest": "/robots.txt" },
     { "src": "/privacy",             "dest": "/privacy.html" },
