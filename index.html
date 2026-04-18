@@ -604,19 +604,40 @@
                   <td colspan="3">▼ USCITE</td>
                 </tr>
                 <tr class="pn-row-even">
-                  <td class="td-desc">POS</td>
+                  <td class="td-desc">
+                    <div style="display:flex;flex-direction:column;gap:4px">
+                      <span>POS</span>
+                      <select id="pn-pos-banca" class="pn-desc-input" style="font-size:11px;margin-top:2px">
+                        <option value="">— Seleziona banca —</option>
+                      </select>
+                    </div>
+                  </td>
                   <td><input type="number" id="pos-m" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
                   <td><input type="number" id="pos-p" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
                   <td><input type="number" id="pos-s" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
                 </tr>
                 <tr>
-                  <td class="td-desc">Carte di credito</td>
+                  <td class="td-desc">
+                    <div style="display:flex;flex-direction:column;gap:4px">
+                      <span>Carte di credito</span>
+                      <select id="pn-carte-banca" class="pn-desc-input" style="font-size:11px;margin-top:2px">
+                        <option value="">— Seleziona banca —</option>
+                      </select>
+                    </div>
+                  </td>
                   <td><input type="number" id="carte-m" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
                   <td><input type="number" id="carte-p" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
                   <td><input type="number" id="carte-s" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
                 </tr>
                 <tr class="pn-row-even">
-                  <td class="td-desc">Bonifici bancari</td>
+                  <td class="td-desc">
+                    <div style="display:flex;flex-direction:column;gap:4px">
+                      <span>Bonifici bancari</span>
+                      <select id="pn-bonifici-banca" class="pn-desc-input" style="font-size:11px;margin-top:2px">
+                        <option value="">— Seleziona banca —</option>
+                      </select>
+                    </div>
+                  </td>
                   <td><input type="number" id="bonifici-m" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
                   <td><input type="number" id="bonifici-p" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
                   <td><input type="number" id="bonifici-s" step="0.01" placeholder="—" class="pn-input" oninput="calcPN()" /></td>
