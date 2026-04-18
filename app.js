@@ -3530,145 +3530,217 @@ async function calcolaDataOttimaleAssegno(importoAssegno, dataConsigliataEl) {
 
     // ── Render calendario ─────────────────────────────────────────────
     const giorniSettimana = ['Lu','Ma','Me','Gi','Ve','Sa','Do'];
-    const mesiNomi = ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
+    const mesiNomi = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+    const mesiShort = ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
+
+    const incassoMedioGiorno = Math.round(incassoMedioG.reduce((s,v)=>s+v,0)/7);
+    const statusColor = primoGiornoOk ? '#00e5a0' : '#ff4d6d';
+    const statusMsg   = primoGiornoOk
+      ? `Prima data disponibile: <strong>${formatDate(primoGiornoOk)}</strong>`
+      : `⚠ Liquidità insufficiente nei prossimi 60 giorni`;
 
     let html = `
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;margin-top:4px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-          <div style="font-size:13px;font-weight:700;color:var(--text-primary)">
-            📅 Scegli la data di scadenza
+    <div style="margin-top:10px;border-radius:16px;overflow:hidden;border:1px solid rgba(255,255,255,0.08);box-shadow:0 8px 32px rgba(0,0,0,0.4)">
+
+      <!-- HEADER STRIP -->
+      <div style="background:linear-gradient(135deg,#1e1b4b 0%,#0f172a 100%);padding:16px 18px 14px;border-bottom:1px solid rgba(255,255,255,0.07)">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
+          <div>
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:rgba(255,255,255,.4);margin-bottom:4px">Analisi liquidità · Prossimi 60 giorni</div>
+            <div style="font-size:14px;color:rgba(255,255,255,.9)">${statusMsg}</div>
           </div>
-          <div style="display:flex;gap:10px;font-size:10px;color:var(--gray-400)">
-            <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#10b981;margin-right:3px;vertical-align:middle"></span>Ottimale</span>
-            <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#f59e0b;margin-right:3px;vertical-align:middle"></span>Marginale</span>
-            <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#ef4444;margin-right:3px;vertical-align:middle"></span>Critico</span>
-            <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);margin-right:3px;vertical-align:middle"></span>Scadenza</span>
+          <div style="display:flex;gap:16px">
+            <div style="text-align:right">
+              <div style="font-size:10px;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:.06em">Saldo oggi</div>
+              <div style="font-size:16px;font-weight:800;color:${saldoAttuale>=0?'#00e5a0':'#ff4d6d'};font-family:monospace">${formatEur(saldoAttuale)}</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:10px;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:.06em">Assegno</div>
+              <div style="font-size:16px;font-weight:800;color:#e2e8f0;font-family:monospace">${formatEur(importoAssegno)}</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:10px;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:.06em">Incasso/die</div>
+              <div style="font-size:16px;font-weight:800;color:#60a5fa;font-family:monospace">≈${incassoMedioGiorno > 0 ? formatEur(incassoMedioGiorno).replace('€ ','€') : '—'}</div>
+            </div>
           </div>
         </div>
-        <div style="font-size:11px;color:var(--gray-400);margin-bottom:10px">
-          Saldo attuale: <strong style="color:${saldoAttuale>=0?'var(--green-400)':'var(--red-400)'}">${formatEur(saldoAttuale)}</strong>
-          · Importo assegno: <strong style="color:var(--text-primary)">${formatEur(importoAssegno)}</strong>
-          · Incasso medio/giorno: <strong style="color:#60a5fa">${formatEur(incassoMedioG.reduce((s,v)=>s+v,0)/7)}</strong>
-          ${primoGiornoOk ? '· <strong style="color:#10b981">✓ Prima data ok: ' + formatDate(primoGiornoOk) + '</strong>' : '· <strong style="color:#ef4444">⚠ Liquidità insufficiente nei prossimi 60 giorni</strong>'}
-        </div>`;
 
-    // Intestazione colonne settimana
-    html += '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:4px">';
-    giorniSettimana.forEach(g => {
-      html += `<div style="text-align:center;font-size:10px;font-weight:700;color:var(--gray-500);padding:2px">${g}</div>`;
+        <!-- LEGENDA -->
+        <div style="display:flex;gap:12px;margin-top:12px;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:5px;font-size:10px;color:rgba(255,255,255,.5)">
+            <div style="width:14px;height:14px;border-radius:4px;background:#00e5a0"></div> Ottimale
+          </div>
+          <div style="display:flex;align-items:center;gap:5px;font-size:10px;color:rgba(255,255,255,.5)">
+            <div style="width:14px;height:14px;border-radius:4px;background:#fbbf24"></div> Marginale
+          </div>
+          <div style="display:flex;align-items:center;gap:5px;font-size:10px;color:rgba(255,255,255,.5)">
+            <div style="width:14px;height:14px;border-radius:4px;background:#f43f5e"></div> Critico
+          </div>
+          <div style="display:flex;align-items:center;gap:5px;font-size:10px;color:rgba(255,255,255,.5)">
+            <div style="width:14px;height:14px;border-radius:4px;background:#1e293b;border:2px solid #fbbf24;box-sizing:border-box"></div> Scadenza programmata
+          </div>
+          <div style="display:flex;align-items:center;gap:5px;font-size:10px;color:rgba(255,255,255,.5)">
+            <div style="width:14px;height:14px;border-radius:4px;background:#3730a3;border:2px solid #818cf8;box-sizing:border-box"></div> Consigliato
+          </div>
+        </div>
+      </div>
+
+      <!-- CALENDARIO -->
+      <div style="background:#0f172a;padding:14px 16px">`;
+
+    // Intestazione giorni
+    html += '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:6px">';
+    giorniSettimana.forEach((g, gi) => {
+      const isWeekend = gi >= 5;
+      html += `<div style="text-align:center;font-size:10px;font-weight:700;color:${isWeekend?'rgba(251,191,36,.5)':'rgba(255,255,255,.25)'};padding:3px 0;letter-spacing:.05em">${g}</div>`;
     });
     html += '</div>';
 
-    // Costruisce settimane
-    const startDate = new Date(); startDate.setDate(startDate.getDate() + 1);
     // Allinea al lunedì
-    const dowStart = startDate.getDay(); // 0=dom,1=lun,...
+    const startDate = new Date(); startDate.setDate(startDate.getDate() + 1);
+    const dowStart  = startDate.getDay();
     const offsetToMon = dowStart === 0 ? -6 : 1 - dowStart;
-    const calStart = new Date(startDate); calStart.setDate(calStart.getDate() + offsetToMon);
+    const calStart  = new Date(startDate); calStart.setDate(calStart.getDate() + offsetToMon);
 
-    html += '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px">';
+    html += '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">';
 
-    const todayD = new Date(today + 'T12:00:00');
-    let mese = -1;
+    let mesePrecedente = -1;
+    const maxSaldoPositivo = Math.max(...Object.values(saldoPerData).map(d => d.saldo), importoAssegno * 2, 1);
 
-    for (let i = 0; i < 7 * 9; i++) { // max 9 settimane
-      const d = new Date(calStart); d.setDate(d.getDate() + i);
+    for (let i = 0; i < 7 * 10; i++) {
+      const d  = new Date(calStart); d.setDate(d.getDate() + i);
       const ds = d.toISOString().split('T')[0];
-      const isPast = ds < today;
-      const isFuture = d.getDate(); // numero del giorno
+      const isPast    = ds <= today;
+      const isToday   = ds === today;
+      const isWeekend = d.getDay() === 0 || d.getDay() === 6;
 
-      if (!isPast && ds > in90str) break; // stop
+      if (!isPast && ds > in90str) break;
 
-      // Separatore mese
-      if (d.getMonth() !== mese && !isPast) {
-        mese = d.getMonth();
+      // Separatore mese — iniettato nella griglia come span vuoto se cambia mese
+      if (d.getMonth() !== mesePrecedente && !isPast) {
+        mesePrecedente = d.getMonth();
+        // Se non siamo all'inizio della riga, aggiungi label mese come overlay nel primo giorno del mese
       }
 
-      const info = saldoPerData[ds];
+      const info    = saldoPerData[ds];
       const haEventi = (info?.eventi?.length || 0) > 0;
-      const saldoG   = info?.saldo ?? saldoAttuale;
-      const incassoG = info?.entrate ?? 0;
+      const saldoG  = info?.saldo ?? 0;
+      const isCons  = ds === primoGiornoOk;
 
-      let bg = 'rgba(255,255,255,0.04)'; // futuro default
-      let border = '1px solid rgba(255,255,255,0.06)';
-      let textCol = 'var(--gray-600)';
-      let title = '';
+      // ── Calcola colore cella ──────────────────────────────────────
+      let cellBg = 'rgba(255,255,255,0.03)';
+      let cellBorder = '1px solid rgba(255,255,255,0.05)';
+      let numColor   = 'rgba(255,255,255,0.18)';
+      let glowColor  = '';
 
       if (isPast) {
-        bg = 'transparent'; textCol = 'var(--gray-700)'; border = 'none';
+        cellBg = 'transparent'; cellBorder = '1px solid transparent'; numColor = 'rgba(255,255,255,0.08)';
       } else if (info) {
-        // Colore basato su liquidità
-        const ratio = saldoG / (importoAssegno + BUFFER);
         if (saldoG >= importoAssegno + BUFFER) {
-          // Verde: ottimale — intensità proporzionale al surplus
-          const intensity = Math.min(1, (saldoG - importoAssegno) / importoAssegno);
-          bg = `rgba(16,185,129,${0.15 + intensity * 0.25})`;
-          border = '1px solid rgba(16,185,129,0.4)';
-          textCol = '#6ee7b7';
-        } else if (saldoG >= importoAssegno * 0.7) {
-          bg = 'rgba(245,158,11,0.2)'; border = '1px solid rgba(245,158,11,0.35)'; textCol = '#fcd34d';
+          // Verde — intensità basata su quanto supera il target
+          const surplus = Math.min(1, (saldoG - importoAssegno) / (maxSaldoPositivo - importoAssegno + 1));
+          const alpha   = 0.25 + surplus * 0.55;
+          cellBg     = `rgba(0,229,160,${alpha})`;
+          cellBorder = `1px solid rgba(0,229,160,${0.5 + surplus * 0.4})`;
+          numColor   = surplus > 0.5 ? '#002a1e' : '#00e5a0';
+          if (surplus > 0.6) glowColor = '0 0 8px rgba(0,229,160,0.4)';
+        } else if (saldoG >= importoAssegno * 0.75) {
+          const ratio = (saldoG - importoAssegno * 0.75) / (importoAssegno * 0.25);
+          cellBg     = `rgba(251,191,36,${0.2 + ratio * 0.25})`;
+          cellBorder = `1px solid rgba(251,191,36,${0.5 + ratio * 0.3})`;
+          numColor   = '#fbbf24';
+        } else if (saldoG >= importoAssegno * 0.4) {
+          cellBg     = 'rgba(244,63,94,0.22)';
+          cellBorder = '1px solid rgba(244,63,94,0.45)';
+          numColor   = '#fda4af';
         } else {
-          bg = 'rgba(239,68,68,0.15)'; border = '1px solid rgba(239,68,68,0.3)'; textCol = '#fca5a5';
+          cellBg     = 'rgba(244,63,94,0.38)';
+          cellBorder = '1px solid rgba(244,63,94,0.65)';
+          numColor   = '#fff1f2';
+          glowColor  = '0 0 6px rgba(244,63,94,0.35)';
         }
-
-        // Overlay scadenze programmate
-        if (haEventi) {
-          border = '1px solid rgba(255,255,255,0.25)';
-        }
-
-        title = `Saldo prev: ${formatEur(saldoG)}\\nIncasso: ${formatEur(incassoG)}` +
-          (info.usciteProg > 0 ? `\\nUscite prog: ${formatEur(info.usciteProg)}` : '') +
-          (info.eventi.length > 0 ? `\\n${info.eventi.join(', ')}` : '');
       }
 
-      // Evidenzia primo giorno ok
-      let extra = '';
-      if (ds === primoGiornoOk) {
-        border = '2px solid #a5b4fc';
-        extra = '<div style="position:absolute;bottom:2px;left:50%;transform:translateX(-50%);width:4px;height:4px;border-radius:50%;background:#a5b4fc"></div>';
+      // Override per consigliato
+      if (isCons) {
+        cellBg     = 'rgba(55,48,163,0.8)';
+        cellBorder = '2px solid #818cf8';
+        numColor   = '#c7d2fe';
+        glowColor  = '0 0 12px rgba(129,140,248,0.6)';
       }
 
-      // Indicatore eventi/scadenze
-      const dotEventi = haEventi && !isPast
-        ? '<div style="position:absolute;top:2px;right:2px;width:4px;height:4px;border-radius:50%;background:#f59e0b"></div>'
-        : '';
+      // Override border per eventi
+      if (haEventi && !isPast && !isCons) {
+        cellBorder = '2px solid rgba(251,191,36,0.8)';
+      }
 
-      const numStyle = isPast ? 'opacity:.3' : '';
-      const clickable = !isPast && info ? `onclick="selezionaDataScadenzaAssegno('${ds}')" style="cursor:pointer"` : '';
+      // Weekend leggermente più scuri
+      if (isWeekend && !isPast && cellBg === 'rgba(255,255,255,0.03)') {
+        cellBg = 'rgba(255,255,255,0.015)';
+      }
 
-      html += `<div ${clickable} title="${title}" style="position:relative;border-radius:6px;background:${bg};border:${border};aspect-ratio:1;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:all .15s;${!isPast&&info?'':'pointer-events:none'}">
-        ${dotEventi}
-        <div style="font-size:11px;font-weight:600;color:${textCol};${numStyle}">${d.getDate()}</div>
-        ${d.getDate() === 1 ? `<div style="font-size:8px;color:var(--gray-500);line-height:1">${mesiNomi[d.getMonth()]}</div>` : ''}
-        ${extra}
+      // Tooltip
+      let titleTxt = '';
+      if (info) {
+        titleTxt = `${formatDate(ds)}\\nSaldo: ${formatEur(saldoG)}\\nIncasso prev: ${formatEur(info.entrate)}`;
+        if (info.usciteProg > 0) titleTxt += `\\nUscite prog: ${formatEur(info.usciteProg)}`;
+        if (info.eventi.length) titleTxt += `\\n${info.eventi.slice(0,3).join('\\n')}`;
+        if (isCons) titleTxt = '⭐ DATA CONSIGLIATA\\n' + titleTxt;
+      }
+
+      const isFirstOfMonth = d.getDate() === 1;
+      const clickHandler = !isPast && info ? `onclick="selezionaDataScadenzaAssegno('${ds}')"` : '';
+      const cursor = !isPast && info ? 'cursor:pointer' : 'pointer-events:none';
+      const glow = glowColor ? `box-shadow:${glowColor};` : '';
+
+      html += `<div ${clickHandler} title="${titleTxt}"
+        style="position:relative;border-radius:8px;background:${cellBg};border:${cellBorder};${glow}
+          aspect-ratio:1;display:flex;align-items:center;justify-content:center;flex-direction:column;
+          ${cursor};transition:transform .12s,box-shadow .12s;user-select:none"
+        onmouseover="if(this.style.cursor!='default')this.style.transform='scale(1.12)'"
+        onmouseout="this.style.transform='scale(1)'">
+        ${isFirstOfMonth && !isPast ? `<div style="position:absolute;top:2px;left:3px;font-size:7px;font-weight:800;color:rgba(255,255,255,.35);letter-spacing:.03em;text-transform:uppercase">${mesiShort[d.getMonth()]}</div>` : ''}
+        ${haEventi && !isPast ? '<div style="position:absolute;top:3px;right:3px;width:5px;height:5px;border-radius:50%;background:#fbbf24;box-shadow:0 0 4px #fbbf24"></div>' : ''}
+        ${isCons ? '<div style="position:absolute;top:3px;left:3px;font-size:8px">⭐</div>' : ''}
+        <div style="font-size:12px;font-weight:700;color:${numColor};line-height:1">${d.getDate()}</div>
+        ${info && !isPast ? `<div style="font-size:7px;color:${numColor};opacity:.7;margin-top:1px;line-height:1">${saldoG >= importoAssegno + BUFFER ? '✓' : saldoG >= 0 ? '~' : '✗'}</div>` : ''}
       </div>`;
     }
-
     html += '</div>';
 
-    // Legenda incasso medio
-    html += `
-      <div style="margin-top:12px;padding:10px 12px;background:rgba(96,165,250,0.06);border-radius:8px;border:1px solid rgba(96,165,250,0.15)">
-        <div style="font-size:11px;color:var(--gray-400);margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:.05em">📈 Incasso medio per giorno della settimana</div>
-        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">`;
-
-    const dowLabels = ['Do','Lu','Ma','Me','Gi','Ve','Sa'];
-    const maxInc = Math.max(...incassoMedioG, 1);
-    // Riordina Lu→Do
+    // ── Barre incasso per giorno settimana ────────────────────────────
     const order = [1,2,3,4,5,6,0];
-    order.forEach(dow => {
+    const dowLabelsOrd = ['Lu','Ma','Me','Gi','Ve','Sa','Do'];
+    const maxInc = Math.max(...incassoMedioG, 1);
+
+    html += `
+      <div style="margin-top:14px;padding:12px 14px;background:rgba(96,165,250,0.05);border-radius:10px;border:1px solid rgba(96,165,250,0.12)">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(96,165,250,.6);margin-bottom:10px">📈 Incasso medio per giorno · storico 28 giorni</div>
+        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px">`;
+
+    order.forEach((dow, i) => {
       const val = incassoMedioG[dow];
-      const h = Math.round((val / maxInc) * 28);
-      html += `<div style="display:flex;flex-direction:column;align-items:center;gap:2px">
-        <div style="width:100%;height:28px;display:flex;align-items:flex-end">
-          <div style="width:100%;height:${h}px;background:rgba(96,165,250,${0.3 + (val/maxInc)*0.5});border-radius:2px;min-height:${val>0?2:0}px"></div>
+      const pct = val / maxInc;
+      const barH = Math.max(Math.round(pct * 40), val > 0 ? 3 : 0);
+      const isWe = i >= 5;
+      const barColor = isWe
+        ? `rgba(251,191,36,${0.4 + pct * 0.5})`
+        : `rgba(96,165,250,${0.3 + pct * 0.6})`;
+
+      html += `<div style="display:flex;flex-direction:column;align-items:center;gap:3px">
+        <div style="width:100%;height:40px;display:flex;align-items:flex-end;justify-content:center">
+          <div style="width:80%;height:${barH}px;background:${barColor};border-radius:3px 3px 0 0;
+            box-shadow:${val/maxInc > 0.6 ? '0 0 6px ' + barColor : 'none'};
+            transition:height .3s;min-height:${val>0?2:0}px"></div>
         </div>
-        <div style="font-size:9px;color:var(--gray-500)">${dowLabels[dow]}</div>
-        <div style="font-size:9px;color:#60a5fa">${val > 0 ? formatEur(val).replace('€ ','') : '—'}</div>
+        <div style="font-size:10px;font-weight:600;color:${isWe?'rgba(251,191,36,.7)':'rgba(255,255,255,.3)'}">${dowLabelsOrd[i]}</div>
+        <div style="font-size:9px;color:${isWe?'#fbbf24':'#60a5fa'};font-family:monospace">${val > 0 ? formatEur(val).replace('€ ','') : '—'}</div>
       </div>`;
     });
-    html += '</div></div></div></div>';
 
+    html += `</div></div></div></div>`;
+
+    dataConsigliataEl.style.cssText = 'display:block;background:transparent;border:none;padding:0;margin-top:8px';
     dataConsigliataEl.innerHTML = html;
 
     // Auto-seleziona il primo giorno ottimale se il campo è vuoto
@@ -3688,18 +3760,28 @@ function selezionaDataScadenzaAssegno(dataStr) {
   const el = document.getElementById('na-scadenza');
   if (el) {
     el.value = dataStr;
-    // Evidenzia visivamente la selezione nel calendario
-    const dataConsigliataEl = document.getElementById('na-data-consigliata');
-    if (dataConsigliataEl) {
-      const existing = dataConsigliataEl.querySelector('.cal-selected-label');
-      if (existing) existing.remove();
-      const label = document.createElement('div');
-      label.className = 'cal-selected-label';
-      label.style.cssText = 'margin-top:8px;padding:8px 12px;background:rgba(165,180,252,0.15);border:1px solid rgba(165,180,252,0.4);border-radius:8px;font-size:12px;font-weight:600;color:#a5b4fc;text-align:center';
-      label.textContent = '✓ Data selezionata: ' + formatDate(dataStr);
-      dataConsigliataEl.querySelector('div').appendChild(label);
-    }
+    el.style.borderColor = '#818cf8';
+    el.style.boxShadow = '0 0 0 2px rgba(129,140,248,0.3)';
+    setTimeout(() => { el.style.borderColor = ''; el.style.boxShadow = ''; }, 2000);
   }
+  // Aggiorna o crea il banner di conferma sotto il calendario
+  const wrap = document.getElementById('na-data-consigliata');
+  if (!wrap) return;
+  const existing = wrap.querySelector('.cal-confirm');
+  const banner = existing || document.createElement('div');
+  banner.className = 'cal-confirm';
+  banner.style.cssText = `
+    margin-top:10px;padding:12px 16px;
+    background:linear-gradient(135deg,rgba(55,48,163,0.6),rgba(99,102,241,0.3));
+    border:1px solid rgba(129,140,248,0.6);border-radius:10px;
+    font-size:13px;font-weight:700;color:#c7d2fe;
+    text-align:center;letter-spacing:.01em;
+    box-shadow:0 0 20px rgba(129,140,248,0.2)`;
+  banner.innerHTML = `✓ Data selezionata: <span style="color:#fff">${formatDate(dataStr)}</span>
+    <span style="display:block;font-size:11px;font-weight:400;color:rgba(199,210,254,.6);margin-top:3px">
+      Campo "Data scadenza" aggiornato automaticamente
+    </span>`;
+  if (!existing) wrap.appendChild(banner);
 }
 
 // Override saveAssegno per collegare le fatture
