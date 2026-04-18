@@ -1440,6 +1440,7 @@ function initPrimaNota() {
 
   _buildPNFornitoriSelects();
   populatePNBetSelect();
+  populatePNBancheSelect(); // ★ popola POS/Carte/Bonifici
   calcPN2();
   applicaTurniConfig(); // ★ applica configurazione turni
   loadNotaGiorno2();
@@ -1721,6 +1722,14 @@ async function loadNotaGiorno2() {
   document.getElementById('cp').value = nota.compilatore_p || '';
   document.getElementById('cs').value = nota.compilatore_s || '';
   document.getElementById('pn-note').value = nota.note || '';
+
+  // ★ Ripristina banche collegate a POS/Carte/Bonifici
+  const pnPosBanca = document.getElementById('pn-pos-banca');
+  const pnCarteBanca = document.getElementById('pn-carte-banca');
+  const pnBonificiBanca = document.getElementById('pn-bonifici-banca');
+  if (pnPosBanca) pnPosBanca.value = nota.pos_banca_id || '';
+  if (pnCarteBanca) pnCarteBanca.value = nota.carte_banca_id || '';
+  if (pnBonificiBanca) pnBonificiBanca.value = nota.bonifici_banca_id || '';
 
   const fornitori = (nota.daily_note_rows||[]).filter(r=>r.categoria==='fornitore');
   const prelievi  = (nota.daily_note_rows||[]).filter(r=>r.categoria==='prelievo');
@@ -2936,8 +2945,11 @@ async function salvaNotaGiorno() {
     fatture_m: getV('fatture-m'), fatture_p: getV('fatture-p'), fatture_s: getV('fatture-s'),
     giornali_m: getV('giornali-m'), giornali_p: getV('giornali-p'), giornali_s: getV('giornali-s'),
     pos_m: getV('pos-m'), pos_p: getV('pos-p'), pos_s: getV('pos-s'),
+    pos_banca_id: document.getElementById('pn-pos-banca')?.value || null,
     carte_m: getV('carte-m'), carte_p: getV('carte-p'), carte_s: getV('carte-s'),
+    carte_banca_id: document.getElementById('pn-carte-banca')?.value || null,
     bonifici_m: getV('bonifici-m'), bonifici_p: getV('bonifici-p'), bonifici_s: getV('bonifici-s'),
+    bonifici_banca_id: document.getElementById('pn-bonifici-banca')?.value || null,
     fondo_chiusura_m: getV('fc-usc-m'), fondo_chiusura_p: getV('fc-usc-p'), fondo_chiusura_s: getV('fc-usc-s'),
     compilatore_m: document.getElementById('cm').value,
     compilatore_p: document.getElementById('cp').value,
@@ -3063,6 +3075,9 @@ async function salvaNotaGiorno() {
   const betBancaId = document.getElementById('pn-bet-banca')?.value || null;
   const totBet = getV('conto-bet-m') + getV('conto-bet-p') + getV('conto-bet-s');
   if (betBancaId && totBet > 0) await scalaCcontoBet(betBancaId, totBet, data);
+
+  // ★ Registra movimenti bancari per POS, Carte, Bonifici
+  await registraMovimentiBancaPrimaNota(data, saved.id);
 
   showPNMsg('Prima nota salvata ✓' + (fcChiusura > 0 ? ' — fondo cassa domani pre-compilato' : '') + (betBancaId && totBet > 0 ? ' · Conto bet aggiornato' : ''), 'success');
   await loadDashboard();
@@ -3894,14 +3909,27 @@ async function loadEstrattoBanca() {
       segno: 'avere',
       dettaglio: `Contante: ${formatEur(v.importo_contante)} · POS: ${formatEur(v.importo_pos)}`
     })),
-    ...(movimenti||[]).map(m => ({
-      data: m.data,
-      tipo: m.segno === 'avere' ? '↑ Entrata' : '↓ Uscita',
-      desc: m.descrizione || m.tipo || '—',
-      importo: Number(m.importo),
-      segno: m.segno,
-      dettaglio: m.tipo || ''
-    })),
+    ...(movimenti||[]).map(m => {
+      // Icone e label leggibili per tipo di movimento
+      const tipoIcona = {
+        pos:      '💳 POS',
+        carte:    '💳 Carte',
+        bonifico: '🏦 Bonifico',
+        bet:      '🎰 Scommesse',
+        assegno:  '📝 Assegno',
+        acconto:  '👤 Acconto',
+      }[m.tipo] || (m.segno === 'avere' ? '↑ Entrata' : '↓ Uscita');
+      return {
+        data: m.data,
+        tipo: tipoIcona,
+        desc: m.descrizione || m.tipo || '—',
+        importo: Number(m.importo),
+        segno: m.segno,
+        dettaglio: m.tipo || '',
+        da_primanota: !!m.daily_note_id,
+        commissione: Number(m.commissione || 0)
+      };
+    }),
     ...(assegniAd||[]).map(a => ({
       data: a.data_incasso || a.data_scadenza,
       tipo: '📝 Assegno',
@@ -3950,10 +3978,12 @@ async function loadEstrattoBanca() {
       + '</div>'
       + '<div class="ec-val ' + (m.segno === 'avere' ? 'avere' : 'dare') + '" style="min-width:110px;text-align:right">'
       + (m.segno === 'avere' ? '+' : '-') + formatEur(m.importo)
+      + (m.commissione > 0 ? '<span style="display:block;font-size:10px;color:var(--red-400);font-weight:400">comm. -' + formatEur(m.commissione) + '</span>' : '')
       + '</div>'
       + '<div style="min-width:120px;text-align:right;font-family:var(--font-mono);font-size:13px;font-weight:500;color:' + (saldo >= 0 ? 'var(--blue-300)' : 'var(--red-400)') + '">'
       + formatEur(saldo)
       + '</div>'
+      + (m.da_primanota ? '<div title="Generato da Prima Nota" style="font-size:10px;color:var(--gray-500);padding-left:6px;flex-shrink:0;align-self:center">PN</div>' : '<div style="width:24px"></div>')
       + '</div>';
   });
 
@@ -4490,6 +4520,23 @@ async function buildConciliazioneFiscale(periodo) {
 // CONTO BET — Prima Nota
 // ============================================
 
+// ★ Popola select banca per POS, Carte di credito, Bonifici
+function populatePNBancheSelect() {
+  const opts = '<option value="">— Seleziona banca —</option>' +
+    bancheCache
+      .filter(b => b.tipo !== 'bet') // escludi conti scommesse
+      .map(b => `<option value="${b.id}">${b.nome}${b.istituto ? ' · ' + b.istituto : ''}</option>`)
+      .join('');
+  ['pn-pos-banca', 'pn-carte-banca', 'pn-bonifici-banca'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      const val = el.value; // preserva selezione esistente
+      el.innerHTML = opts;
+      if (val) el.value = val;
+    }
+  });
+}
+
 function populatePNBetSelect() {
   const sel = document.getElementById('pn-bet-banca');
   if (!sel) return;
@@ -4503,6 +4550,67 @@ function populatePNBetSelect() {
 
 
 // Aggiorna salvaNotaGiorno per scalare automaticamente dal conto bet
+// ★ Registra POS / Carte / Bonifici come movimenti bancari
+async function registraMovimentiBancaPrimaNota(data, dailyNoteId) {
+  if (!currentBusiness) return;
+
+  // Leggi i valori effettivi (turno sera se compilato, else pom, else mat)
+  function effVal(idM, idP, idS) {
+    const s = document.getElementById(idS), p = document.getElementById(idP), m = document.getElementById(idM);
+    if (s && s.value.trim() !== '') return parseFloat(s.value) || 0;
+    if (p && p.value.trim() !== '') return parseFloat(p.value) || 0;
+    return parseFloat(m?.value) || 0;
+  }
+
+  const voci = [
+    {
+      bancaId: document.getElementById('pn-pos-banca')?.value || null,
+      importo: effVal('pos-m', 'pos-p', 'pos-s'),
+      tipo: 'pos',
+      desc: 'POS — Prima Nota ' + data
+    },
+    {
+      bancaId: document.getElementById('pn-carte-banca')?.value || null,
+      importo: effVal('carte-m', 'carte-p', 'carte-s'),
+      tipo: 'carte',
+      desc: 'Carte di credito — Prima Nota ' + data
+    },
+    {
+      bancaId: document.getElementById('pn-bonifici-banca')?.value || null,
+      importo: effVal('bonifici-m', 'bonifici-p', 'bonifici-s'),
+      tipo: 'bonifico',
+      desc: 'Bonifici bancari — Prima Nota ' + data
+    }
+  ];
+
+  // Elimina eventuali movimenti precedenti di questa prima nota (per evitare duplicati al ri-salvataggio)
+  await db.from('movimenti_banca')
+    .delete()
+    .eq('business_id', currentBusiness.id)
+    .eq('data', data)
+    .in('tipo', ['pos', 'carte', 'bonifico'])
+    .like('descrizione', '%Prima Nota%');
+
+  const movimenti = voci
+    .filter(v => v.bancaId && v.importo > 0)
+    .map(v => ({
+      business_id: currentBusiness.id,
+      banca_id: v.bancaId,
+      data,
+      segno: 'avere',   // entrata in banca: il POS versa in conto, le carte accreditano, i bonifici entrano
+      tipo: v.tipo,
+      descrizione: v.desc,
+      importo: v.importo,
+      commissione: 0, // ★ verrà detratta quando implementeremo le commissioni per banca
+      daily_note_id: dailyNoteId
+    }));
+
+  if (movimenti.length > 0) {
+    const { error } = await db.from('movimenti_banca').insert(movimenti);
+    if (error) console.warn('Errore movimenti banca PN:', error.message);
+  }
+}
+
 async function scalaCcontoBet(betBancaId, totBet, data) {
   if (!betBancaId || !totBet || totBet <= 0 || !currentBusiness) return;
 
