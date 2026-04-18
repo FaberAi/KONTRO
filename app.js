@@ -3588,6 +3588,28 @@ async function calcolaDataOttimaleAssegno(importoAssegno, dataConsigliataEl) {
 
 // Override saveAssegno per collegare le fatture
 const _origSaveAssegno = saveAssegno;
+// ★ Suggerisci data scadenza quando l'utente clicca sul campo
+// Funziona sia con fatture selezionate che con importo inserito manualmente
+function suggerisciDataScadenzaAssegno() {
+  const dataConsigliataEl = document.getElementById('na-data-consigliata');
+  if (!dataConsigliataEl) return;
+
+  // Usa l'importo già nel campo (da fatture selezionate o inserito a mano)
+  const importo = parseFloat(document.getElementById('na-importo')?.value) || 0;
+  if (importo <= 0) {
+    // Nessun importo ancora — mostra messaggio di aiuto
+    dataConsigliataEl.innerHTML = '💡 Inserisci prima l\'importo per ricevere un consiglio sulla data ottimale';
+    dataConsigliataEl.style.display = 'block';
+    dataConsigliataEl.style.background = 'rgba(255,255,255,0.04)';
+    dataConsigliataEl.style.borderColor = 'rgba(255,255,255,0.1)';
+    dataConsigliataEl.style.color = 'var(--gray-400)';
+    return;
+  }
+
+  // Lancia il simulatore di liquidità
+  calcolaDataOttimaleAssegno(importo, dataConsigliataEl);
+}
+
 function resetFormAssegno() {
   ['na-numero','na-importo','na-note'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   const naFor = document.getElementById('na-fornitore'); if (naFor) naFor.value = '';
