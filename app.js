@@ -5014,6 +5014,7 @@ function switchHRTab(tab) {
   if (tab === 'turni') initTurni();
   if (tab === 'presenze') initPresenze();
   if (tab === 'acconti') initAcconti();
+  if (tab === 'ricevute') initRicevute();
   if (tab === 'export') initExportHR();
 }
 
@@ -5268,6 +5269,21 @@ function initAcconti() {
     accBanca.innerHTML = '<option value="">Seleziona banca</option>' +
       bancheCache.filter(b => b.tipo !== 'bet').map(b => `<option value="${b.id}">${b.nome}</option>`).join('');
   }
+  // Popola select mese riferimento (ultimi 12 mesi)
+  const mesiNomi = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
+                    'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+  const selMese = document.getElementById('acc-mese-rif');
+  if (selMese) {
+    const now = new Date();
+    let opts = '';
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const val = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+      const label = `${mesiNomi[d.getMonth()]} ${d.getFullYear()}`;
+      opts += `<option value="${val}" ${i===0?'selected':''}>${label}</option>`;
+    }
+    selMese.innerHTML = opts;
+  }
   loadAcconti();
 }
 
@@ -5357,6 +5373,7 @@ async function saveAcconto() {
     business_id: currentBusiness.id,
     dipendente_id: dipId,
     data, importo, tipo,
+    mese_riferimento: document.getElementById('acc-mese-rif')?.value || null,
     banca_id: document.getElementById('acc-banca').value || null,
     note: document.getElementById('acc-note').value.trim(),
     created_by: currentUser.id
@@ -5592,6 +5609,244 @@ async function deleteAcconto(id) {
   await db.from('acconti_stipendio').delete().eq('id', id);
   loadAcconti();
   showToast('Acconto eliminato', 'success');
+}
+
+// ── RICEVUTE ARCHIVIO ─────────────────────────────────────────────
+function initRicevute() {
+  const mesiNomi = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
+                    'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+
+  // Popola filtro dipendente
+  const selDip = document.getElementById('ric-filter-dip');
+  if (selDip) {
+    selDip.innerHTML = '<option value="">Tutti i dipendenti</option>' +
+      dipendentiCache.map(d => `<option value="${d.id}">${d.nome} ${d.cognome}</option>`).join('');
+  }
+
+  // Popola filtro mese
+  const selMese = document.getElementById('ric-filter-mese');
+  if (selMese) {
+    const now = new Date();
+    let opts = '<option value="">Tutti i mesi</option>';
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const val = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+      opts += `<option value="${val}">${mesiNomi[d.getMonth()]} ${d.getFullYear()}</option>`;
+    }
+    selMese.innerHTML = opts;
+  }
+
+  loadRicevute();
+}
+
+async function loadRicevute() {
+  if (!currentBusiness) return;
+  const el = document.getElementById('ricevute-list');
+  el.innerHTML = '<div class="empty-state">Caricamento...</div>';
+
+  const dipFilter   = document.getElementById('ric-filter-dip')?.value;
+  const meseFilter  = document.getElementById('ric-filter-mese')?.value;
+  const statoFilter = document.getElementById('ric-filter-stato')?.value;
+
+  let query = db.from('acconti_stipendio')
+    .select('*, dipendenti(nome,cognome)')
+    .eq('business_id', currentBusiness.id)
+    .not('firma_token', 'is', null)
+    .order('data', { ascending: false })
+    .limit(100);
+
+  if (dipFilter)  query = query.eq('dipendente_id', dipFilter);
+  if (statoFilter) query = query.eq('firma_stato', statoFilter);
+  if (meseFilter) query = query.eq('mese_riferimento', meseFilter);
+
+  const { data } = await query;
+
+  if (!data?.length) {
+    el.innerHTML = '<div class="empty-state">Nessuna ricevuta trovata</div>';
+    return;
+  }
+
+  const statoHTML = {
+    in_attesa: '<span style="background:rgba(251,191,36,.15);color:#fbbf24;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700">⏳ In attesa</span>',
+    firmata:   '<span style="background:rgba(0,229,160,.15);color:#00e5a0;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700">✅ Firmata</span>',
+    non_inviata: '<span style="background:rgba(255,255,255,.06);color:rgba(255,255,255,.4);padding:3px 10px;border-radius:20px;font-size:11px">— Non inviata</span>'
+  };
+
+  const mesiNomi = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
+                    'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+
+  el.innerHTML = data.map(a => {
+    const dipNome = `${a.dipendenti?.nome||''} ${a.dipendenti?.cognome||''}`.trim();
+    const stato   = a.firma_stato || 'non_inviata';
+    const meseLabel = a.mese_riferimento
+      ? (() => { const [y,m] = a.mese_riferimento.split('-'); return mesiNomi[parseInt(m)-1] + ' ' + y; })()
+      : formatDate(a.data);
+    const firmatoLabel = a.firmato_at
+      ? ' · Firmato il ' + new Date(a.firmato_at).toLocaleDateString('it-IT', {day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})
+      : '';
+
+    return `<div class="acconto-item" style="gap:10px">
+      <div class="entry-dot ${stato === 'firmata' ? 'entrata' : 'uscita'}"></div>
+      <div class="entry-info" style="flex:1">
+        <div class="entry-desc">${dipNome}</div>
+        <div class="entry-meta">
+          📅 ${meseLabel} · Pagato il ${formatDate(a.data)}${firmatoLabel}
+          ${a.note ? ' · ' + a.note : ''}
+        </div>
+      </div>
+      ${statoHTML[stato] || ''}
+      <div class="entry-amount uscita">${formatEur(a.importo)}</div>
+      <div style="display:flex;gap:4px;flex-shrink:0">
+        ${stato !== 'firmata' ? `<button class="btn-secondary sm" onclick="inviaRicevutaFirma('${a.id}')" title="Invia/rinvia per firma">✍</button>` : ''}
+        ${stato === 'firmata' ? `<button class="btn-secondary sm" onclick="scaricaRicevutaPDF('${a.id}')" title="Scarica PDF">⬇ PDF</button>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function scaricaRicevutaPDF(accontoId) {
+  if (!currentBusiness) return;
+
+  const { data: a } = await db.from('acconti_stipendio')
+    .select('*, dipendenti(nome,cognome,ruolo), businesses!business_id(name)')
+    .eq('id', accontoId).single();
+
+  if (!a) { showToast('Ricevuta non trovata', 'error'); return; }
+  if (!a.firma_data_url) { showToast('Firma non ancora disponibile', 'error'); return; }
+
+  const mesiNomi = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
+                    'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+
+  const meseLabel = a.mese_riferimento
+    ? (() => { const [y,m] = a.mese_riferimento.split('-'); return mesiNomi[parseInt(m)-1] + ' ' + y; })()
+    : formatDate(a.data);
+
+  const tipoLabel = { contanti_cassa:'Contanti (cassa)', contanti_extra:'Contanti (extra)', bonifico:'Bonifico bancario', fuori_busta:'Anticipazione personale' };
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+  const W = 210, margin = 20;
+
+  // Header
+  doc.setFillColor(13, 22, 37);
+  doc.rect(0, 0, W, 40, 'F');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(20);
+  doc.setTextColor(255, 255, 255);
+  doc.text('KONTRO', margin, 18);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(150, 170, 200);
+  doc.text('Ricevuta Acconto Stipendio', margin, 26);
+  doc.setTextColor(0, 229, 160);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.text('FIRMATA DIGITALMENTE', W - margin, 22, { align: 'right' });
+
+  // Titolo
+  doc.setTextColor(30, 40, 60);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(16);
+  doc.text('Ricevuta di Acconto Stipendio', margin, 58);
+
+  // Linea separatore
+  doc.setDrawColor(200, 210, 230);
+  doc.line(margin, 63, W - margin, 63);
+
+  // Dati azienda e dipendente
+  let y = 74;
+  const col2 = W / 2 + 5;
+
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(100, 120, 150);
+  doc.text('AZIENDA', margin, y);
+  doc.text('DIPENDENTE', col2, y);
+  y += 6;
+
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(30, 40, 60);
+  doc.setFontSize(12);
+  doc.text(currentBusiness?.name || a.businesses?.name || '—', margin, y);
+  doc.text(`${a.dipendenti?.nome||''} ${a.dipendenti?.cognome||''}`.trim(), col2, y);
+
+  // Box importo
+  y += 20;
+  doc.setFillColor(240, 250, 245);
+  doc.setDrawColor(0, 180, 120);
+  doc.roundedRect(margin, y, W - margin*2, 28, 4, 4, 'FD');
+  doc.setTextColor(0, 120, 80);
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.text('IMPORTO ACCONTO', W/2, y + 9, { align: 'center' });
+  doc.setFontSize(24);
+  doc.text(formatEur(a.importo), W/2, y + 21, { align: 'center' });
+
+  // Dettagli
+  y += 38;
+  const righe = [
+    ['Mese di riferimento', meseLabel],
+    ['Data pagamento',      formatDate(a.data)],
+    ['Modalità',           tipoLabel[a.tipo] || a.tipo],
+    ['Note',               a.note || '—'],
+  ];
+  if (a.firmato_at) {
+    righe.push(['Firmato il', new Date(a.firmato_at).toLocaleDateString('it-IT', {day:'2-digit',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'})]);
+  }
+
+  righe.forEach(([label, val]) => {
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(100, 120, 150);
+    doc.text(label.toUpperCase(), margin, y);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(30, 40, 60);
+    doc.setFontSize(11);
+    doc.text(val, margin, y + 5);
+    y += 14;
+  });
+
+  // Testo legale
+  y += 6;
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'italic');
+  doc.setTextColor(120, 130, 150);
+  const legal = 'Il sottoscritto dichiara di aver ricevuto la somma indicata a titolo di acconto sulla retribuzione del mese di riferimento.';
+  const lines = doc.splitTextToSize(legal, W - margin*2);
+  doc.text(lines, margin, y);
+  y += lines.length * 5 + 10;
+
+  // Firma
+  doc.setDrawColor(180, 190, 210);
+  doc.line(margin, y, W - margin, y);
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(60, 80, 120);
+  doc.text('FIRMA DEL DIPENDENTE', margin, y + 7);
+
+  // Immagine firma
+  try {
+    const firmaImg = new Image();
+    firmaImg.src = a.firma_data_url;
+    await new Promise(r => { firmaImg.onload = r; firmaImg.onerror = r; });
+    doc.addImage(firmaImg, 'PNG', margin, y + 10, 80, 30);
+  } catch(e) {
+    doc.setTextColor(150);
+    doc.text('[Firma non disponibile]', margin, y + 25);
+  }
+
+  // Footer
+  doc.setFillColor(13, 22, 37);
+  doc.rect(0, 282, W, 15, 'F');
+  doc.setTextColor(100, 120, 150);
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  doc.text('Documento generato da KONTRO · kontro.cloud', W/2, 290, { align: 'center' });
+
+  const dipCognome = a.dipendenti?.cognome || 'dipendente';
+  doc.save(`Ricevuta_${dipCognome}_${meseLabel.replace(' ', '_')}.pdf`);
+  showToast('PDF scaricato ✓', 'success');
 }
 
 // ── EXPORT CONSULENTE ─────────────────────────────────────────────

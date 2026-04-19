@@ -1445,6 +1445,7 @@
           <button class="banca-tab" onclick="switchHRTab('turni')" id="hrtab-turni">🕐 Turni</button>
           <button class="banca-tab" onclick="switchHRTab('presenze')" id="hrtab-presenze">📅 Presenze</button>
           <button class="banca-tab" onclick="switchHRTab('acconti')" id="hrtab-acconti">💸 Acconti</button>
+          <button class="banca-tab" onclick="switchHRTab('ricevute')" id="hrtab-ricevute">📄 Ricevute</button>
           <button class="banca-tab" onclick="switchHRTab('export')" id="hrtab-export">📤 Export</button>
         </div>
 
@@ -1737,7 +1738,8 @@
             <h2 style="margin-bottom:16px">Nuovo acconto stipendio</h2>
             <div class="form-grid">
               <div class="field"><label>Dipendente</label><select id="acc-dipendente" onchange="aggiornaSaldoStipendio()"><option value="">Seleziona</option></select></div>
-              <div class="field"><label>Data</label><input type="date" id="acc-data" /></div>
+              <div class="field"><label>Mese di riferimento</label><select id="acc-mese-rif"></select></div>
+              <div class="field"><label>Data pagamento</label><input type="date" id="acc-data" /></div>
               <div class="field"><label>Importo (€)</label><input type="number" id="acc-importo" step="0.01" placeholder="0,00" oninput="aggiornaSaldoStipendio()" /></div>
               <div class="field"><label>Tipo pagamento</label>
                 <select id="acc-tipo" onchange="toggleAccBanca()">
@@ -1792,6 +1794,31 @@
             </div>
             <div id="acconti-list" class="entries-list">
               <div class="empty-state">Nessun acconto registrato</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── RICEVUTE ARCHIVIO ── -->
+        <div id="hrpanel-ricevute" class="banca-panel">
+          <div class="section-card">
+            <div class="section-header">
+              <h2>📄 Archivio ricevute firmate</h2>
+            </div>
+            <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+              <select id="ric-filter-dip" class="filter-input" onchange="loadRicevute()" style="flex:1;min-width:160px">
+                <option value="">Tutti i dipendenti</option>
+              </select>
+              <select id="ric-filter-mese" class="filter-input" onchange="loadRicevute()" style="flex:1;min-width:140px">
+                <option value="">Tutti i mesi</option>
+              </select>
+              <select id="ric-filter-stato" class="filter-input" onchange="loadRicevute()" style="min-width:140px">
+                <option value="">Tutti gli stati</option>
+                <option value="firmata">✅ Firmate</option>
+                <option value="in_attesa">⏳ In attesa</option>
+              </select>
+            </div>
+            <div id="ricevute-list" class="entries-list">
+              <div class="empty-state">Nessuna ricevuta</div>
             </div>
           </div>
         </div>
