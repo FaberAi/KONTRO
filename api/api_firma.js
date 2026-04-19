@@ -28,7 +28,7 @@ module.exports = async function handler(req, res) {
       .select(`
         id, importo, data, tipo, note, firma_stato, firmato_at, firma_scade_at,
         dipendenti(nome, cognome, ruolo),
-        businesses:business_id(name, vat_number, email)
+        businesses!business_id(name, vat_number, email)
       `)
       .eq('firma_token', token)
       .single();
