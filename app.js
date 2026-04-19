@@ -5840,30 +5840,25 @@ async function scaricaRicevutaPDF(accontoId) {
   doc.setTextColor(60, 80, 120);
   doc.text('FIRMA DEL DIPENDENTE', margin, y + 7);
 
-  // Immagine firma — sfondo bianco con bordo, firma nera visibile
+  // Immagine firma — bordo leggero, nessun riempimento (la firma è già su sfondo bianco)
   try {
     if (a.firma_data_url && a.firma_data_url.startsWith('data:')) {
-      // Bordo leggero attorno alla firma
+      // Solo bordo grigio attorno
       doc.setDrawColor(200, 210, 225);
-      doc.setFillColor(255, 255, 255);
-      doc.roundedRect(margin, y + 8, 90, 36, 3, 3, 'FD');
+      doc.setLineWidth(0.4);
+      doc.roundedRect(margin, y + 8, 90, 36, 2, 2, 'D');
       // Firma
       const fmt = a.firma_data_url.startsWith('data:image/jpeg') ? 'JPEG' : 'PNG';
-      doc.addImage(a.firma_data_url, fmt, margin + 2, y + 10, 86, 32);
+      doc.addImage(a.firma_data_url, fmt, margin + 1, y + 9, 88, 34);
     } else {
-      doc.setFillColor(240, 242, 245);
-      doc.rect(margin, y + 8, 90, 36, 'F');
-      doc.setTextColor(150, 150, 150);
+      doc.setDrawColor(200, 210, 225);
+      doc.roundedRect(margin, y + 8, 90, 36, 2, 2, 'D');
+      doc.setTextColor(180, 180, 180);
       doc.setFontSize(9);
       doc.text('Firma non disponibile', margin + 45, y + 28, { align: 'center' });
     }
   } catch(e) {
     console.warn('Firma PDF error:', e);
-    doc.setFillColor(240, 242, 245);
-    doc.rect(margin, y + 8, 90, 36, 'F');
-    doc.setTextColor(150, 150, 150);
-    doc.setFontSize(9);
-    doc.text('Errore caricamento firma', margin + 45, y + 28, { align: 'center' });
   }
 
   // Footer
