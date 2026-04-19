@@ -1919,6 +1919,14 @@ async function initBanca() {
   await loadBancheCache();
   populateBancaSelects();
   setTodayFields();
+  // Assicura che i fornitori siano sempre disponibili nel form assegni
+  // indipendentemente dal fatto che si sia visitata la sezione Fornitori
+  if (!fornitoriCache.length && currentBusiness) {
+    const { data } = await db.from('fornitori').select('id,ragione_sociale')
+      .eq('business_id', currentBusiness.id).eq('attivo', true).order('ragione_sociale');
+    fornitoriCache = data || [];
+  }
+  populateFornitoriSelectAssegni();
   await Promise.all([
     loadOverview(),
     loadBancheList(),
@@ -1926,6 +1934,16 @@ async function initBanca() {
     loadAssegni(),
     loadRid()
   ]);
+}
+
+// Popola solo il select fornitore nel form assegni (senza toccare gli altri)
+function populateFornitoriSelectAssegni() {
+  const el = document.getElementById('na-fornitore');
+  if (!el) return;
+  const val = el.value; // preserva selezione attuale
+  el.innerHTML = '<option value="">Nessun fornitore collegato</option>' +
+    fornitoriCache.map(f => `<option value="${f.id}">${f.ragione_sociale}</option>`).join('');
+  if (val) el.value = val;
 }
 
 function setTodayFields() {
