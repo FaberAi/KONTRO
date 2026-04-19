@@ -1943,15 +1943,6 @@ async function initBanca() {
 }
 
 // Popola solo il select fornitore nel form assegni (senza toccare gli altri)
-function populateFornitoriSelectAssegni() {
-  const el = document.getElementById('na-fornitore');
-  if (!el) return;
-  const val = el.value; // preserva selezione attuale
-  el.innerHTML = '<option value="">Nessun fornitore collegato</option>' +
-    fornitoriCache.map(f => `<option value="${f.id}">${f.ragione_sociale}</option>`).join('');
-  if (val) el.value = val;
-}
-
 function setTodayFields() {
   const today = new Date().toISOString().split('T')[0];
   ['nv-data','na-emissione','na-scadenza','nr-prossimo'].forEach(id => {
@@ -5508,42 +5499,92 @@ async function loadAcconti() {
 async function inviaRicevutaFirma(accontoId) {
   if (!currentBusiness) return;
 
-  // Genera token unico
-  const token = crypto.randomUUID();
+  // Mostra subito un feedback visivo (prima degli await)
+  showToast('Generazione link firma...', '');
+
+  // Genera token unico — fallback se crypto.randomUUID non disponibile
+  const token = typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
+
   const scadeAt = new Date();
   scadeAt.setHours(scadeAt.getHours() + 48);
 
+  // Aggiorna il record con il token
   const { error } = await db.from('acconti_stipendio').update({
     firma_token:    token,
     firma_stato:    'in_attesa',
     firma_scade_at: scadeAt.toISOString()
   }).eq('id', accontoId);
 
-  if (error) { showToast('Errore: ' + error.message, 'error'); return; }
+  if (error) {
+    // Se fallisce probabilmente mancano le colonne SQL
+    showToast('Errore: ' + error.message + ' — hai eseguito il SQL su Supabase?', 'error');
+    return;
+  }
 
-  // Carica dati acconto per il messaggio WhatsApp
+  // Carica dati per il messaggio
   const { data: acc } = await db.from('acconti_stipendio')
     .select('importo, data, dipendenti(nome, cognome, telefono)')
     .eq('id', accontoId).single();
 
-  const link     = `https://www.kontro.cloud/firma-ricevuta.html?token=${token}`;
-  const nome     = acc?.dipendenti?.nome || '';
-  const importo  = '€ ' + Number(acc?.importo||0).toFixed(2).replace('.', ',');
-  const telefono = acc?.dipendenti?.telefono?.replace(/\s/g,'') || '';
+  const link    = `https://www.kontro.cloud/firma-ricevuta.html?token=${token}`;
+  const nome    = acc?.dipendenti?.nome || '';
+  const cognome = acc?.dipendenti?.cognome || '';
+  const importo = '€ ' + Number(acc?.importo||0).toFixed(2).replace('.', ',');
+  const tel     = (acc?.dipendenti?.telefono || '').replace(/\s/g, '').replace('+', '');
 
-  const messaggio = encodeURIComponent(
-    `Ciao ${nome}, ti inviamo la ricevuta per l'acconto stipendio di ${importo}.\n\n` +
-    `Clicca qui per visualizzare e firmare (link valido 48 ore):\n${link}`
-  );
+  const testo = `Ciao ${nome}, ti inviamo la ricevuta per l'acconto di ${importo}.\nFirma qui (valido 48 ore):\n${link}`;
+  const waUrl = tel
+    ? `https://wa.me/${tel}?text=${encodeURIComponent(testo)}`
+    : `https://wa.me/?text=${encodeURIComponent(testo)}`;
 
-  const waUrl = telefono
-    ? `https://wa.me/${telefono.replace('+','')}?text=${messaggio}`
-    : `https://wa.me/?text=${messaggio}`;
+  // Mostra modal con link e bottone WhatsApp
+  // (window.open dopo await è bloccato dai browser — usiamo un modal cliccabile)
+  const old = document.getElementById('modal-firma-link');
+  if (old) old.remove();
 
-  window.open(waUrl, '_blank');
-  showToast('Link firma generato · WhatsApp aperto ✓', 'success');
+  const modal = document.createElement('div');
+  modal.id = 'modal-firma-link';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  modal.innerHTML = `
+    <div style="background:var(--surface);border:1px solid rgba(129,140,248,0.4);border-radius:20px;padding:28px;max-width:420px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.6)">
+      <div style="font-size:18px;font-weight:800;color:#c7d2fe;margin-bottom:6px">✍ Link firma generato</div>
+      <div style="font-size:13px;color:rgba(255,255,255,.5);margin-bottom:20px">
+        ${nome} ${cognome} · ${importo} · valido 48 ore
+      </div>
 
-  // Aggiorna la lista per mostrare lo stato aggiornato
+      <div style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:12px;margin-bottom:16px;font-family:monospace;font-size:11px;color:#94a3b8;word-break:break-all;line-height:1.6">
+        ${link}
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <a href="${waUrl}" target="_blank" rel="noopener"
+          style="display:flex;align-items:center;justify-content:center;gap:10px;
+            background:linear-gradient(135deg,#075e54,#128c7e);
+            color:white;font-weight:700;font-size:15px;
+            padding:14px;border-radius:12px;text-decoration:none;
+            border:none;cursor:pointer">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+          Invia su WhatsApp
+        </a>
+
+        <button onclick="navigator.clipboard.writeText('${link}').then(()=>showToast('Link copiato ✓','success'))"
+          style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.8);
+            font-size:13px;padding:12px;border-radius:12px;cursor:pointer;font-weight:600">
+          📋 Copia link
+        </button>
+
+        <button onclick="document.getElementById('modal-firma-link').remove()"
+          style="background:transparent;border:none;color:rgba(255,255,255,.4);font-size:13px;padding:8px;cursor:pointer">
+          Chiudi
+        </button>
+      </div>
+    </div>`;
+
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+
   loadAcconti();
 }
 
