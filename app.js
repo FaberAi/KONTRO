@@ -3465,7 +3465,7 @@ async function calcolaDataOttimaleAssegno(importoAssegno, dataConsigliataEl) {
   dataConsigliataEl.innerHTML = '<div style="padding:12px;font-size:12px;color:var(--gray-400)">⏳ Analisi liquidità in corso...</div>';
 
   const today = new Date().toISOString().split('T')[0];
-  const GIORNI = 60; // mostra 60 giorni
+  const GIORNI = 90; // mostra 90 giorni
   const in90   = new Date(); in90.setDate(in90.getDate() + 90);
   const in90str = in90.toISOString().split('T')[0];
   const from28  = new Date(); from28.setDate(from28.getDate() - 28);
@@ -3607,7 +3607,7 @@ async function calcolaDataOttimaleAssegno(importoAssegno, dataConsigliataEl) {
       <div style="background:#0f172a;padding:14px 16px">`;
 
     // Intestazione giorni
-    html += '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:6px">';
+    html += '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px">';
     giorniSettimana.forEach((g, gi) => {
       const isWeekend = gi >= 5;
       html += `<div style="text-align:center;font-size:10px;font-weight:700;color:${isWeekend?'rgba(251,191,36,.5)':'rgba(255,255,255,.25)'};padding:3px 0;letter-spacing:.05em">${g}</div>`;
@@ -3620,12 +3620,12 @@ async function calcolaDataOttimaleAssegno(importoAssegno, dataConsigliataEl) {
     const offsetToMon = dowStart === 0 ? -6 : 1 - dowStart;
     const calStart  = new Date(startDate); calStart.setDate(calStart.getDate() + offsetToMon);
 
-    html += '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">';
+    html += '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px">';
 
     let mesePrecedente = -1;
     const maxSaldoPositivo = Math.max(...Object.values(saldoPerData).map(d => d.saldo), importoAssegno * 2, 1);
 
-    for (let i = 0; i < 7 * 10; i++) {
+    for (let i = 0; i < 7 * 14; i++) {
       const d  = new Date(calStart); d.setDate(d.getDate() + i);
       const ds = d.toISOString().split('T')[0];
       const isPast    = ds <= today;
@@ -3712,16 +3712,16 @@ async function calcolaDataOttimaleAssegno(importoAssegno, dataConsigliataEl) {
       const glow = glowColor ? `box-shadow:${glowColor};` : '';
 
       html += `<div ${clickHandler} title="${titleTxt}"
-        style="position:relative;border-radius:8px;background:${cellBg};border:${cellBorder};${glow}
+        style="position:relative;border-radius:5px;background:${cellBg};border:${cellBorder};${glow}
           aspect-ratio:1;display:flex;align-items:center;justify-content:center;flex-direction:column;
           ${cursor};transition:transform .12s,box-shadow .12s;user-select:none"
-        onmouseover="if(this.style.cursor!='default')this.style.transform='scale(1.12)'"
+        onmouseover="if(this.style.cursor!='default')this.style.transform='scale(1.08)'"
         onmouseout="this.style.transform='scale(1)'">
-        ${isFirstOfMonth && !isPast ? `<div style="position:absolute;top:2px;left:3px;font-size:7px;font-weight:800;color:rgba(255,255,255,.35);letter-spacing:.03em;text-transform:uppercase">${mesiShort[d.getMonth()]}</div>` : ''}
-        ${haEventi && !isPast ? '<div style="position:absolute;top:3px;right:3px;width:5px;height:5px;border-radius:50%;background:#fbbf24;box-shadow:0 0 4px #fbbf24"></div>' : ''}
+        ${isFirstOfMonth && !isPast ? `<div style="position:absolute;top:2px;left:3px;font-size:6px;font-weight:800;color:rgba(255,255,255,.35);letter-spacing:.03em;text-transform:uppercase">${mesiShort[d.getMonth()]}</div>` : ''}
+        ${haEventi && !isPast ? '<div style="position:absolute;top:2px;right:2px;width:4px;height:4px;border-radius:50%;background:#fbbf24;box-shadow:0 0 3px #fbbf24"></div>' : ''}
         ${isCons ? '<div style="position:absolute;top:3px;left:3px;font-size:8px">⭐</div>' : ''}
-        <div style="font-size:12px;font-weight:700;color:${numColor};line-height:1">${d.getDate()}</div>
-        ${info && !isPast ? `<div style="font-size:7px;color:${numColor};opacity:.7;margin-top:1px;line-height:1">${saldoG >= importoAssegno + BUFFER ? '✓' : saldoG >= 0 ? '~' : '✗'}</div>` : ''}
+        <div style="font-size:10px;font-weight:700;color:${numColor};line-height:1">${d.getDate()}</div>
+        ${info && !isPast ? `<div style="font-size:6px;color:${numColor};opacity:.7;margin-top:1px;line-height:1">${saldoG >= importoAssegno + BUFFER ? '✓' : saldoG >= 0 ? '~' : '✗'}</div>` : ''}
       </div>`;
     }
     html += '</div>';
