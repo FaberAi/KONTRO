@@ -256,8 +256,10 @@
       </div>
 
       <div class="row"><span class="lbl">Dipendente</span><span class="val" id="r-dipendente">—</span></div>
-      <div class="row"><span class="lbl">Data</span><span class="val" id="r-data">—</span></div>
+      <div class="row" id="r-mese-row"><span class="lbl">Periodo di riferimento</span><span class="val" id="r-mese" style="color:#a5b4fc;font-weight:700">—</span></div>
+      <div class="row"><span class="lbl">Data pagamento</span><span class="val" id="r-data">—</span></div>
       <div class="row"><span class="lbl">Tipo pagamento</span><span class="val" id="r-tipo">—</span></div>
+      <div class="row" id="r-erogazione-row" style="display:none"><span class="lbl">Tipo erogazione</span><span class="val" id="r-erogazione">—</span></div>
       <div class="row" id="r-note-row" style="display:none"><span class="lbl">Note</span><span class="val" id="r-note">—</span></div>
 
       <div class="legal" style="margin-top:16px">
@@ -333,6 +335,23 @@
         document.getElementById('r-dipendente').textContent = `${data.dipendenti?.nome || ''} ${data.dipendenti?.cognome || ''}`;
         document.getElementById('r-data').textContent       = formatData(data.data);
         document.getElementById('r-tipo').textContent       = tipoLabel[data.tipo] || data.tipo;
+
+        // Periodo di riferimento
+        const mesiNomi = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
+                          'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+        if (data.mese_riferimento) {
+          const [y,m] = data.mese_riferimento.split('-');
+          document.getElementById('r-mese').textContent = mesiNomi[parseInt(m)-1] + ' ' + y;
+        } else {
+          document.getElementById('r-mese-row').style.display = 'none';
+        }
+
+        // Tipo erogazione
+        if (data.tipo_erogazione) {
+          const erogLabel = { acconto:'💸 Acconto parziale', saldo:'✅ Saldo — pagamento completo' };
+          document.getElementById('r-erogazione').textContent = erogLabel[data.tipo_erogazione] || data.tipo_erogazione;
+          document.getElementById('r-erogazione-row').style.display = 'flex';
+        }
 
         if (data.note) {
           document.getElementById('r-note').textContent     = data.note;

@@ -5374,6 +5374,7 @@ async function saveAcconto() {
     dipendente_id: dipId,
     data, importo, tipo,
     mese_riferimento: document.getElementById('acc-mese-rif')?.value || null,
+    tipo_erogazione: document.getElementById('acc-tipo-erogazione')?.value || 'acconto',
     banca_id: document.getElementById('acc-banca').value || null,
     note: document.getElementById('acc-note').value.trim(),
     created_by: currentUser.id
@@ -5708,7 +5709,7 @@ async function scaricaRicevutaPDF(accontoId) {
   if (!currentBusiness) return;
 
   const { data: a } = await db.from('acconti_stipendio')
-    .select('*, dipendenti(nome,cognome,ruolo), businesses!business_id(name)')
+    .select('*, dipendenti(nome,cognome,ruolo)')
     .eq('id', accontoId).single();
 
   if (!a) { showToast('Ricevuta non trovata', 'error'); return; }
@@ -5825,15 +5826,18 @@ async function scaricaRicevutaPDF(accontoId) {
   doc.setTextColor(60, 80, 120);
   doc.text('FIRMA DEL DIPENDENTE', margin, y + 7);
 
-  // Immagine firma
+  // Immagine firma — usa data URL direttamente (più affidabile con jsPDF)
   try {
-    const firmaImg = new Image();
-    firmaImg.src = a.firma_data_url;
-    await new Promise(r => { firmaImg.onload = r; firmaImg.onerror = r; });
-    doc.addImage(firmaImg, 'PNG', margin, y + 10, 80, 30);
+    if (a.firma_data_url && a.firma_data_url.startsWith('data:')) {
+      doc.addImage(a.firma_data_url, 'PNG', margin, y + 10, 80, 30);
+    } else {
+      doc.setTextColor(150, 150, 150);
+      doc.text('[Firma non disponibile]', margin, y + 25);
+    }
   } catch(e) {
-    doc.setTextColor(150);
-    doc.text('[Firma non disponibile]', margin, y + 25);
+    console.warn('Firma PDF error:', e);
+    doc.setTextColor(150, 150, 150);
+    doc.text('[Firma non caricabile]', margin, y + 25);
   }
 
   // Footer
