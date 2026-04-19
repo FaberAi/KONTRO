@@ -1335,13 +1335,38 @@ html, body {
   gap: 12px;
   margin-top: 16px;
 }
-@media (max-width: 900px) { .storico-kpi-row { grid-template-columns: repeat(2,1fr); } }
+@media (max-width: 900px) { 
+  .storico-kpi-row { grid-template-columns: repeat(2,1fr); }
+  .storico-item { grid-template-columns: 100px 1fr repeat(3, 80px) 32px; gap: 8px; padding: 10px 12px; font-size: 13px; }
+}
 
 .storico-kpi {
   background: var(--navy-700);
   border-radius: var(--radius);
   padding: 12px 16px;
   border: 1px solid rgba(255,255,255,0.05);
+  min-width: 0; /* evita overflow */
+}
+
+.storico-kpi .kpi-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #7a8fb5;
+  margin-bottom: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.storico-kpi .kpi-value {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .storico-list { display: flex; flex-direction: column; gap: 8px; }
@@ -2995,4 +3020,257 @@ html, body {
   overflow: hidden;
   text-overflow: ellipsis;
   font-size: 11px;
+}
+
+/* ============================================
+   MOBILE — Ottimizzazioni complete
+   max-width: 768px
+   ============================================ */
+
+@media (max-width: 768px) {
+
+  /* ── LAYOUT BASE ── */
+  .view { padding: 12px; }
+  .section-card { padding: 14px; border-radius: 12px; }
+  .section-header { flex-wrap: wrap; gap: 8px; }
+  .section-header h2 { font-size: 15px; }
+
+  /* ── KPI GRID ── */
+  .kpi-grid { grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+  .kpi-card { padding: 12px; }
+  .kpi-card .kpi-value { font-size: 18px; }
+  .kpi-card .kpi-label { font-size: 10px; }
+  .kpi-card .kpi-sub { font-size: 10px; }
+
+  /* ── CHARTS ── */
+  .charts-grid { grid-template-columns: 1fr; gap: 12px; }
+  .prev-dashboard-grid { grid-template-columns: 1fr; gap: 12px; }
+
+  /* ── TOPBAR / SIDEBAR ── */
+  .mobile-topbar { display: flex; }
+  .topbar { display: none; }
+  .main-content { margin-left: 0; padding-top: 56px; }
+
+  /* ── FORM ── */
+  .form-grid { grid-template-columns: 1fr; gap: 12px; }
+  .form-card { padding: 16px; }
+  .form-actions { flex-direction: column; gap: 8px; }
+  .form-actions .btn-primary,
+  .form-actions .btn-secondary,
+  .form-actions .btn-danger { width: 100%; justify-content: center; }
+  .add-form { padding: 14px; }
+
+  /* ── FILTRI ── */
+  .filters-row { flex-wrap: wrap; gap: 8px; }
+  .filters-row .filter-input { flex: 1 1 calc(50% - 4px); min-width: 120px; }
+  .filters-row .btn-primary,
+  .filters-row .btn-secondary { flex: 1; }
+  .filter-totals { flex-wrap: wrap; gap: 8px; }
+  .ft-item { font-size: 12px; }
+
+  /* ── ENTRY ITEMS ── */
+  .entry-item { padding: 10px 12px; gap: 8px; }
+  .entry-desc { font-size: 13px; }
+  .entry-meta { font-size: 10px; }
+  .entry-amount { font-size: 14px; }
+
+  /* ── PRIMA NOTA ── */
+  .pn-header-card {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 14px;
+    gap: 12px;
+  }
+  .pn-header-left { flex-direction: column; gap: 10px; }
+  .pn-field-wrap input,
+  .pn-field-wrap select { min-width: unset; width: 100%; font-size: 16px; /* evita zoom iOS */ }
+  .pn-fc-input { width: 100%; font-size: 16px; }
+  .pn-fc-box { width: 100%; }
+
+  /* Tabella Prima Nota — prima colonna più stretta */
+  .pn-table { font-size: 12px; }
+  .pn-table th.th-desc { min-width: 120px; }
+  .pn-table th.th-turno { width: 90px; }
+  .pn-table .td-desc { font-size: 12px; padding: 6px 8px; }
+  .pn-input { font-size: 14px; padding: 6px 8px; }
+  .pn-desc-input { font-size: 11px; }
+
+  /* KPI Prima Nota */
+  .pn-kpi-row { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .pn-kpi-val { font-size: 15px; }
+  .pn-compilatori { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .pn-compilatori .field:last-child { grid-column: span 2; }
+
+  /* Bottoni Prima Nota */
+  .pn-riepilogo .form-actions { flex-wrap: wrap; }
+  .pn-riepilogo .btn-secondary,
+  .pn-riepilogo .btn-primary,
+  .pn-riepilogo .btn-danger { flex: 1 1 calc(50% - 4px); min-width: 120px; font-size: 12px; padding: 10px 8px; }
+
+  /* ── BANCA & FINANZA ── */
+  .banca-tabs { flex-wrap: wrap; gap: 4px; }
+  .banca-tab { flex: 1 1 auto; min-width: 70px; font-size: 11px; padding: 8px 6px; text-align: center; }
+
+  .kpi-grid.banca { grid-template-columns: 1fr 1fr; }
+
+  /* Assegni */
+  .assegno-item {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 12px;
+  }
+  .assegno-item .ass-info { flex: 1 1 100%; }
+  .assegno-item .ass-meta { font-size: 10px; }
+  .assegno-item .ass-importo { font-size: 15px; }
+  .assegno-item .ass-badge { font-size: 10px; }
+
+  /* RID */
+  .rid-item { flex-wrap: wrap; gap: 8px; }
+  .rid-item .rid-prossimo { flex: 1 1 100%; text-align: left; }
+
+  /* Versamenti */
+  .banche-grid { grid-template-columns: 1fr; }
+  .banca-card { padding: 14px; }
+  .banca-card .bc-saldo { font-size: 18px; }
+
+  /* Estratto conto */
+  .ec-item { padding: 8px 10px; gap: 6px; font-size: 12px; }
+  .ec-desc { font-size: 12px; }
+  .ec-meta { font-size: 10px; }
+  .ec-val { min-width: 80px !important; font-size: 12px; }
+  .ec-header-row { font-size: 10px; }
+
+  /* ── FORNITORI ── */
+  .fornitore-item {
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 12px;
+  }
+  .fornitore-info { flex: 1 1 100%; }
+  .fornitore-esposizione { flex: 1 1 100%; }
+  .fornitore-item > div:last-child { width: 100%; justify-content: flex-end; }
+
+  .fattura-item { flex-wrap: wrap; gap: 8px; padding: 10px 12px; }
+  .fattura-item .ft-info { flex: 1 1 100%; }
+  .fattura-item .ft-importo { font-size: 15px; }
+
+  /* ── STORICO ── */
+  .storico-kpi-row { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .storico-item {
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    padding: 10px 12px;
+    font-size: 12px;
+  }
+  .storico-item .st-data { grid-column: span 2; font-size: 13px; }
+  .storico-item .st-sede { display: none; } /* nasconde compilatori su mobile */
+  .storico-item .st-val { font-size: 11px; text-align: left; }
+  .storico-item .st-arrow { grid-column: span 2; text-align: right; }
+  .storico-kpi .kpi-value { font-size: 18px; }
+
+  /* ── IMPOSTAZIONI ── */
+  .categorie-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .categoria-card { padding: 10px; }
+
+  /* ── DIPENDENTI / HR ── */
+  .dipendente-item { flex-wrap: wrap; gap: 8px; }
+  .dip-info { flex: 1 1 100%; }
+  .turni-grid-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .presenze-grid { grid-template-columns: repeat(5, 1fr); gap: 4px; }
+  .presenze-cell { min-height: 36px; font-size: 10px; }
+
+  /* ── SEDI ── */
+  .location-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .loc-info { flex: 1; }
+  .loc-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+  /* ── TEAM ── */
+  .member-item { flex-wrap: wrap; gap: 8px; }
+  .member-info { flex: 1 1 100%; }
+
+  /* ── MODAL ── */
+  .modal-card {
+    margin: 12px;
+    max-height: calc(100vh - 24px);
+    overflow-y: auto;
+  }
+  .modal-body { padding: 14px; }
+  .modal-footer { flex-direction: column; gap: 8px; }
+  .modal-footer .btn-primary,
+  .modal-footer .btn-secondary { width: 100%; }
+
+  /* ── REPORT ── */
+  .report-grid { grid-template-columns: 1fr; }
+  .report-month-select { flex-direction: column; gap: 8px; }
+
+  /* ── HELP DRAWER ── */
+  #help-drawer { width: 100% !important; right: 0 !important; }
+
+  /* ── TIPO TOGGLE ── */
+  .type-toggle { flex-direction: row; }
+  .type-btn { flex: 1; }
+
+  /* ── TABS FORNITORI/BANCA/IMPOSTAZIONI ── */
+  .banca-panel { padding-top: 12px; }
+
+  /* ── INPUT ANTI-ZOOM iOS ── */
+  input[type="text"],
+  input[type="email"],
+  input[type="number"],
+  input[type="password"],
+  input[type="date"],
+  input[type="time"],
+  input[type="tel"],
+  select,
+  textarea {
+    font-size: 16px !important; /* blocca zoom automatico su iOS */
+  }
+
+  /* eccezioni — elementi dove il font più piccolo è intenzionale */
+  .pn-input,
+  .pn-desc-input,
+  .filter-input,
+  .banca-tab { font-size: 14px !important; }
+
+  /* ── FAB ── */
+  .fab { bottom: 20px; right: 16px; width: 52px; height: 52px; font-size: 24px; }
+
+  /* ── TABELLA POS/CARTE/BONIFICI — select banca compatta ── */
+  .pn-table .td-desc select.pn-desc-input {
+    font-size: 11px !important;
+    padding: 3px 6px;
+  }
+
+  /* ── OVERFLOW PROTEZIONE ── */
+  .main-content { overflow-x: hidden; }
+  .banca-panel { overflow-x: hidden; }
+  .banche-grid { overflow-x: hidden; }
+}
+
+/* ── TABLET 768-1024px ── */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .form-grid { grid-template-columns: 1fr 1fr; }
+  .pn-kpi-row { grid-template-columns: repeat(2, 1fr); }
+  .storico-item { font-size: 12px; gap: 8px; }
+  .banca-tab { font-size: 12px; padding: 8px 10px; }
+  .fornitore-item { flex-wrap: wrap; }
+  .fornitore-esposizione { flex: 1 1 100%; margin-top: 8px; }
+}
+
+/* ── SMALL PHONE < 380px ── */
+@media (max-width: 380px) {
+  .kpi-grid { grid-template-columns: 1fr; }
+  .pn-kpi-row { grid-template-columns: 1fr; }
+  .pn-riepilogo .btn-secondary,
+  .pn-riepilogo .btn-primary,
+  .pn-riepilogo .btn-danger { flex: 1 1 100%; }
+  .banca-tab { font-size: 10px; padding: 7px 4px; }
+  .storico-kpi-row { grid-template-columns: 1fr; }
 }
