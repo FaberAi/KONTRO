@@ -5649,22 +5649,37 @@ async function loadRicevute() {
   const meseFilter  = document.getElementById('ric-filter-mese')?.value;
   const statoFilter = document.getElementById('ric-filter-stato')?.value;
 
+  // Query semplice senza join problematici — carica dipendenti separatamente
   let query = db.from('acconti_stipendio')
-    .select('*, firma_stato, firma_token, firmato_at, mese_riferimento, tipo_erogazione, dipendenti(nome,cognome)')
+    .select('*')
     .eq('business_id', currentBusiness.id)
     .order('data', { ascending: false })
     .limit(100);
 
-  if (dipFilter)  query = query.eq('dipendente_id', dipFilter);
+  if (dipFilter)   query = query.eq('dipendente_id', dipFilter);
   if (statoFilter) query = query.eq('firma_stato', statoFilter);
-  if (meseFilter) query = query.eq('mese_riferimento', meseFilter);
+  if (meseFilter)  query = query.eq('mese_riferimento', meseFilter);
 
-  const { data } = await query;
+  const { data, error } = await query;
+
+  if (error) {
+    el.innerHTML = `<div class="empty-state">Errore: ${error.message}</div>`;
+    return;
+  }
 
   if (!data?.length) {
     el.innerHTML = '<div class="empty-state">Nessuna ricevuta trovata</div>';
     return;
   }
+
+  // Arricchisce con nomi dipendenti dalla cache
+  const arricchito = data.map(a => ({
+    ...a,
+    dipNome: (() => {
+      const d = dipendentiCache.find(x => x.id === a.dipendente_id);
+      return d ? `${d.nome} ${d.cognome}` : '—';
+    })()
+  }));
 
   const statoHTML = {
     in_attesa: '<span style="background:rgba(251,191,36,.15);color:#fbbf24;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700">⏳ In attesa</span>',
@@ -5675,9 +5690,9 @@ async function loadRicevute() {
   const mesiNomi = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
                     'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
 
-  el.innerHTML = data.map(a => {
-    const dipNome = `${a.dipendenti?.nome||''} ${a.dipendenti?.cognome||''}`.trim();
-    const stato   = a.firma_stato || 'non_inviata';
+  el.innerHTML = arricchito.map(a => {
+    const dipNome  = a.dipNome;
+    const stato    = a.firma_stato || 'non_inviata';
     const meseLabel = a.mese_riferimento
       ? (() => { const [y,m] = a.mese_riferimento.split('-'); return mesiNomi[parseInt(m)-1] + ' ' + y; })()
       : formatDate(a.data);
