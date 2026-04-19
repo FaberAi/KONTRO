@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Ricevuta · KONTRO</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #060b18;
+      --surface: #0d1625;
+      --border:  rgba(255,255,255,0.08);
+      --text:    #e2e8f0;
+      --muted:   rgba(255,255,255,0.4);
+      --green:   #00e5a0;
+      --blue:    #60a5fa;
+      --gold:    #fbbf24;
+      --red:     #f43f5e;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Mono', monospace;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px 16px 40px;
+    }
+
+    /* ── LOGO ── */
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 24px;
+    }
+    .logo-k {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, #3730a3, #6366f1);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Syne', sans-serif;
+      font-weight: 800; font-size: 18px; color: white;
+    }
+    .logo-text {
+      font-family: 'Syne', sans-serif;
+      font-weight: 800; font-size: 20px;
+      letter-spacing: .06em;
+    }
+
+    /* ── CARD ── */
+    .card {
+      width: 100%; max-width: 480px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      overflow: hidden;
+    }
+
+    .card-header {
+      background: linear-gradient(135deg, #1e1b4b, #0f172a);
+      padding: 20px 22px;
+      border-bottom: 1px solid var(--border);
+    }
+    .card-header .label {
+      font-size: 10px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .12em;
+      color: var(--muted); margin-bottom: 6px;
+    }
+    .card-header .title {
+      font-family: 'Syne', sans-serif;
+      font-size: 22px; font-weight: 800; color: white;
+    }
+    .card-header .subtitle {
+      font-size: 12px; color: var(--muted); margin-top: 4px;
+    }
+
+    .card-body { padding: 22px; }
+
+    /* ── DATI RICEVUTA ── */
+    .row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      gap: 12px;
+    }
+    .row:last-of-type { border-bottom: none; }
+    .row .lbl { font-size: 11px; color: var(--muted); flex-shrink: 0; }
+    .row .val { font-size: 13px; font-weight: 500; text-align: right; }
+
+    .importo-box {
+      background: rgba(0,229,160,0.08);
+      border: 1px solid rgba(0,229,160,0.2);
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+      margin: 16px 0;
+    }
+    .importo-box .lbl { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+    .importo-box .val { font-size: 32px; font-weight: 800; color: var(--green); }
+
+    /* ── TESTO LEGALE ── */
+    .legal {
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.6;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-bottom: 20px;
+    }
+
+    /* ── FIRMA CANVAS ── */
+    .firma-wrap {
+      background: rgba(255,255,255,0.03);
+      border: 2px dashed rgba(255,255,255,0.15);
+      border-radius: 14px;
+      padding: 12px;
+      margin-bottom: 12px;
+      position: relative;
+    }
+    .firma-label {
+      font-size: 11px; color: var(--muted);
+      margin-bottom: 8px; text-align: center;
+      font-weight: 600; text-transform: uppercase; letter-spacing: .08em;
+    }
+    canvas#firma-canvas {
+      width: 100%;
+      height: 140px;
+      display: block;
+      border-radius: 8px;
+      background: rgba(255,255,255,0.06);
+      cursor: crosshair;
+      touch-action: none;
+    }
+    .firma-hint {
+      font-size: 10px; color: rgba(255,255,255,.2);
+      text-align: center; margin-top: 6px;
+    }
+    .btn-clear {
+      position: absolute; top: 12px; right: 12px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--border);
+      color: var(--muted); font-size: 11px;
+      padding: 4px 10px; border-radius: 6px;
+      cursor: pointer;
+    }
+
+    /* ── BOTTONI ── */
+    .btn-firma {
+      width: 100%;
+      background: linear-gradient(135deg, #3730a3, #6366f1);
+      border: none; border-radius: 12px;
+      color: white; font-family: 'Syne', sans-serif;
+      font-size: 15px; font-weight: 700;
+      padding: 16px; cursor: pointer;
+      letter-spacing: .04em;
+      transition: opacity .2s;
+    }
+    .btn-firma:disabled { opacity: .4; cursor: not-allowed; }
+    .btn-firma:not(:disabled):hover { opacity: .9; }
+
+    /* ── STATI ── */
+    #stato-loading, #stato-errore, #stato-scaduto, #stato-firmata, #stato-successo {
+      display: none;
+      text-align: center;
+      padding: 40px 20px;
+    }
+    .stato-icon { font-size: 48px; margin-bottom: 16px; }
+    .stato-titolo { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 800; margin-bottom: 8px; }
+    .stato-sub { font-size: 13px; color: var(--muted); line-height: 1.6; }
+
+    #stato-loading { display: flex; flex-direction: column; align-items: center; }
+    .spinner {
+      width: 40px; height: 40px;
+      border: 3px solid rgba(255,255,255,.1);
+      border-top-color: var(--blue);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+  <div class="logo">
+    <div class="logo-k">K</div>
+    <div class="logo-text">KONTRO</div>
+  </div>
+
+  <!-- Loading -->
+  <div id="stato-loading" class="card" style="display:flex">
+    <div class="card-body" style="display:flex;flex-direction:column;align-items:center;padding:40px">
+      <div class="spinner"></div>
+      <div style="font-size:13px;color:var(--muted)">Caricamento ricevuta...</div>
+    </div>
+  </div>
+
+  <!-- Errore -->
+  <div id="stato-errore" class="card">
+    <div class="card-body">
+      <div class="stato-icon">❌</div>
+      <div class="stato-titolo" style="color:var(--red)">Ricevuta non trovata</div>
+      <div class="stato-sub">Il link non è valido o è stato revocato.</div>
+    </div>
+  </div>
+
+  <!-- Scaduto -->
+  <div id="stato-scaduto" class="card">
+    <div class="card-body">
+      <div class="stato-icon">⏰</div>
+      <div class="stato-titolo" style="color:var(--gold)">Link scaduto</div>
+      <div class="stato-sub">Questo link era valido solo 48 ore. Chiedi al tuo datore di lavoro di inviarti un nuovo link.</div>
+    </div>
+  </div>
+
+  <!-- Già firmata -->
+  <div id="stato-firmata" class="card">
+    <div class="card-body" style="padding:40px;text-align:center">
+      <div class="stato-icon">✅</div>
+      <div class="stato-titolo" style="color:var(--green)">Già firmata</div>
+      <div class="stato-sub" id="firmata-data">Questa ricevuta è già stata firmata.</div>
+    </div>
+  </div>
+
+  <!-- Successo firma -->
+  <div id="stato-successo" class="card">
+    <div class="card-body" style="padding:40px;text-align:center">
+      <div class="stato-icon">🎉</div>
+      <div class="stato-titolo" style="color:var(--green)">Firma registrata!</div>
+      <div class="stato-sub">La tua firma è stata salvata. Puoi chiudere questa pagina.</div>
+    </div>
+  </div>
+
+  <!-- Ricevuta da firmare -->
+  <div id="stato-ricevuta" class="card" style="display:none">
+    <div class="card-header">
+      <div class="label">Ricevuta acconto stipendio</div>
+      <div class="title" id="r-azienda">—</div>
+      <div class="subtitle" id="r-subtitle">—</div>
+    </div>
+    <div class="card-body">
+
+      <div class="importo-box">
+        <div class="lbl">Importo acconto</div>
+        <div class="val" id="r-importo">€ 0,00</div>
+      </div>
+
+      <div class="row"><span class="lbl">Dipendente</span><span class="val" id="r-dipendente">—</span></div>
+      <div class="row"><span class="lbl">Data</span><span class="val" id="r-data">—</span></div>
+      <div class="row"><span class="lbl">Tipo pagamento</span><span class="val" id="r-tipo">—</span></div>
+      <div class="row" id="r-note-row" style="display:none"><span class="lbl">Note</span><span class="val" id="r-note">—</span></div>
+
+      <div class="legal" style="margin-top:16px">
+        Il sottoscritto dichiara di aver ricevuto dall'azienda indicata la somma
+        riportata a titolo di acconto sulla retribuzione del mese in corso.
+        La firma apposta di seguito costituisce prova di avvenuta ricezione.
+      </div>
+
+      <div class="firma-wrap">
+        <div class="firma-label">✍ Firma qui con il dito</div>
+        <button class="btn-clear" onclick="clearFirma()">Cancella</button>
+        <canvas id="firma-canvas"></canvas>
+        <div class="firma-hint">Disegna la tua firma nello spazio sopra</div>
+      </div>
+
+      <button class="btn-firma" id="btn-firma" onclick="salvaFirma()" disabled>
+        Firma e conferma
+      </button>
+
+      <div id="firma-msg" style="text-align:center;font-size:12px;color:var(--red);margin-top:10px;display:none"></div>
+    </div>
+  </div>
+
+  <script>
+    // ── CONFIG ──────────────────────────────────────────────────────────
+    const API_BASE = '/api/firma';
+    const token = new URLSearchParams(location.search).get('token');
+
+    // ── UTILS ──────────────────────────────────────────────────────────
+    function show(id) {
+      ['stato-loading','stato-errore','stato-scaduto','stato-firmata','stato-successo','stato-ricevuta']
+        .forEach(s => document.getElementById(s).style.display = s === id ? (id === 'stato-ricevuta' ? 'block' : 'flex') : 'none');
+    }
+
+    function formatData(d) {
+      return new Date(d + 'T12:00:00').toLocaleDateString('it-IT', { day:'2-digit', month:'long', year:'numeric' });
+    }
+
+    function formatEur(n) {
+      return '€ ' + Number(n||0).toLocaleString('it-IT', { minimumFractionDigits:2, maximumFractionDigits:2 });
+    }
+
+    const tipoLabel = {
+      contanti_cassa: '💵 Contanti da cassa',
+      contanti_extra: '💰 Contanti extra',
+      bonifico:       '🏦 Bonifico bancario',
+      fuori_busta:    '🤫 Fuori busta'
+    };
+
+    // ── CARICA RICEVUTA ──────────────────────────────────────────────────
+    async function caricaRicevuta() {
+      if (!token) { show('stato-errore'); return; }
+
+      try {
+        const res  = await fetch(`${API_BASE}?token=${token}`);
+        const data = await res.json();
+
+        if (res.status === 404) { show('stato-errore'); return; }
+        if (res.status === 410 || data.scaduto) { show('stato-scaduto'); return; }
+        if (!res.ok) { show('stato-errore'); return; }
+
+        if (data.firma_stato === 'firmata') {
+          document.getElementById('firmata-data').textContent =
+            'Firmata il ' + new Date(data.firmato_at).toLocaleDateString('it-IT', { day:'2-digit', month:'long', year:'numeric', hour:'2-digit', minute:'2-digit' });
+          show('stato-firmata');
+          return;
+        }
+
+        // Popola ricevuta
+        document.getElementById('r-azienda').textContent    = data.businesses?.name || '—';
+        document.getElementById('r-subtitle').textContent   = data.businesses?.vat_number ? 'P.IVA ' + data.businesses.vat_number : '';
+        document.getElementById('r-importo').textContent    = formatEur(data.importo);
+        document.getElementById('r-dipendente').textContent = `${data.dipendenti?.nome || ''} ${data.dipendenti?.cognome || ''}`;
+        document.getElementById('r-data').textContent       = formatData(data.data);
+        document.getElementById('r-tipo').textContent       = tipoLabel[data.tipo] || data.tipo;
+
+        if (data.note) {
+          document.getElementById('r-note').textContent     = data.note;
+          document.getElementById('r-note-row').style.display = 'flex';
+        }
+
+        show('stato-ricevuta');
+        initCanvas();
+
+      } catch (err) {
+        show('stato-errore');
+      }
+    }
+
+    // ── CANVAS FIRMA ─────────────────────────────────────────────────────
+    let canvas, ctx, drawing = false, hasStrokes = false;
+
+    function initCanvas() {
+      canvas = document.getElementById('firma-canvas');
+      ctx    = canvas.getContext('2d');
+
+      // Risoluzione alta per schermi retina
+      const ratio = window.devicePixelRatio || 1;
+      const rect  = canvas.getBoundingClientRect();
+      canvas.width  = rect.width  * ratio;
+      canvas.height = rect.height * ratio;
+      ctx.scale(ratio, ratio);
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth   = 2.5;
+      ctx.lineCap     = 'round';
+      ctx.lineJoin    = 'round';
+
+      // Mouse
+      canvas.addEventListener('mousedown', startDraw);
+      canvas.addEventListener('mousemove', draw);
+      canvas.addEventListener('mouseup',   endDraw);
+      canvas.addEventListener('mouseleave', endDraw);
+
+      // Touch
+      canvas.addEventListener('touchstart',  e => { e.preventDefault(); startDraw(e.touches[0]); }, { passive: false });
+      canvas.addEventListener('touchmove',   e => { e.preventDefault(); draw(e.touches[0]); },      { passive: false });
+      canvas.addEventListener('touchend',    e => { e.preventDefault(); endDraw(); },                { passive: false });
+    }
+
+    function getPos(e) {
+      const r = canvas.getBoundingClientRect();
+      return { x: (e.clientX - r.left), y: (e.clientY - r.top) };
+    }
+
+    function startDraw(e) {
+      drawing = true;
+      const p = getPos(e);
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+    }
+
+    function draw(e) {
+      if (!drawing) return;
+      const p = getPos(e);
+      ctx.lineTo(p.x, p.y);
+      ctx.stroke();
+      hasStrokes = true;
+      document.getElementById('btn-firma').disabled = false;
+    }
+
+    function endDraw() { drawing = false; }
+
+    function clearFirma() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      hasStrokes = false;
+      document.getElementById('btn-firma').disabled = true;
+    }
+
+    // ── SALVA FIRMA ──────────────────────────────────────────────────────
+    async function salvaFirma() {
+      if (!hasStrokes) return;
+
+      const btn = document.getElementById('btn-firma');
+      const msg = document.getElementById('firma-msg');
+      btn.disabled = true;
+      btn.textContent = 'Invio in corso...';
+      msg.style.display = 'none';
+
+      try {
+        const firmaDataUrl = canvas.toDataURL('image/png');
+
+        const res = await fetch(API_BASE, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token, firma: firmaDataUrl })
+        });
+
+        const data = await res.json();
+
+        if (res.status === 409) { show('stato-firmata'); return; }
+        if (res.status === 410) { show('stato-scaduto');  return; }
+        if (!res.ok || data.error) throw new Error(data.error || 'Errore');
+
+        show('stato-successo');
+
+      } catch (err) {
+        btn.disabled = false;
+        btn.textContent = 'Firma e conferma';
+        msg.textContent = '⚠ Errore: ' + err.message + '. Riprova.';
+        msg.style.display = 'block';
+      }
+    }
+
+    // ── INIT ────────────────────────────────────────────────────────────
+    caricaRicevuta();
+  </script>
+</body>
+</html>

@@ -5411,7 +5411,7 @@ async function loadAcconti() {
 
   // Carica acconti
   let query = db.from('acconti_stipendio')
-    .select('*, dipendenti(nome,cognome,importo_fisso,paga_oraria,ore_settimanali,tipo_contratto)')
+    .select('*, firma_stato, dipendenti(nome,cognome,importo_fisso,paga_oraria,ore_settimanali,tipo_contratto)')
     .eq('business_id', currentBusiness.id)
     .order('data', { ascending: false }).limit(50);
   if (dipFilter) query = query.eq('dipendente_id', dipFilter);
@@ -5461,19 +5461,71 @@ async function loadAcconti() {
     }
   }
 
+  const firmaLabel = {
+    non_inviata: '',
+    in_attesa:   '<span style="font-size:10px;background:rgba(251,191,36,.15);color:#fbbf24;padding:2px 8px;border-radius:20px;font-weight:600">⏳ In attesa firma</span>',
+    firmata:     '<span style="font-size:10px;background:rgba(0,229,160,.15);color:#00e5a0;padding:2px 8px;border-radius:20px;font-weight:600">✅ Firmata</span>'
+  };
+
   html += data.map(a => `
     <div class="acconto-item">
       <div class="entry-dot uscita"></div>
       <div class="entry-info">
         <div class="entry-desc">${a.dipendenti?.nome || ''} ${a.dipendenti?.cognome || ''}</div>
-        <div class="entry-meta">${formatDate(a.data)}${a.note ? ' · ' + a.note : ''}</div>
+        <div class="entry-meta">${formatDate(a.data)}${a.note ? ' · ' + a.note : ''} ${firmaLabel[a.firma_stato||'non_inviata']}</div>
       </div>
       <span class="acc-tipo-badge ${a.tipo}">${tipoLabel[a.tipo] || a.tipo}</span>
       <div class="entry-amount uscita">- ${formatEur(a.importo)}</div>
-      <button class="entry-del" onclick="deleteAcconto('${a.id}')">✕</button>
+      <div style="display:flex;gap:4px;flex-shrink:0">
+        ${a.firma_stato !== 'firmata' ? `<button class="btn-secondary sm" onclick="inviaRicevutaFirma('${a.id}')" title="Invia ricevuta per firma">✍</button>` : ''}
+        <button class="entry-del" onclick="deleteAcconto('${a.id}')">✕</button>
+      </div>
     </div>`).join('');
 
   el.innerHTML = html;
+}
+
+// ★ RICEVUTA FIRMA — genera token e apre WhatsApp
+async function inviaRicevutaFirma(accontoId) {
+  if (!currentBusiness) return;
+
+  // Genera token unico
+  const token = crypto.randomUUID();
+  const scadeAt = new Date();
+  scadeAt.setHours(scadeAt.getHours() + 48);
+
+  const { error } = await db.from('acconti_stipendio').update({
+    firma_token:    token,
+    firma_stato:    'in_attesa',
+    firma_scade_at: scadeAt.toISOString()
+  }).eq('id', accontoId);
+
+  if (error) { showToast('Errore: ' + error.message, 'error'); return; }
+
+  // Carica dati acconto per il messaggio WhatsApp
+  const { data: acc } = await db.from('acconti_stipendio')
+    .select('importo, data, dipendenti(nome, cognome, telefono)')
+    .eq('id', accontoId).single();
+
+  const link     = `https://www.kontro.cloud/firma-ricevuta.html?token=${token}`;
+  const nome     = acc?.dipendenti?.nome || '';
+  const importo  = '€ ' + Number(acc?.importo||0).toFixed(2).replace('.', ',');
+  const telefono = acc?.dipendenti?.telefono?.replace(/\s/g,'') || '';
+
+  const messaggio = encodeURIComponent(
+    `Ciao ${nome}, ti inviamo la ricevuta per l'acconto stipendio di ${importo}.\n\n` +
+    `Clicca qui per visualizzare e firmare (link valido 48 ore):\n${link}`
+  );
+
+  const waUrl = telefono
+    ? `https://wa.me/${telefono.replace('+','')}?text=${messaggio}`
+    : `https://wa.me/?text=${messaggio}`;
+
+  window.open(waUrl, '_blank');
+  showToast('Link firma generato · WhatsApp aperto ✓', 'success');
+
+  // Aggiorna la lista per mostrare lo stato aggiornato
+  loadAcconti();
 }
 
 async function deleteAcconto(id) {
