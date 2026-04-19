@@ -923,11 +923,32 @@
             <h2 style="margin-bottom:16px">Nuovo assegno</h2>
             <div class="form-grid">
               <div class="field"><label>Numero assegno</label><input type="text" id="na-numero" placeholder="Es. 001234" /></div>
-              <div class="field"><label>Fornitore</label><select id="na-fornitore" onchange="loadFattureFornitoreAssegno()"><option value="">Seleziona o lascia libero</option></select></div>
+              <div class="field">
+                <label>Beneficiario</label>
+                <select id="na-fornitore" onchange="onBeneficiarioAssegnoChange()">
+                  <option value="">Seleziona o lascia libero</option>
+                  <optgroup id="na-fornitore-group-fornitori" label="📦 Fornitori"></optgroup>
+                  <optgroup id="na-fornitore-group-dipendenti" label="👤 Dipendenti"></optgroup>
+                </select>
+              </div>
               <!-- Fatture aperte del fornitore -->
               <div class="field full" id="na-fatture-wrap" style="display:none">
                 <label>Fatture aperte — seleziona quelle che stai pagando</label>
                 <div id="na-fatture-list" class="fatture-assegno-list"></div>
+              </div>
+              <!-- Saldo stipendio dipendente -->
+              <div class="field full" id="na-dipendente-wrap" style="display:none">
+                <div style="background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.25);border-radius:10px;padding:12px 14px">
+                  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(165,180,252,.7);margin-bottom:8px">👤 Acconto stipendio</div>
+                  <div style="display:flex;gap:20px;flex-wrap:wrap">
+                    <div><div style="font-size:10px;color:rgba(255,255,255,.35)">Stipendio</div><div id="na-dip-stipendio" style="font-family:monospace;font-weight:700;color:#e2e8f0">—</div></div>
+                    <div><div style="font-size:10px;color:rgba(255,255,255,.35)">Acconti mese</div><div id="na-dip-acconti" style="font-family:monospace;font-weight:700;color:#f97316">—</div></div>
+                    <div><div style="font-size:10px;color:rgba(255,255,255,.35)">Da corrispondere</div><div id="na-dip-saldo" style="font-family:monospace;font-weight:700;color:#00e5a0">—</div></div>
+                  </div>
+                  <div style="font-size:11px;color:rgba(165,180,252,.6);margin-top:8px">
+                    💡 Il bonifico sarà registrato anche come acconto stipendio
+                  </div>
+                </div>
               </div>
               <div id="na-data-consigliata" style="display:none;background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.3);border-radius:8px;padding:10px 14px;font-size:13px;color:#a5b4fc;font-weight:600;margin-top:-8px;line-height:1.6"></div>
               <div class="field"><label>Importo (€)</label><input type="number" id="na-importo" step="0.01" placeholder="0,00" /></div>
@@ -1715,9 +1736,9 @@
           <div class="section-card" style="margin-bottom:16px">
             <h2 style="margin-bottom:16px">Nuovo acconto stipendio</h2>
             <div class="form-grid">
-              <div class="field"><label>Dipendente</label><select id="acc-dipendente"><option value="">Seleziona</option></select></div>
+              <div class="field"><label>Dipendente</label><select id="acc-dipendente" onchange="aggiornaSaldoStipendio()"><option value="">Seleziona</option></select></div>
               <div class="field"><label>Data</label><input type="date" id="acc-data" /></div>
-              <div class="field"><label>Importo (€)</label><input type="number" id="acc-importo" step="0.01" placeholder="0,00" /></div>
+              <div class="field"><label>Importo (€)</label><input type="number" id="acc-importo" step="0.01" placeholder="0,00" oninput="aggiornaSaldoStipendio()" /></div>
               <div class="field"><label>Tipo pagamento</label>
                 <select id="acc-tipo" onchange="toggleAccBanca()">
                   <option value="contanti_cassa">💵 Contanti da cassa (Prima Nota)</option>
@@ -1732,7 +1753,31 @@
               </div>
               <div class="field full"><label>Note</label><input type="text" id="acc-note" placeholder="Note..." /></div>
             </div>
-            <div class="form-actions">
+
+            <!-- ★ PANNELLO SALDO STIPENDIO ★ -->
+            <div id="acc-saldo-panel" style="display:none;margin-top:16px;border-radius:12px;overflow:hidden;border:1px solid rgba(255,255,255,0.08)">
+              <div style="background:linear-gradient(135deg,#1e1b4b,#0f172a);padding:14px 18px;border-bottom:1px solid rgba(255,255,255,0.07)">
+                <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:rgba(255,255,255,.4);margin-bottom:4px">Situazione stipendio — mese corrente</div>
+                <div id="acc-saldo-dipnome" style="font-size:14px;font-weight:700;color:#e2e8f0"></div>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);background:#0f172a">
+                <div style="padding:14px 16px;border-right:1px solid rgba(255,255,255,0.07)">
+                  <div style="font-size:10px;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Stipendio mensile</div>
+                  <div id="acc-saldo-stipendio" style="font-size:18px;font-weight:800;color:#e2e8f0;font-family:monospace">—</div>
+                </div>
+                <div style="padding:14px 16px;border-right:1px solid rgba(255,255,255,0.07)">
+                  <div style="font-size:10px;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Acconti questo mese</div>
+                  <div id="acc-saldo-acconti" style="font-size:18px;font-weight:800;color:#f97316;font-family:monospace">€ 0,00</div>
+                </div>
+                <div style="padding:14px 16px">
+                  <div style="font-size:10px;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Da corrispondere</div>
+                  <div id="acc-saldo-rimanente" style="font-size:18px;font-weight:800;font-family:monospace;color:#00e5a0">—</div>
+                </div>
+              </div>
+              <div id="acc-saldo-avviso" style="display:none;padding:10px 16px;background:rgba(239,68,68,0.15);border-top:1px solid rgba(239,68,68,0.3);font-size:12px;color:#fca5a5;font-weight:600"></div>
+            </div>
+
+            <div class="form-actions" style="margin-top:16px">
               <button class="btn-primary" onclick="saveAcconto()">Registra acconto →</button>
             </div>
             <div id="acc-msg" class="auth-message"></div>

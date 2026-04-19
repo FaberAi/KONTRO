@@ -1926,6 +1926,12 @@ async function initBanca() {
       .eq('business_id', currentBusiness.id).eq('attivo', true).order('ragione_sociale');
     fornitoriCache = data || [];
   }
+  // Carica anche i dipendenti se non già in cache
+  if (!dipendentiCache.length && currentBusiness) {
+    const { data } = await db.from('dipendenti').select('id,nome,cognome,importo_fisso,paga_oraria,ore_settimanali,tipo_contratto')
+      .eq('business_id', currentBusiness.id).eq('attivo', true).order('cognome');
+    dipendentiCache = data || [];
+  }
   populateFornitoriSelectAssegni();
   await Promise.all([
     loadOverview(),
@@ -3365,8 +3371,91 @@ async function loadCurrentUserPermissions() {
 // ============================================
 let fattureAssegnoSelezionate = new Set();
 
+// ★ BENEFICIARIO ASSEGNO — fornitore O dipendente
+// Popola il select con entrambi i gruppi
+function populateFornitoriSelectAssegni() {
+  const el = document.getElementById('na-fornitore');
+  if (!el) return;
+
+  // Gruppo fornitori
+  const gForn = document.getElementById('na-fornitore-group-fornitori');
+  if (gForn) {
+    gForn.innerHTML = fornitoriCache
+      .map(f => `<option value="forn:${f.id}">${f.ragione_sociale}</option>`)
+      .join('');
+  }
+
+  // Gruppo dipendenti
+  const gDip = document.getElementById('na-fornitore-group-dipendenti');
+  if (gDip) {
+    gDip.innerHTML = dipendentiCache
+      .map(d => `<option value="dip:${d.id}">${d.nome} ${d.cognome}${d.importo_fisso ? ' · €' + d.importo_fisso + '/mese' : ''}</option>`)
+      .join('') || '<option disabled>Nessun dipendente</option>';
+  }
+}
+
+// Chiamata quando cambia il beneficiario
+async function onBeneficiarioAssegnoChange() {
+  const val = document.getElementById('na-fornitore')?.value || '';
+  const isForn = val.startsWith('forn:');
+  const isDip  = val.startsWith('dip:');
+
+  const fattureWrap = document.getElementById('na-fatture-wrap');
+  const dipWrap     = document.getElementById('na-dipendente-wrap');
+  const consEl      = document.getElementById('na-data-consigliata');
+
+  if (fattureWrap) fattureWrap.style.display = 'none';
+  if (dipWrap)     dipWrap.style.display     = 'none';
+  if (consEl)      consEl.style.display      = 'none';
+
+  if (isForn) {
+    // comportamento originale — carica fatture aperte
+    await loadFattureFornitoreAssegno();
+  } else if (isDip) {
+    // mostra saldo stipendio dipendente
+    await caricaSaldoDipendanteAssegno(val.replace('dip:', ''));
+  }
+}
+
+// Carica saldo stipendio per il dipendente selezionato
+async function caricaSaldoDipendanteAssegno(dipId) {
+  if (!currentBusiness) return;
+  const dip = dipendentiCache.find(d => d.id === dipId);
+  if (!dip) return;
+
+  const stipendio = dip.tipo_contratto === 'ccnl'
+    ? ((dip.ore_settimanali||40)/5) * 4.33 * 5 * (parseFloat(dip.paga_oraria)||0)
+    : parseFloat(dip.importo_fisso) || 0;
+
+  const now = new Date();
+  const firstDay = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
+  const { data: acc } = await db.from('acconti_stipendio')
+    .select('importo')
+    .eq('business_id', currentBusiness.id)
+    .eq('dipendente_id', dipId)
+    .gte('data', firstDay)
+    .neq('tipo', 'fuori_busta');
+
+  const totAcc   = (acc||[]).reduce((s,a) => s + Number(a.importo), 0);
+  const saldo    = stipendio - totAcc;
+
+  document.getElementById('na-dipendente-wrap').style.display = 'block';
+  document.getElementById('na-dip-stipendio').textContent  = stipendio > 0 ? formatEur(stipendio) : '—';
+  document.getElementById('na-dip-acconti').textContent    = `- ${formatEur(totAcc)}`;
+  document.getElementById('na-dip-saldo').textContent      = formatEur(Math.max(0, saldo));
+  document.getElementById('na-dip-saldo').style.color      = saldo <= 0 ? '#f43f5e' : '#00e5a0';
+
+  // Auto-compila importo con il saldo rimanente
+  const impEl = document.getElementById('na-importo');
+  if (impEl && !impEl.value && saldo > 0) impEl.value = saldo.toFixed(2);
+}
+
+function loadFattureFornitoreAssegnoLegacy() { loadFattureFornitoreAssegno(); }
+
 async function loadFattureFornitoreAssegno() {
-  const fornitoreId = document.getElementById('na-fornitore').value;
+  const raw = document.getElementById('na-fornitore')?.value || '';
+  // Supporta sia il vecchio formato (UUID puro) che il nuovo (forn:UUID)
+  const fornitoreId = raw.startsWith('forn:') ? raw.replace('forn:', '') : (raw && !raw.startsWith('dip:') ? raw : null);
   const wrap = document.getElementById('na-fatture-wrap');
   const listEl = document.getElementById('na-fatture-list');
 
@@ -3840,15 +3929,25 @@ function resetFormAssegno() {
 
 async function saveAssegno() {
   if (!currentBusiness) return;
-  const importo = parseFloat(document.getElementById('na-importo').value);
-  const scadenza = document.getElementById('na-scadenza').value;
-  const fornitoreId = document.getElementById('na-fornitore')?.value || null;
+  const importo    = parseFloat(document.getElementById('na-importo').value);
+  const scadenza   = document.getElementById('na-scadenza').value;
+  const rawVal     = document.getElementById('na-fornitore')?.value || '';
+  const isDip      = rawVal.startsWith('dip:');
+  const isForn     = rawVal.startsWith('forn:');
+  const fornitoreId = isForn ? rawVal.replace('forn:', '') : (!isDip && rawVal ? rawVal : null);
+  const dipId      = isDip  ? rawVal.replace('dip:', '') : null;
 
   if (!importo || importo <= 0) { showToast('Inserisci un importo valido', 'error'); return; }
   if (!scadenza) { showToast('Inserisci la data di scadenza', 'error'); return; }
 
   let beneficiario = '';
-  if (fornitoreId) { const f = fornitoriCache.find(x => x.id === fornitoreId); if (f) beneficiario = f.ragione_sociale; }
+  if (fornitoreId) {
+    const f = fornitoriCache.find(x => x.id === fornitoreId);
+    if (f) beneficiario = f.ragione_sociale;
+  } else if (dipId) {
+    const d = dipendentiCache.find(x => x.id === dipId);
+    if (d) beneficiario = `${d.nome} ${d.cognome}`;
+  }
 
   const { data: assegno, error } = await db.from('assegni').insert({
     business_id: currentBusiness.id,
@@ -3865,8 +3964,41 @@ async function saveAssegno() {
 
   if (error) { showToast('Errore: ' + error.message, 'error'); return; }
 
+  // ★ Se beneficiario è un DIPENDENTE — crea acconto stipendio automatico
+  if (dipId && assegno) {
+    const bancaId = document.getElementById('na-banca').value || null;
+    const dataEmissione = document.getElementById('na-emissione').value ||
+      new Date().toISOString().split('T')[0];
+
+    // Crea acconto stipendio
+    await db.from('acconti_stipendio').insert({
+      business_id: currentBusiness.id,
+      dipendente_id: dipId,
+      data: dataEmissione,
+      importo,
+      tipo: 'bonifico',
+      banca_id: bancaId,
+      note: `Assegno N° ${document.getElementById('na-numero').value || '—'} · ${document.getElementById('na-note').value || 'Acconto stipendio'}`,
+      created_by: currentUser.id
+    });
+
+    // Movimento bancario dare (uscita dalla banca)
+    if (bancaId) {
+      await db.from('movimenti_banca').insert({
+        business_id: currentBusiness.id,
+        banca_id: bancaId,
+        data: dataEmissione,
+        segno: 'dare',
+        tipo: 'bonifico',
+        descrizione: `Acconto stipendio — ${beneficiario}`,
+        importo
+      });
+    }
+
+    showToast(`Assegno registrato ✓ · Acconto ${beneficiario} salvato`, 'success');
+  }
   // Collega fatture selezionate e calcola giorni pagamento
-  if (fattureAssegnoSelezionate.size > 0 && assegno) {
+  else if (fattureAssegnoSelezionate.size > 0 && assegno) {
     const oggi = new Date().toISOString().split('T')[0];
 
     for (const fatturaId of fattureAssegnoSelezionate) {
@@ -3898,7 +4030,7 @@ async function saveAssegno() {
     }
 
     showToast(`Assegno registrato ✓ · ${fattureAssegnoSelezionate.size} fattura/e collegate`, 'success');
-  } else {
+  } else if (!dipId) {
     showToast('Assegno registrato ✓', 'success');
   }
 
@@ -3908,6 +4040,7 @@ async function saveAssegno() {
   });
   const naF = document.getElementById('na-fornitore'); if (naF) naF.value = '';
   const naFW = document.getElementById('na-fatture-wrap'); if (naFW) naFW.style.display = 'none';
+  const naDW = document.getElementById('na-dipendente-wrap'); if (naDW) naDW.style.display = 'none';
   fattureAssegnoSelezionate.clear();
 
   loadAssegniV2();
@@ -5153,6 +5286,73 @@ function toggleAccBanca() {
   if (wrap) wrap.style.display = tipo === 'bonifico' ? 'block' : 'none';
 }
 
+// ★ SALDO STIPENDIO — aggiorna pannello live
+async function aggiornaSaldoStipendio() {
+  const dipId  = document.getElementById('acc-dipendente')?.value;
+  const panel  = document.getElementById('acc-saldo-panel');
+  const avviso = document.getElementById('acc-saldo-avviso');
+  if (!dipId || !currentBusiness) { if (panel) panel.style.display = 'none'; return; }
+
+  const dip = dipendentiCache.find(d => d.id === dipId);
+  if (!dip) return;
+
+  // Calcola stipendio mensile
+  let stipendio = 0;
+  if (dip.tipo_contratto === 'forfettario' || !dip.tipo_contratto) {
+    stipendio = parseFloat(dip.importo_fisso) || 0;
+  } else {
+    // CCNL: stima base mensile (ore settimanali × 4.33 × paga oraria)
+    const oreG = (dip.ore_settimanali || 40) / 5;
+    stipendio = oreG * 4.33 * 5 * (parseFloat(dip.paga_oraria) || 0);
+  }
+
+  // Carica acconti del mese corrente
+  const now = new Date();
+  const firstDay = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
+  const lastDay  = new Date(now.getFullYear(), now.getMonth()+1, 0).toISOString().split('T')[0];
+
+  const { data: accontiMese } = await db.from('acconti_stipendio')
+    .select('importo,tipo')
+    .eq('business_id', currentBusiness.id)
+    .eq('dipendente_id', dipId)
+    .gte('data', firstDay).lte('data', lastDay)
+    .neq('tipo', 'fuori_busta'); // fuori busta non conta nel saldo
+
+  const totAcconti = (accontiMese || []).reduce((s, a) => s + Number(a.importo), 0);
+
+  // Importo corrente nel campo (quello che sto per registrare)
+  const importoCorrente = parseFloat(document.getElementById('acc-importo')?.value) || 0;
+  const totConCorrente = totAcconti + importoCorrente;
+  const rimanente = stipendio - totConCorrente;
+
+  // Aggiorna UI
+  panel.style.display = 'block';
+  document.getElementById('acc-saldo-dipnome').textContent =
+    `${dip.nome} ${dip.cognome}` +
+    (dip.tipo_contratto === 'ccnl' ? ' · CCNL Commercio' : ' · Forfettario');
+  document.getElementById('acc-saldo-stipendio').textContent =
+    stipendio > 0 ? formatEur(stipendio) : '— non impostato';
+  document.getElementById('acc-saldo-acconti').textContent =
+    `- ${formatEur(totConCorrente)}`;
+  document.getElementById('acc-saldo-rimanente').textContent = formatEur(Math.max(0, rimanente));
+  document.getElementById('acc-saldo-rimanente').style.color =
+    rimanente < 0 ? '#f43f5e' : rimanente === 0 ? '#94a3b8' : '#00e5a0';
+
+  // Avviso se si supera lo stipendio
+  if (rimanente < 0 && stipendio > 0) {
+    avviso.style.display = 'block';
+    avviso.textContent = `⚠ Attenzione: gli acconti superano lo stipendio mensile di ${formatEur(Math.abs(rimanente))}`;
+  } else if (importoCorrente > 0 && stipendio > 0 && rimanente >= 0) {
+    avviso.style.display = 'block';
+    avviso.style.background = 'rgba(0,229,160,0.1)';
+    avviso.style.borderTopColor = 'rgba(0,229,160,0.3)';
+    avviso.style.color = '#6ee7b7';
+    avviso.textContent = `✓ Dopo questo acconto rimangono ${formatEur(rimanente)} da corrispondere`;
+  } else {
+    avviso.style.display = 'none';
+  }
+}
+
 async function saveAcconto() {
   if (!currentBusiness) return;
   const dipId = document.getElementById('acc-dipendente').value;
@@ -5200,16 +5400,20 @@ async function saveAcconto() {
 
   showToast('Acconto registrato ✓', 'success');
   ['acc-importo','acc-note'].forEach(id => document.getElementById(id).value = '');
+  // Aggiorna pannello saldo dopo registrazione
+  await aggiornaSaldoStipendio();
   loadAcconti();
 }
 
 async function loadAcconti() {
   if (!currentBusiness) return;
   const dipFilter = document.getElementById('acc-filter-dip')?.value;
+
+  // Carica acconti
   let query = db.from('acconti_stipendio')
-    .select('*, dipendenti(nome,cognome)')
+    .select('*, dipendenti(nome,cognome,importo_fisso,paga_oraria,ore_settimanali,tipo_contratto)')
     .eq('business_id', currentBusiness.id)
-    .order('data', { ascending: false }).limit(30);
+    .order('data', { ascending: false }).limit(50);
   if (dipFilter) query = query.eq('dipendente_id', dipFilter);
   const { data } = await query;
   const el = document.getElementById('acconti-list');
@@ -5217,7 +5421,47 @@ async function loadAcconti() {
 
   const tipoLabel = { contanti_cassa:'💵 Cassa', contanti_extra:'💰 Extra', bonifico:'🏦 Bonifico', fuori_busta:'🤫 Fuori busta' };
 
-  el.innerHTML = data.map(a => `
+  // Raggruppa per dipendente per calcolare totali
+  const perDip = {};
+  data.forEach(a => {
+    const dipId = a.dipendente_id;
+    if (!perDip[dipId]) perDip[dipId] = { dip: a.dipendenti, acconti: [] };
+    perDip[dipId].acconti.push(a);
+  });
+
+  let html = '';
+
+  // Se filtro su un dipendente specifico: mostra il saldo in cima
+  if (dipFilter && perDip[dipFilter]) {
+    const { dip, acconti } = perDip[dipFilter];
+    const stipendio = dip?.tipo_contratto === 'ccnl'
+      ? ((dip.ore_settimanali||40)/5) * 4.33 * 5 * (parseFloat(dip.paga_oraria)||0)
+      : parseFloat(dip?.importo_fisso) || 0;
+    const now = new Date();
+    const firstDay = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
+    const accontiMese = acconti.filter(a => a.data >= firstDay && a.tipo !== 'fuori_busta');
+    const totMese = accontiMese.reduce((s,a) => s + Number(a.importo), 0);
+    const rimanente = stipendio - totMese;
+
+    if (stipendio > 0) {
+      html += `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">
+        <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:12px 14px;border:1px solid rgba(255,255,255,0.07)">
+          <div style="font-size:10px;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Stipendio</div>
+          <div style="font-family:monospace;font-size:16px;font-weight:700;color:#e2e8f0">${formatEur(stipendio)}</div>
+        </div>
+        <div style="background:rgba(249,115,22,0.1);border-radius:10px;padding:12px 14px;border:1px solid rgba(249,115,22,0.2)">
+          <div style="font-size:10px;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Acconti mese</div>
+          <div style="font-family:monospace;font-size:16px;font-weight:700;color:#f97316">- ${formatEur(totMese)}</div>
+        </div>
+        <div style="background:${rimanente<0?'rgba(244,63,94,0.12)':'rgba(0,229,160,0.08)'};border-radius:10px;padding:12px 14px;border:1px solid ${rimanente<0?'rgba(244,63,94,0.3)':'rgba(0,229,160,0.2)'}">
+          <div style="font-size:10px;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Da corrispondere</div>
+          <div style="font-family:monospace;font-size:16px;font-weight:700;color:${rimanente<0?'#f43f5e':'#00e5a0'}">${formatEur(Math.abs(rimanente))}${rimanente<0?' ⚠':''}</div>
+        </div>
+      </div>`;
+    }
+  }
+
+  html += data.map(a => `
     <div class="acconto-item">
       <div class="entry-dot uscita"></div>
       <div class="entry-info">
@@ -5228,6 +5472,8 @@ async function loadAcconti() {
       <div class="entry-amount uscita">- ${formatEur(a.importo)}</div>
       <button class="entry-del" onclick="deleteAcconto('${a.id}')">✕</button>
     </div>`).join('');
+
+  el.innerHTML = html;
 }
 
 async function deleteAcconto(id) {
