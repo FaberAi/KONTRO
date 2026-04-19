@@ -4977,7 +4977,7 @@ async function loadDipendentiList() {
   // Raggruppa per sede
   const bySede = {};
   data.forEach(d => {
-    const sedeNome = d.location_id ? (d.locations?.name || 'Disponibile su tutte le sedi') : 'Disponibile su tutte le sedi';
+    const sedeNome = d.location_id ? (d.locations?.name || 'Tutte le sedi') : '🌐 Tutte le sedi';
     if (!bySede[sedeNome]) bySede[sedeNome] = [];
     bySede[sedeNome].push(d);
   });
@@ -4990,7 +4990,7 @@ async function loadDipendentiList() {
           <div class="dip-avatar">${d.nome[0]}${d.cognome[0]}</div>
           <div class="dip-info">
             <div class="dip-nome">${d.nome} ${d.cognome}</div>
-            <div class="dip-ruolo">${d.ruolo || '—'}${d.data_assunzione ? ' · dal ' + formatDate(d.data_assunzione) : ''}${d.telefono ? ' · 📞 ' + d.telefono : ''}${!d.location_id ? ' · <span style="color:var(--blue-300)">Riepilogo generale sedi</span>' : ''}</div>
+            <div class="dip-ruolo">${d.ruolo || '—'}${d.data_assunzione ? ' · dal ' + formatDate(d.data_assunzione) : ''}${d.telefono ? ' · 📞 ' + d.telefono : ''}${!d.location_id ? ' · <span style="color:var(--blue-300)">🌐 Disponibile in tutte le sedi</span>' : ''}</div>
             ${(d.mat_start||d.pom_start||d.ser_start) ? `<div style="font-size:11px;color:var(--gray-400);margin-top:3px">
               ${d.mat_start ? `☀ ${d.mat_start}–${d.mat_end||'?'}` : ''}
               ${d.pom_start ? ` · 🌤 ${d.pom_start}–${d.pom_end||'?'}` : ''}
@@ -5434,7 +5434,7 @@ async function exportHRCSV() {
 function populateSedeDipendente() {
   const sel = document.getElementById('nd-sede');
   if (!sel) return;
-  sel.innerHTML = '<option value="">Riepilogo generale sedi</option>' +
+  sel.innerHTML = '<option value="">🌐 Disponibile in tutte le sedi</option>' +
     currentLocations.map(l => `<option value="${l.id}">${l.name}</option>`).join('');
 }
 
