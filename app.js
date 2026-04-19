@@ -5377,12 +5377,31 @@ async function saveAcconto() {
   const dipNome = dip ? dip.nome + ' ' + dip.cognome : 'Dipendente';
 
   if (tipo === 'contanti_cassa') {
-    // Registra uscita in cash_entries
+    // Uscita dalla Prima Nota (cassa giornaliera)
     await db.from('cash_entries').insert({
       business_id: currentBusiness.id,
       user_id: currentUser.id,
       type: 'uscita', amount: importo,
       description: 'Acconto stipendio — ' + dipNome,
+      payment_method: 'contanti', entry_date: data
+    });
+  } else if (tipo === 'contanti_extra') {
+    // Uscita extra cassa — va in cash_entries come movimento extra
+    await db.from('cash_entries').insert({
+      business_id: currentBusiness.id,
+      user_id: currentUser.id,
+      type: 'uscita', amount: importo,
+      description: 'Acconto stipendio (extra cassa) — ' + dipNome,
+      payment_method: 'contanti', entry_date: data
+    });
+  } else if (tipo === 'fuori_busta') {
+    // Anticipazione personale — esce sempre dalla cassa fisica (contanti)
+    // Va registrato come uscita cassa per quadrare la contabilità
+    await db.from('cash_entries').insert({
+      business_id: currentBusiness.id,
+      user_id: currentUser.id,
+      type: 'uscita', amount: importo,
+      description: '💼 Anticipazione personale — ' + dipNome,
       payment_method: 'contanti', entry_date: data
     });
   } else if (tipo === 'bonifico') {
@@ -5419,7 +5438,7 @@ async function loadAcconti() {
   const el = document.getElementById('acconti-list');
   if (!data?.length) { el.innerHTML = '<div class="empty-state">Nessun acconto registrato</div>'; return; }
 
-  const tipoLabel = { contanti_cassa:'💵 Cassa', contanti_extra:'💰 Extra', bonifico:'🏦 Bonifico', fuori_busta:'🤫 Fuori busta' };
+  const tipoLabel = { contanti_cassa:'💵 Cassa', contanti_extra:'💰 Extra', bonifico:'🏦 Bonifico', fuori_busta:'💼 Anticipazione personale' };
 
   // Raggruppa per dipendente per calcolare totali
   const perDip = {};
