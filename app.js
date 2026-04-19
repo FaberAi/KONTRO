@@ -5722,7 +5722,7 @@ async function scaricaRicevutaPDF(accontoId) {
     ? (() => { const [y,m] = a.mese_riferimento.split('-'); return mesiNomi[parseInt(m)-1] + ' ' + y; })()
     : formatDate(a.data);
 
-  const tipoLabel = { contanti_cassa:'Contanti (cassa)', contanti_extra:'Contanti (extra)', bonifico:'Bonifico bancario', fuori_busta:'Anticipazione personale' };
+  const tipoLabel = { contanti_cassa:'Contanti', contanti_extra:'Contanti', bonifico:'Bonifico bancario', fuori_busta:'Anticipazione personale' };
 
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
