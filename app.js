@@ -5840,33 +5840,13 @@ async function scaricaRicevutaPDF(accontoId) {
   doc.setTextColor(60, 80, 120);
   doc.text('FIRMA DEL DIPENDENTE', margin, y + 7);
 
-  // Immagine firma — adatta sfondo in base al tipo di firma salvata
+  // Immagine firma — sfondo bianco, firma nera
   try {
     if (a.firma_data_url && a.firma_data_url.startsWith('data:')) {
-      const img = new Image();
-      img.src = a.firma_data_url;
-      await new Promise(r => { img.onload = r; img.onerror = r; });
-
-      // Rileva se la firma è su sfondo scuro o chiaro
-      const tmpC = document.createElement('canvas');
-      tmpC.width = 10; tmpC.height = 10;
-      const tmpCtx = tmpC.getContext('2d');
-      tmpCtx.drawImage(img, 0, 0, 10, 10);
-      const pixel = tmpCtx.getImageData(2, 2, 1, 1).data;
-      const luminanza = pixel[0] * 0.299 + pixel[1] * 0.587 + pixel[2] * 0.114;
-      const sfondoScuro = luminanza < 128;
-
-      // Sfondo adattato + bordo
-      if (sfondoScuro) {
-        doc.setFillColor(20, 30, 48);
-        doc.setDrawColor(50, 70, 110);
-      } else {
-        doc.setFillColor(255, 255, 255);
-        doc.setDrawColor(200, 210, 225);
-      }
+      doc.setFillColor(255, 255, 255);
+      doc.setDrawColor(200, 210, 225);
       doc.setLineWidth(0.3);
       doc.roundedRect(margin, y + 8, 90, 36, 2, 2, 'FD');
-
       const fmt = a.firma_data_url.startsWith('data:image/jpeg') ? 'JPEG' : 'PNG';
       doc.addImage(a.firma_data_url, fmt, margin + 1, y + 9, 88, 34);
     } else {
