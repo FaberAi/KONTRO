@@ -5650,9 +5650,8 @@ async function loadRicevute() {
   const statoFilter = document.getElementById('ric-filter-stato')?.value;
 
   let query = db.from('acconti_stipendio')
-    .select('*, dipendenti(nome,cognome)')
+    .select('*, firma_stato, firma_token, firmato_at, mese_riferimento, tipo_erogazione, dipendenti(nome,cognome)')
     .eq('business_id', currentBusiness.id)
-    .not('firma_token', 'is', null)
     .order('data', { ascending: false })
     .limit(100);
 
