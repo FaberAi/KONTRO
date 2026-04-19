@@ -137,7 +137,7 @@
       height: 140px;
       display: block;
       border-radius: 8px;
-      background: rgba(255,255,255,0.06);
+      background: #ffffff;
       cursor: crosshair;
       touch-action: none;
     }
@@ -379,7 +379,7 @@
       canvas.width  = rect.width  * ratio;
       canvas.height = rect.height * ratio;
       ctx.scale(ratio, ratio);
-      ctx.strokeStyle = '#ffffff';
+      ctx.strokeStyle = '#1e293b'; // blu-nero scuro
       ctx.lineWidth   = 2.5;
       ctx.lineCap     = 'round';
       ctx.lineJoin    = 'round';
@@ -436,7 +436,7 @@
       msg.style.display = 'none';
 
       try {
-        const firmaDataUrl = canvas.toDataURL('image/png');
+        const firmaDataUrl = canvas.toDataURL('image/jpeg', 0.95);
 
         const res = await fetch(API_BASE, {
           method: 'POST',
