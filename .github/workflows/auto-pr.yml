@@ -1,0 +1,29 @@
+name: Auto PR for Claude branches
+on:
+  push:
+    branches:
+      - 'claude/**'
+jobs:
+  open-pr:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 1
+      - name: Apri PR se non esiste
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          if [ -n "$(gh pr list --repo "$REPO" --head "$BRANCH" --json number --jq '.[0].number')" ]; then
+            echo "PR gia' esistente per $BRANCH"; exit 0
+          fi
+          TITLE=$(git log -1 --pretty=%s 2>/dev/null || echo "Modifiche di Claude su $BRANCH")
+          gh pr create --repo "$REPO" --base main --head "$BRANCH" \
+            --title "$TITLE" \
+            --body "PR aperta automaticamente dal branch \`$BRANCH\` (lavoro di Claude via @claude). Rivedi e mergia. 🤖" || true
